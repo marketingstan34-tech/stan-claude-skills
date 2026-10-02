@@ -48,9 +48,34 @@ def _slug(text: str) -> str:
     return re.sub(r"[^0-9a-zA-Zа-яА-Я]+", "-", text).strip("-")
 
 
-def _save(path: Path, fetched: Fetched) -> None:
+_KEEP_IDS = ("Content", "TablicaRezultati", "kriterii")
+
+
+def slim_html(body: bytes) -> bytes:
+    """Keep only the act text / result table of a VKS page (pages embed ~600 KB of fonts).
+
+    The kept elements are serialized unchanged by lxml, so parse_act/parse_list read the
+    slim file exactly as the full page. Falls back to the full body if nothing is found.
+    """
+    import lxml.etree
+    import lxml.html
+
+    try:
+        doc = lxml.html.fromstring(body.decode("utf-8", errors="replace"))
+    except (ValueError, lxml.etree.ParserError):
+        return body
+    parts = [lxml.html.tostring(el, encoding="unicode")
+             for el in doc.xpath("//*[@id]") if el.get("id") in _KEEP_IDS]
+    if not parts:
+        return body
+    html = ("<!doctype html><html><head><meta charset=\"utf-8\"></head><body>"
+            + "\n".join(parts) + "</body></html>")
+    return html.encode("utf-8")
+
+
+def _save(path: Path, fetched: Fetched, slim: bool = True) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_bytes(fetched.body)
+    path.write_bytes(slim_html(fetched.body) if slim else fetched.body)
     path.with_suffix(".meta.json").write_text(json.dumps({
         "url": fetched.url, "statusCode": fetched.status, "retrieved_at": fetched.retrieved_at,
     }, ensure_ascii=False, indent=2), encoding="utf-8")

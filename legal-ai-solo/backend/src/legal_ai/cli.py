@@ -82,6 +82,77 @@ def cmd_crawl(args) -> int:
     return 0 if ok == len(report.acts) else 1
 
 
+def cmd_build_corpus(args) -> int:
+    """Quarter by quarter: crawl lists + acts (resumable), then ingest that quarter."""
+    import json
+    import time
+
+    from legal_ai.config import load_settings
+    from legal_ai.db import connect
+    from legal_ai.ingestion.vks_ingest import ingest_raw_dir
+    from legal_ai.sources.vks.crawler import VksClient, crawl, quarters_between
+
+    settings = load_settings()
+    root = settings.private_storage_path.resolve()
+    quarters = quarters_between(_ym(args.start), _ym(args.end))
+    if args.newest_first:
+        quarters = list(reversed(quarters))
+    client = VksClient(settings.source_min_interval_seconds, settings.source_user_agent)
+    log = root / "raw" / "vks-corpus" / "progress.jsonl"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        for y, m1, m2 in quarters:
+            for case_type in args.case_types.split(","):
+                slug = "gr" if case_type == "гр." else "targ"
+                out = root / "raw" / "vks-corpus" / slug / f"{y}-{m1:02d}-{m2:02d}"
+                done_flag = out / ".ingested"
+                if done_flag.exists():
+                    continue
+                t0 = time.time()
+                report = crawl(client, out, (y, m1), (y, m2), act_type="15", case_type=case_type)
+                with connect(settings.database_url) as conn:
+                    stats = ingest_raw_dir(conn, out, root, "direct", f"ВКС, решения, {case_type}")
+                ok = sum(1 for a in report.acts if a.get("ok"))
+                entry = {"quarter": f"{y}-{m1:02d}..{m2:02d}", "case_type": case_type,
+                         "acts_ok": ok, "acts": len(report.acts), "ingested": stats.acts_ingested,
+                         "truncated": report.truncated, "seconds": round(time.time() - t0)}
+                with open(log, "a", encoding="utf-8") as f:
+                    f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+                print(json.dumps(entry, ensure_ascii=False), flush=True)
+                if ok == len(report.acts):
+                    done_flag.write_text(entry["quarter"], encoding="utf-8")
+    finally:
+        client.close()
+    return 0
+
+
+def cmd_fetch_tr(args) -> int:
+    from legal_ai.config import load_settings
+    from legal_ai.db import connect
+    from legal_ai.http import PoliteClient
+    from legal_ai.ingestion.tr_ingest import ingest_tr
+    from legal_ai.sources.vks import HOST
+    from legal_ai.sources.vks.interpretive import download_all
+
+    settings = load_settings()
+    root = settings.private_storage_path.resolve()
+    out = root / "raw" / "vks-tr"
+    with PoliteClient([HOST], settings.source_min_interval_seconds, settings.source_user_agent,
+                      max_bytes=30 * 1024 * 1024) as client:
+        files, log = download_all(client, out, range(args.from_year, args.to_year + 1))
+    ok = 0
+    with connect(settings.database_url) as conn:
+        for f in files:
+            done, warnings = ingest_tr(conn, f, str(f.path.relative_to(root)))
+            ok += int(done)
+            if warnings:
+                print(f"Предупреждение {f.college} {f.number}/{f.year}: {', '.join(warnings)}")
+    print(f"Тълкувателни решения: свалени/налични {len(files)}, заредени {ok}")
+    for line in log:
+        print(f"Грешка: {line}")
+    return 0
+
+
 def cmd_ingest(args) -> int:
     from legal_ai.config import load_settings
     from legal_ai.db import connect
@@ -186,6 +257,18 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--case-type", default="гр.", choices=["гр.", "нак.", "търг."])
     c.add_argument("--out", help="Папка за суровите страници")
     c.set_defaults(func=cmd_crawl)
+
+    b = sub.add_parser("build-corpus", help="Сваляне и зареждане на решения на ВКС по тримесечия")
+    b.add_argument("--from", dest="start", required=True, help="ГГГГ-ММ")
+    b.add_argument("--to", dest="end", required=True, help="ГГГГ-ММ")
+    b.add_argument("--case-types", default="гр.,търг.")
+    b.add_argument("--newest-first", action="store_true")
+    b.set_defaults(func=cmd_build_corpus)
+
+    tr = sub.add_parser("fetch-tr", help="Тълкувателни решения на ОСГТК/ОСГК/ОСТК (PDF)")
+    tr.add_argument("--from-year", type=int, default=2008)
+    tr.add_argument("--to-year", type=int, default=2026)
+    tr.set_defaults(func=cmd_fetch_tr)
 
     i = sub.add_parser("ingest", help="Зареди свалени страници в базата")
     i.add_argument("raw_dir")

@@ -109,3 +109,18 @@ def test_quarter_list_adds_acts_missing_from_monthly_lists(tmp_path):
     report = crawl(client, tmp_path, (2025, 1), (2025, 2))
     assert [entry["name"] for entry in report.lists] == ["2025-01", "2025-02", "2025-Q1-01-02"]
     assert sorted(a["id"] for a in report.acts) == ["A" * 32, "B" * 32]
+
+
+def test_slim_html_keeps_act_text_and_result_table():
+    from legal_ai.sources.vks.crawler import slim_html
+    from legal_ai.sources.vks.parser import parse_act, parse_list
+    page = ("<html><head><style>@font-face{src:url(data:font/woff;base64," + "A" * 5000 + ")}</style></head>"
+            "<body><div id='kriterii'><p>Вид дело: гр.</p></div><div id='TablicaRezultati'><div><a href='"
+            "pregled-akt.jsp?type=ot-spisak&id=" + "C" * 32 + "'>Решение №3/04.05.2016 по дело №9/2015</a>"
+            "</div></div><div id=\"Content\" class=\"AktSadarjanie\">Р Е Ш Е Н И Е<br>№ 3<br>"
+            "Производството е по чл. 290 ГПК.<br>Текст.<br></div></body></html>").encode("utf-8")
+    slim = slim_html(page)
+    assert len(slim) < len(page) // 3
+    assert [r.source_id for r in parse_list(slim.decode())] == ["C" * 32]
+    assert parse_act(slim.decode()).proceeding_article == parse_act(page.decode()).proceeding_article == "290"
+    assert parse_act(slim.decode()).canonical_text == parse_act(page.decode()).canonical_text
