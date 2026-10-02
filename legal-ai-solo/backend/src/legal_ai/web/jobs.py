@@ -60,7 +60,15 @@ class JobRunner:
                     y, m = (int(x) for x in p["until"].split("-"))
                     cutoff = date(y, m, 28)
                 job.message = f"Анализ на „{appellate.label}“ и търсене във ВКС…"
-                result = run_analysis(ai, vks, appellate, cutoff)
+                conn = None
+                if os.environ.get("DATABASE_URL"):
+                    from legal_ai.db import connect
+                    conn = connect(os.environ["DATABASE_URL"])
+                try:
+                    result = run_analysis(ai, vks, appellate, cutoff, conn=conn)
+                finally:
+                    if conn is not None:
+                        conn.close()
             ai.close()
             job.run_dir = save_run(result, self.runs_dir).name
             job.status = "done"

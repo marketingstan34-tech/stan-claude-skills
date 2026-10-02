@@ -224,7 +224,16 @@ def cmd_analyze(args) -> int:
             cutoff = appellate.act_date + timedelta(days=60)
         else:
             cutoff = date.today()
-        result = run_analysis(ai, vks, appellate, cutoff)
+        conn = None
+        if os.environ.get("DATABASE_URL"):
+            from legal_ai.db import connect
+            conn = connect(os.environ["DATABASE_URL"])
+            print("Собствена база: включена")
+        try:
+            result = run_analysis(ai, vks, appellate, cutoff, conn=conn)
+        finally:
+            if conn is not None:
+                conn.close()
     ai.close()
     run_dir = save_run(result, out)
     print(f"Готово: {run_dir / 'report.md'}")

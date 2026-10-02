@@ -182,28 +182,78 @@ def search_vks(vks: PoliteClient, search_plan: list[dict], cutoff: date,
             for r in rows:
                 if r.act_date and r.act_date > cutoff:
                     continue
-                e = found.setdefault(r.source_id, {"row": r, "by_question": {}})
+                e = found.setdefault(r.source_id, {"label": r.link_text, "date": r.act_date,
+                                                   "by_question": {}, "is_tr": False})
                 e["by_question"].setdefault(qid, []).append(ws)
     return found
 
 
+TR_PER_QUESTION = 2
+
+
 def pick_candidates(found: dict[str, dict], question_ids: list[str]) -> dict[str, list[str]]:
-    """Per question: acts matched by most word sets (broad truncated lists count less)."""
+    """Per question: acts matched by most word sets (newer first on ties), plus up to
+    TR_PER_QUESTION interpretative decisions, which do not count against PER_QUESTION."""
     picked: dict[str, list[str]] = {}
     total: set[str] = set()
     for qid in question_ids:
-        scored = [(len(e["by_question"][qid]), e["row"].act_date or date.min, sid)
-                  for sid, e in found.items() if qid in e["by_question"]]
-        scored.sort(reverse=True)
-        chosen = []
-        for _, _, sid in scored:
-            if len(chosen) >= PER_QUESTION:
-                break
-            if sid in total or len(total) < MAX_ACTS:
-                chosen.append(sid)
-                total.add(sid)
+        scored = sorted(((len(e["by_question"][qid]), e.get("date") or date.min, key, e["is_tr"])
+                         for key, e in found.items() if qid in e["by_question"]), reverse=True)
+        chosen: list[str] = []
+        n_dec = n_tr = 0
+        for _, _, key, is_tr in scored:
+            if is_tr:
+                if n_tr < TR_PER_QUESTION:
+                    chosen.append(key)
+                    n_tr += 1
+                continue
+            if n_dec >= PER_QUESTION:
+                continue
+            if key in total or len(total) < MAX_ACTS:
+                chosen.append(key)
+                total.add(key)
+                n_dec += 1
         picked[qid] = chosen
     return picked
+
+
+def merge_local(conn, found: dict[str, dict], search_plan: list[dict], cutoff: date,
+                searches_log: list[dict]) -> None:
+    """Add local-corpus hits (VKS art. 290 and interpretative decisions) to `found`."""
+    from legal_ai.cassation.local import local_candidates
+
+    with conn.cursor() as cur:
+        for item in search_plan:
+            qid = item["question_id"]
+            sets = [w for w in (_words_ok(ws) for ws in item["word_sets"]) if w]
+            hits = local_candidates(conn, sets, cutoff)
+            searches_log.append({"question_id": qid, "local": True, "words": [" + ".join(s) for s in sets],
+                                 "rows": len(hits)})
+            for decision_id, h in hits.items():
+                cur.execute("SELECT source, source_record_id, act_number, act_date, case_number, "
+                            "case_year, chamber FROM decisions WHERE id = %s", (decision_id,))
+                d = cur.fetchone()
+                is_tr = d["source"] == "vks-tr"
+                key = f"vks-tr:{d['source_record_id']}" if is_tr else d["source_record_id"]
+                if is_tr:
+                    label = f"Тълкувателно решение № {d['act_number']}/{d['case_year']} на {d['chamber']}"
+                else:
+                    dd = d["act_date"].strftime("%d.%m.%Y") if d["act_date"] else "?"
+                    label = f"Решение №{d['act_number']}/{dd} по дело №{d['case_number']}/{d['case_year']}"
+                e = found.setdefault(key, {"label": label, "date": d["act_date"], "by_question": {},
+                                           "is_tr": is_tr})
+                e["decision_id"] = decision_id
+                e["by_question"].setdefault(qid, []).extend(h["hits"])
+
+
+def _local_id(conn, key: str) -> str | None:
+    if conn is None:
+        return None
+    with conn.cursor() as cur:
+        cur.execute("SELECT id FROM decisions WHERE source = 'vks' AND source_record_id = %s "
+                    "AND current_version_id IS NOT NULL", (key,))
+        row = cur.fetchone()
+    return row["id"] if row else None
 
 
 def excerpt(act: ParsedAct, words: list[str]) -> str:
@@ -228,7 +278,7 @@ def excerpt(act: ParsedAct, words: list[str]) -> str:
 # ---------- main ----------
 
 def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
-                 cutoff: date) -> RunResult:
+                 cutoff: date, conn=None) -> RunResult:
     cfg = ai.config
     analysis = ai.structured(
         model=cfg.analysis_model, system=P.SYSTEM_BASE,
@@ -238,6 +288,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
 
     searches: list[dict] = []
     found = search_vks(vks, analysis["search"], cutoff, searches)
+    if conn is not None:
+        merge_local(conn, found, analysis["search"], cutoff, searches)
     qids = [q["id"] for q in analysis["questions"]]
     picked = pick_candidates(found, qids)
 
@@ -249,25 +301,30 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
         qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
                          for ws in item["word_sets"] for w in _words_ok(ws)})
         for sid in picked.get(q["id"], []):
-            if sid not in acts:  # sequential, polite fetching
-                try:
-                    acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
-                except FetchError as exc:
-                    acts[sid] = None
-                    skipped.append(f"{sid}: {exc}")
+            if sid not in acts:
+                local_id = found[sid].get("decision_id") or _local_id(conn, sid)
+                if local_id is not None:
+                    from legal_ai.cassation.local import load_act
+                    acts[sid] = load_act(conn, local_id)
+                else:  # sequential, polite fetching
+                    try:
+                        acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
+                    except FetchError as exc:
+                        acts[sid] = None
+                        skipped.append(f"{sid}: {exc}")
             act = acts[sid]
             if act is None:
                 continue
             if act.chamber and "наказател" in act.chamber.lower():
-                skipped.append(f"{found[sid]['row'].link_text}: наказателно дело")
+                skipped.append(f"{found[sid]['label']}: наказателно дело")
                 continue
-            if act.proceeding_article != "290":
-                skipped.append(f"{found[sid]['row'].link_text}: не е решение по чл. 290 ГПК")
+            if act.proceeding_article not in ("290", "ТР"):
+                skipped.append(f"{found[sid]['label']}: не е решение по чл. 290 ГПК")
                 continue
             hold = "\n".join(f"- {holdings[h]['summary']}" for h in q["holding_ids"] if h in holdings)
             user = (f"{P.ASSESS_INSTRUCTIONS}\n\n(А) ВЪПРОС: {q['text']}\n"
                     f"Извод на въззивния съд:\n{hold or '-'}\n\n"
-                    f"(Б) {found[sid]['row'].link_text} ({act.chamber or 'отделение не е разпознато'})\n"
+                    f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
                     f"{excerpt(act, qwords)}")
             jobs.append((q, sid, user))
 
@@ -278,11 +335,11 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                               user=user, schema_name="vks_assessment", schema=P.ASSESS_SCHEMA,
                               effort=cfg.assess_effort)
         except Exception as exc:  # noqa: BLE001 - one failed assessment must not sink the run
-            return f"{found[sid]['row'].link_text}: AI оценката не успя ({exc})"
+            return f"{found[sid]['label']}: AI оценката не успя ({exc})"
         act = acts[sid]
         return Assessment(
-            question_id=q["id"], source_id=sid, label=found[sid]["row"].link_text,
-            url=act_url(sid), chamber=act.chamber, proceeding_article=act.proceeding_article,
+            question_id=q["id"], source_id=sid, label=found[sid]["label"],
+            url=getattr(act, "url", None) or act_url(sid), chamber=act.chamber, proceeding_article=act.proceeding_article,
             relevant=bool(a["relevant"]), stance=a["stance"], vks_rule=a["vks_rule"],
             quote=check_quote(act.canonical_text, a["quote"]) if a["quote"] else Quote("", "empty"),
             explanation=a["explanation"],
@@ -369,8 +426,9 @@ def render_markdown(r: RunResult) -> str:
         sets = [s for s in r.searches if s.get("question_id") == q["id"] and "rows" in s]
         if sets:
             lines += ["<details><summary>Търсения</summary>", ""]
-            lines += [f"- {' + '.join(s['words'])} ({s['case_type']}): {s['rows']} резултата"
-                      + (" — отрязан списък" if s.get("truncated") else "") for s in sets]
+            lines += [(f"- Собствена база ({'; '.join(s['words'])}): {s['rows']} акта" if s.get("local") else
+                       f"- {' + '.join(s['words'])} ({s['case_type']}): {s['rows']} резултата"
+                       + (" — отрязан списък" if s.get("truncated") else "")) for s in sets]
             lines += ["", "</details>", ""]
     lines += ["## Технически данни", "",
               f"- AI заявки: {r.usage['calls']}, токени вход/изход: {r.usage['input_tokens']}"

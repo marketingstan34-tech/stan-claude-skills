@@ -71,3 +71,74 @@ def test_only_290_filter_and_partial_coverage(conn, raw):
     result = search(conn, "възлагане несъществуващадума")
     assert result.decisions[0].terms_matched == 1 and result.note
     assert search(conn, "несъществуващадума").decisions == []
+
+
+def test_analysis_uses_local_corpus_and_interpretative_decisions(conn, raw):
+    """SYNTHETIC: live VKS search finds nothing; the local corpus supplies a decision and a TR."""
+    import json
+    from datetime import date
+
+    import httpx
+
+    from legal_ai.ai import AIConfig, OpenAIProvider
+    from legal_ai.cassation.pipeline import SourceDoc, run_analysis
+    from legal_ai.http import PoliteClient
+
+    ingest_raw_dir(conn, raw, raw.parent, "manual", "synthetic")
+    with conn.cursor() as cur:  # one synthetic interpretative decision
+        cur.execute("""INSERT INTO source_artifacts (source, url, acquisition, sha256, storage_key)
+                       VALUES ('vks-tr', 'https://www.vks.bg/tr.pdf', 'manual', repeat('1', 64), 'x')
+                       RETURNING id""")
+        art = cur.fetchone()["id"]
+        cur.execute("""INSERT INTO decisions (source, source_record_id, court, chamber, act_type, act_number,
+                       act_date, case_type, case_number, case_year, proceeding_article, canonical_url)
+                       VALUES ('vks-tr', 'osgtk-2013-1', 'ВКС', 'ОСГТК', 'Тълкувателно решение', '1',
+                       '2013-12-09', 'тълк.', '1', 2013, 'ТР', 'https://www.vks.bg/tr.pdf') RETURNING id""")
+        dec = cur.fetchone()["id"]
+        text = "СИНТЕТИЧНО ТР.\nВъзлагането на неподеляем имот се допуска при условия."
+        cur.execute("""INSERT INTO decision_versions (decision_id, artifact_id, canonical_text, text_hash,
+                       parser_version) VALUES (%s, %s, %s, repeat('2', 64), 'tr-1') RETURNING id""",
+                    (dec, art, text))
+        ver = cur.fetchone()["id"]
+        cur.execute("""INSERT INTO passages (decision_version_id, paragraph_no, section, start_offset,
+                       end_offset, exact_text, search_text) VALUES
+                       (%s, 0, 'reasoning', 0, 14, 'СИНТЕТИЧНО ТР.', 'синтетично тр'),
+                       (%s, 1, 'reasoning', 15, %s, %s, 'възлагането на неподеляем имот се допуска при условия')""",
+                    (ver, ver, len(text), text[15:]))
+        cur.execute("UPDATE decisions SET current_version_id = %s WHERE id = %s", (ver, dec))
+    conn.commit()
+
+    answers = [{"case_summary": "С.", "lower_instance": {"act": "", "date": "", "case": "", "court": ""},
+                "holdings": [], "questions": [{"id": "В1", "text": "Въпрос?", "kind": "материалноправен",
+                                               "holding_ids": [], "ground": "т.1", "why_decisive": "-"}],
+                "search": [{"question_id": "В1", "word_sets": [["неподеляем", "имот"]]}]}]
+    seen_prompts = []
+
+    def ai_handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json=pending.pop())
+        body = json.loads(request.content)
+        seen_prompts.append(body["input"][1]["content"])
+        out = answers[0] if len(seen_prompts) == 1 else {
+            "relevant": True, "stance": "противоречи", "vks_rule": "Правило.", "quote": "", "explanation": "-"}
+        pending.append({"id": "r", "status": "completed", "usage": {},
+                        "output": [{"type": "message", "content": [{"type": "output_text", "text": json.dumps(out)}]}]})
+        return httpx.Response(200, json={"id": "r", "status": "queued"})
+    pending = []
+
+    vks_urls = []
+
+    def vks_handler(request):
+        vks_urls.append(str(request.url))
+        return httpx.Response(200, text="<html><body>няма резултати</body></html>")
+
+    ai = OpenAIProvider(AIConfig("m", "m", max_calls=10), transport=httpx.MockTransport(ai_handler),
+                        sleep=lambda s: None)
+    vks = PoliteClient(["www.vks.bg"], transport=httpx.MockTransport(vks_handler), sleep=lambda s: None)
+    r = run_analysis(ai, vks, SourceDoc("С", "file:///s", "текст", "txt", "now"), date(2030, 1, 1), conn=conn)
+
+    labels = sorted(a.label for a in r.assessments)
+    assert any(lbl.startswith("Тълкувателно решение № 1/2013") for lbl in labels)
+    assert any(lbl.startswith("Решение №901/") for lbl in labels)
+    assert not any("pregled-akt" in u for u in vks_urls)  # local acts are not downloaded again
+    assert any(s.get("local") for s in r.searches)

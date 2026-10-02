@@ -45,7 +45,8 @@
   {% endfor %}
   <details><summary>Търсения в сайта на ВКС</summary><ul>
   {% for s in run.searches if s.question_id == q.id and s.rows is defined %}
-    <li>{{ s.words|join(' + ') }} ({{ s.case_type }}): {{ s.rows }} резултата{% if s.truncated %} — отрязан списък{% endif %}</li>
+    {% if s.local %}<li>Собствена база ({{ s.words|join('; ') }}): {{ s.rows }} акта</li>
+    {% else %}<li>{{ s.words|join(' + ') }} ({{ s.case_type }}): {{ s.rows }} резултата{% if s.truncated %} — отрязан списък{% endif %}</li>{% endif %}
   {% endfor %}</ul></details>
 </section>
 {% endfor %}
