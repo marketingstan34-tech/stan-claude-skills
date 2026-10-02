@@ -23,6 +23,13 @@ class AIError(Exception):
     pass
 
 
+class AIQuotaError(AIError):
+    """No credit / quota left: stop the whole run instead of failing call after call."""
+
+
+_QUOTA_CODES = {"credit_balance_exhausted", "insufficient_quota", "billing_hard_limit_reached"}
+
+
 @dataclass
 class Usage:
     calls: int = 0
@@ -122,6 +129,10 @@ class OpenAIProvider:
             with self._lock:
                 self.usage.add(model, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0)))
             if data.get("status") != "completed":
+                err = data.get("error") or {}
+                if isinstance(err, dict) and err.get("code") in _QUOTA_CODES:
+                    raise AIQuotaError("Кредитът в OpenAI е изчерпан. Добавете кредит в "
+                                       "platform.openai.com → Billing и пуснете анализа отново.")
                 last = f"status={data.get('status')} {data.get('incomplete_details') or data.get('error')}"
                 continue
             text = "".join(
@@ -146,6 +157,9 @@ class OpenAIProvider:
                 if resp.status_code == 200:
                     return resp.json()
                 last = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                if any(code in resp.text for code in _QUOTA_CODES):
+                    raise AIQuotaError("Кредитът в OpenAI е изчерпан. Добавете кредит в "
+                                       "platform.openai.com → Billing и пуснете анализа отново.")
                 if resp.status_code not in (429, 500, 502, 503, 504):
                     break
             self._sleep(2 ** attempt * 2)

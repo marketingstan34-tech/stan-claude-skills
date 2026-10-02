@@ -13,7 +13,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from legal_ai.ai import OpenAIProvider
+from legal_ai.ai import AIQuotaError, OpenAIProvider
 from legal_ai.cassation import prompts as P
 from legal_ai.citations.verify import TextStatus, locate_quote, verify_quote
 from legal_ai.http import FetchError, PoliteClient
@@ -25,9 +25,9 @@ from legal_ai.sources.vks.parser import ParsedAct, parse_act, parse_list
 from legal_ai.sources.vks.urls import ListQuery, act_url, list_url
 
 MAX_LIST_QUERIES = 30
-PER_QUESTION = 4
+PER_QUESTION = 3
 MAX_ACTS = 24
-EXCERPT_CHARS = 7000
+EXCERPT_CHARS = 5000
 AI_WORKERS = 4  # parallel AI assessments; source requests stay sequential
 
 
@@ -191,7 +191,7 @@ def search_vks(vks: PoliteClient, search_plan: list[dict], cutoff: date,
     return found
 
 
-TR_PER_QUESTION = 2
+TR_PER_QUESTION = 1
 
 
 def pick_candidates(found: dict[str, dict], question_ids: list[str]) -> dict[str, list[str]]:
@@ -348,6 +348,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                                   schema_name="vks_assessment", schema=P.ASSESS_SCHEMA,
                                   effort=cfg.stance_effort)
                 stage = "посока"
+        except AIQuotaError:
+            raise  # no credit left: stop the run, do not keep calling
         except Exception as exc:  # noqa: BLE001 - one failed assessment must not sink the run
             return f"{found[sid]['label']}: AI оценката не успя ({exc})"
         act = acts[sid]

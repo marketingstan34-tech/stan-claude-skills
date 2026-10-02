@@ -117,3 +117,19 @@ def test_non_contiguous_sentences_are_verified_separately_and_marked():
     assert q.text == "Първо изречение тук. […] Трето изречение накрая."
     assert check_quote(text, "Трето изречение накрая. Първо изречение тук.").status == "not_found"
     assert check_quote(text, "Първо изречение тук. Измислено изречение.").status == "not_found"
+
+
+def test_exhausted_credit_stops_with_a_clear_error():
+    import pytest
+    from legal_ai.ai import AIQuotaError
+
+    def handler(request):
+        if request.method == "GET":
+            return httpx.Response(200, json={"id": "r", "status": "failed",
+                                             "error": {"code": "credit_balance_exhausted", "message": "x"}})
+        return httpx.Response(200, json={"id": "r", "status": "queued"})
+
+    ai = OpenAIProvider(AIConfig("m", "m", max_calls=10), transport=httpx.MockTransport(handler),
+                        sleep=lambda s: None)
+    with pytest.raises(AIQuotaError):
+        ai.structured(model="m", system="s", user="u", schema_name="x", schema={"type": "object"})
