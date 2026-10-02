@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -73,6 +74,8 @@ class OpenAIProvider:
         self._sleep = sleep
         self._poll = poll_seconds
         self._max_wait = max_wait
+        self._lock = threading.Lock()  # usage and the call cap are shared by worker threads
+        self._reserved = 0
         self.usage = Usage()
         headers = {"Content-Type": "application/json"}
         key = os.environ.get("OPENAI_API_KEY", "")
@@ -85,8 +88,17 @@ class OpenAIProvider:
 
     def structured(self, *, model: str, system: str, user: str, schema_name: str,
                    schema: dict[str, Any], effort: str | None = None) -> dict[str, Any]:
-        if self.usage.calls >= self.config.max_calls:
-            raise AIError(f"Достигнат лимит от {self.config.max_calls} AI заявки за един анализ.")
+        with self._lock:
+            if self.usage.calls + self._reserved >= self.config.max_calls:
+                raise AIError(f"Достигнат лимит от {self.config.max_calls} AI заявки за един анализ.")
+            self._reserved += 1
+        try:
+            return self._structured(model, system, user, schema_name, schema, effort)
+        finally:
+            with self._lock:
+                self._reserved -= 1
+
+    def _structured(self, model, system, user, schema_name, schema, effort) -> dict[str, Any]:
         payload = {
             "model": model,
             "input": [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -99,7 +111,8 @@ class OpenAIProvider:
         for _ in range(2):
             data = self._run_background(payload)
             usage = data.get("usage") or {}
-            self.usage.add(model, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0)))
+            with self._lock:
+                self.usage.add(model, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0)))
             if data.get("status") != "completed":
                 last = f"status={data.get('status')} {data.get('incomplete_details') or data.get('error')}"
                 continue

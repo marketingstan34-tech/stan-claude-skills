@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -27,6 +28,7 @@ MAX_LIST_QUERIES = 30
 PER_QUESTION = 4
 MAX_ACTS = 24
 EXCERPT_CHARS = 7000
+AI_WORKERS = 4  # parallel AI assessments; source requests stay sequential
 
 
 @dataclass
@@ -241,13 +243,13 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
 
     acts: dict[str, ParsedAct | None] = {}
     skipped: list[str] = []
-    assessments: list[Assessment] = []
     holdings = {h["id"]: h for h in analysis["holdings"]}
+    jobs: list[tuple[dict, str, str]] = []   # (question, source_id, prompt)
     for q in analysis["questions"]:
         qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
                          for ws in item["word_sets"] for w in _words_ok(ws)})
         for sid in picked.get(q["id"], []):
-            if sid not in acts:
+            if sid not in acts:  # sequential, polite fetching
                 try:
                     acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
                 except FetchError as exc:
@@ -267,15 +269,31 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                     f"Извод на въззивния съд:\n{hold or '-'}\n\n"
                     f"(Б) {found[sid]['row'].link_text} ({act.chamber or 'отделение не е разпознато'})\n"
                     f"{excerpt(act, qwords)}")
+            jobs.append((q, sid, user))
+
+    def assess(job: tuple[dict, str, str]) -> Assessment | str:
+        q, sid, user = job
+        try:
             a = ai.structured(model=cfg.analysis_model, system=P.SYSTEM_BASE, user=user,
                               schema_name="vks_assessment", schema=P.ASSESS_SCHEMA)
-            assessments.append(Assessment(
-                question_id=q["id"], source_id=sid, label=found[sid]["row"].link_text,
-                url=act_url(sid), chamber=act.chamber, proceeding_article=act.proceeding_article,
-                relevant=bool(a["relevant"]), stance=a["stance"], vks_rule=a["vks_rule"],
-                quote=check_quote(act.canonical_text, a["quote"]) if a["quote"] else Quote("", "empty"),
-                explanation=a["explanation"],
-                matched_word_sets=found[sid]["by_question"].get(q["id"], [])))
+        except Exception as exc:  # noqa: BLE001 - one failed assessment must not sink the run
+            return f"{found[sid]['row'].link_text}: AI оценката не успя ({exc})"
+        act = acts[sid]
+        return Assessment(
+            question_id=q["id"], source_id=sid, label=found[sid]["row"].link_text,
+            url=act_url(sid), chamber=act.chamber, proceeding_article=act.proceeding_article,
+            relevant=bool(a["relevant"]), stance=a["stance"], vks_rule=a["vks_rule"],
+            quote=check_quote(act.canonical_text, a["quote"]) if a["quote"] else Quote("", "empty"),
+            explanation=a["explanation"],
+            matched_word_sets=found[sid]["by_question"].get(q["id"], []))
+
+    assessments: list[Assessment] = []
+    with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
+        for res in pool.map(assess, jobs):  # map keeps the question/candidate order
+            if isinstance(res, str):
+                skipped.append(res)
+            else:
+                assessments.append(res)
 
     return RunResult(
         appellate=appellate, analysis=analysis, holding_quotes=holding_quotes,
