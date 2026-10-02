@@ -43,3 +43,36 @@ def verify_quote(
     if _squash_ws(canonical_text[start:end]) != _squash_ws(quote):
         return TextStatus.INVALID
     return TextStatus.TEXT_VERIFIED
+
+
+def locate_quote(canonical_text: str, quote: str) -> tuple[int, int] | None:
+    """Find a quote in the text tolerating only whitespace differences.
+
+    Returns code-point offsets [start, end) into canonical_text, or None. The result is
+    meant to be re-checked with verify_quote().
+    """
+    words = quote.split()
+    if not words:
+        return None
+    # Map positions of the whitespace-squashed text back to the original.
+    squashed_chars: list[str] = []
+    origin: list[int] = []
+    prev_space = True
+    for i, ch in enumerate(canonical_text):
+        if ch.isspace():
+            if not prev_space:
+                squashed_chars.append(" ")
+                origin.append(i)
+            prev_space = True
+        else:
+            squashed_chars.append(ch)
+            origin.append(i)
+            prev_space = False
+    squashed = "".join(squashed_chars)
+    needle = " ".join(words)
+    pos = squashed.find(needle)
+    if pos < 0:
+        return None
+    start = origin[pos]
+    end = origin[pos + len(needle) - 1] + 1
+    return start, end

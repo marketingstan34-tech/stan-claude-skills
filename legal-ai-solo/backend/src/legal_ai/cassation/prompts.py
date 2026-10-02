@@ -1,0 +1,95 @@
+"""Prompts and strict JSON schemas for the cassation analysis (версия cass-1)."""
+
+from __future__ import annotations
+
+PROMPT_VERSION = "cass-1"
+
+SYSTEM_BASE = (
+    "Ти си помощник на български адвокат по касационни производства (чл. 280 ГПК). "
+    "Работиш САМО с текста, който ти е подаден. Не измисляй съдебни актове, номера на дела, "
+    "дати или текстове на закони. Когато цитираш, копирай текста ДОСЛОВНО от подадения документ, "
+    "без промени, многоточия или съкращения. Ако нещо не личи от текста, кажи го изрично. "
+    "Пишеш на български."
+)
+
+ANALYSIS_INSTRUCTIONS = """Прочети въззивното решение по-долу и направи:
+
+1. case_summary: кратко описание на казуса (5–8 изречения): страни (с инициалите от текста),
+   искове, какво е решила първата инстанция, какво е решил въззивният съд и защо.
+2. lower_instance: обжалваният пред въззивния съд акт, точно както е посочен в текста
+   (вид, номер, дата, дело, съд). Празни низове, ако не е посочен.
+3. holdings: ключовите правни изводи на въззивния съд, от които зависи изходът. За всеки:
+   кратко описание и quote — едно изречение или част от изречение, копирано ДОСЛОВНО.
+4. questions: правни въпроси по чл. 280, ал. 1 ГПК, които адвокат би поставил срещу решението.
+   Всеки въпрос: да е правен (не фактически), обуславящ изхода, формулиран общо (без имена и суми),
+   като въпрос. kind: "материалноправен" или "процесуалноправен". holding_ids: на кои изводи отговаря.
+   ground: "т.1" ако вероятно има практика на ВКС в обратния смисъл, "т.3" ако практика вероятно
+   липсва или трябва да се промени. Дай 3–7 въпроса, подредени по важност.
+5. search: за всеки въпрос 2–4 набора от думи за търсачката на ВКС. Търсачката намира актове,
+   съдържащи ВСИЧКИ думи от набора, в ТОЧНО тази словоформа (без корени). Затова: 2–3 думи на набор,
+   характерни за правния проблем, във формата, в която най-често се срещат в мотиви на ВКС
+   (напр. "най-обременителното", "задатък", "нестанала"). Може и номер на член като отделна дума
+   (напр. "493"). Избягвай общи думи (съд, решение, иск, ГПК).
+"""
+
+ANALYSIS_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["case_summary", "lower_instance", "holdings", "questions", "search"],
+    "properties": {
+        "case_summary": {"type": "string"},
+        "lower_instance": {
+            "type": "object", "additionalProperties": False,
+            "required": ["act", "date", "case", "court"],
+            "properties": {k: {"type": "string"} for k in ("act", "date", "case", "court")},
+        },
+        "holdings": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["id", "summary", "quote"],
+            "properties": {"id": {"type": "string"}, "summary": {"type": "string"},
+                           "quote": {"type": "string"}},
+        }},
+        "questions": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["id", "text", "kind", "holding_ids", "ground", "why_decisive"],
+            "properties": {
+                "id": {"type": "string"}, "text": {"type": "string"},
+                "kind": {"type": "string", "enum": ["материалноправен", "процесуалноправен"]},
+                "holding_ids": {"type": "array", "items": {"type": "string"}},
+                "ground": {"type": "string", "enum": ["т.1", "т.3"]},
+                "why_decisive": {"type": "string"},
+            },
+        }},
+        "search": {"type": "array", "items": {
+            "type": "object", "additionalProperties": False,
+            "required": ["question_id", "word_sets"],
+            "properties": {
+                "question_id": {"type": "string"},
+                "word_sets": {"type": "array", "items": {"type": "array", "items": {"type": "string"}}},
+            },
+        }},
+    },
+}
+
+ASSESS_INSTRUCTIONS = """Дадени са: (А) правен въпрос и изводът на въззивния съд по него; (Б) откъси от
+решение на ВКС. Прецени дали решението на ВКС е относимо към въпроса и в каква посока е.
+
+- relevant: true само ако ВКС разглежда същия или пряко сходен правен проблем.
+- stance: "противоречи" — ВКС приема обратното на въззивния съд (полезно за касатора);
+  "подкрепя" — ВКС приема същото като въззивния съд; "неясно" — относимо, но посоката не е ясна;
+  "неотносимо" — не е по въпроса.
+- vks_rule: правилото, което ВКС формулира, с твои думи (1–3 изречения). Празно, ако е неотносимо.
+- quote: 1–3 изречения, копирани ДОСЛОВНО от откъсите (Б), които доказват vks_rule. Празно, ако е неотносимо.
+- explanation: защо е относимо и в каква посока (1–2 изречения).
+"""
+
+ASSESS_SCHEMA = {
+    "type": "object", "additionalProperties": False,
+    "required": ["relevant", "stance", "vks_rule", "quote", "explanation"],
+    "properties": {
+        "relevant": {"type": "boolean"},
+        "stance": {"type": "string", "enum": ["противоречи", "подкрепя", "неясно", "неотносимо"]},
+        "vks_rule": {"type": "string"},
+        "quote": {"type": "string"},
+        "explanation": {"type": "string"},
+    },
+}

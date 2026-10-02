@@ -125,6 +125,43 @@ def cmd_search(args) -> int:
     return 0
 
 
+def cmd_analyze(args) -> int:
+    import os
+    from datetime import date, timedelta
+
+    from legal_ai.ai import OpenAIProvider, load_ai_config
+    from legal_ai.cassation.pipeline import fetch_appellate, load_local, run_analysis, save_run
+    from legal_ai.http import PoliteClient
+    from legal_ai.sources.courts import ALLOWED_HOSTS
+    from legal_ai.sources.vks import HOST as VKS_HOST
+
+    interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
+    ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
+    out = Path(args.out or Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs")
+    ai = OpenAIProvider(load_ai_config())
+    with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
+            PoliteClient([VKS_HOST], interval, ua) as vks:
+        if args.file:
+            appellate = load_local(Path(args.file), args.label or "")
+        else:
+            _, appellate = fetch_appellate(courts, args.court, args.case, args.year, args.type)
+        print(f"Въззивно решение: {appellate.label} ({appellate.fmt}, {len(appellate.text)} знака)")
+        if args.until:
+            y, m = (int(x) for x in args.until.split("-"))
+            cutoff = date(y, m, 28)
+        elif appellate.act_date:
+            cutoff = appellate.act_date + timedelta(days=60)
+        else:
+            cutoff = date.today()
+        result = run_analysis(ai, vks, appellate, cutoff)
+    ai.close()
+    run_dir = save_run(result, out)
+    print(f"Готово: {run_dir / 'report.md'}")
+    print(f"AI заявки: {result.usage['calls']}; токени {result.usage['input_tokens']}"
+          f"/{result.usage['output_tokens']}")
+    return 0
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
@@ -161,6 +198,17 @@ def main(argv: list[str] | None = None) -> int:
     s.add_argument("--only-290", action="store_true")
     s.add_argument("--limit", type=int, default=10)
     s.set_defaults(func=cmd_search)
+
+    a = sub.add_parser("analyze", help="Касационен анализ на въззивно решение")
+    a.add_argument("--court", choices=["as-plovdiv", "os-plovdiv"], help="Съд (за сваляне по номер)")
+    a.add_argument("--case", type=int, help="Номер на въззивното дело")
+    a.add_argument("--year", type=int, help="Година на въззивното дело")
+    a.add_argument("--type", default="", choices=["", "Гражданско", "Търговско"])
+    a.add_argument("--file", help="Или: локален файл с решението (PDF/HTML/TXT)")
+    a.add_argument("--label", help="Название при --file")
+    a.add_argument("--until", help="Практика на ВКС до ГГГГ-ММ (по подразбиране: 2 месеца след решението)")
+    a.add_argument("--out", help="Папка за резултатите (по подразбиране data/runs)")
+    a.set_defaults(func=cmd_analyze)
 
     v = sub.add_parser("serve", help="Стартирай уеб интерфейса")
     v.add_argument("--host", default="127.0.0.1")

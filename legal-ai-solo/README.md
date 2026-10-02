@@ -76,6 +76,22 @@ legal-ai serve                     # http://127.0.0.1:8000
 legal-ai search "възлагане на неподеляем имот чл. 349"
 ```
 
+## Касационен анализ (етап 2)
+
+Нужни: `OPENAI_API_KEY` и `AI_*` от `.env.example`, достъп до www.vks.bg и *.justice.bg.
+
+```bash
+cd backend
+# по номер на дело (сваля решението от сайта на съда):
+legal-ai analyze --court as-plovdiv --case 899 --year 2021 --type Търговско
+# или от файл (PDF/HTML/TXT):
+legal-ai analyze --file ~/Downloads/reshenie.pdf --label "АС Пловдив, в.т.д. ..."
+```
+
+Резултатът (`report.md`, `run.json`) е в `data/runs/<дата>/` — частна папка, не е в Git.
+Всеки цитат е проверен дословно спрямо източника (✅) или е маркиран (⚠️).
+Ограничения: търсенето е в сайта на ВКС по точни думи; тълкувателните решения още не са включени.
+
 ## Тестове
 
 ```bash
