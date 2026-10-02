@@ -234,6 +234,10 @@ def cmd_analyze(args) -> int:
         finally:
             if conn is not None:
                 conn.close()
+        if args.court and not args.file:
+            from legal_ai.tracing import as_dicts, trace
+            result.path = as_dicts(trace(courts, vks, args.court, args.case, args.year,
+                                         appellate.act_date, result.analysis.get("lower_instance")))
     ai.close()
     run_dir = save_run(result, out)
     print(f"Готово: {run_dir / 'report.md'}")
@@ -292,7 +296,8 @@ def main(argv: list[str] | None = None) -> int:
     s.set_defaults(func=cmd_search)
 
     a = sub.add_parser("analyze", help="Касационен анализ на въззивно решение")
-    a.add_argument("--court", choices=["as-plovdiv", "os-plovdiv"], help="Съд (за сваляне по номер)")
+    a.add_argument("--court", choices=["as-plovdiv", "os-plovdiv", "rs-plovdiv"],
+                   help="Съд на въззивното решение (за сваляне по номер)")
     a.add_argument("--case", type=int, help="Номер на въззивното дело")
     a.add_argument("--year", type=int, help="Година на въззивното дело")
     a.add_argument("--type", default="", choices=["", "Гражданско", "Търговско"])

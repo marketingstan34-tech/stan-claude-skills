@@ -69,6 +69,10 @@ class JobRunner:
                 finally:
                     if conn is not None:
                         conn.close()
+                from legal_ai.tracing import as_dicts, trace
+                job.message = "Проследяване на делото по инстанции…"
+                result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
+                                             appellate.act_date, result.analysis.get("lower_instance")))
             ai.close()
             job.run_dir = save_run(result, self.runs_dir).name
             job.status = "done"

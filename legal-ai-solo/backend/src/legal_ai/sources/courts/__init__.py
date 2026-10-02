@@ -22,6 +22,8 @@ class CourtSite:
 COURTS: dict[str, CourtSite] = {
     "as-plovdiv": CourtSite("as-plovdiv", "Апелативен съд Пловдив", "plovdiv-as.justice.bg", "2465"),
     "os-plovdiv": CourtSite("os-plovdiv", "Окръжен съд Пловдив", "plovdiv-os.justice.bg", "3935"),
+    # from the court's sitemap, 02.10.2026 (used for first-instance lookups)
+    "rs-plovdiv": CourtSite("rs-plovdiv", "Районен съд Пловдив", "plovdiv-rs.justice.bg", "9885"),
 }
 
 CASE_TYPES = ("Гражданско", "Търговско")

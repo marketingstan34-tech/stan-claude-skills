@@ -20,6 +20,18 @@
 {% set li = a.lower_instance %}
 <p class="muted">Обжалван пред въззивния съд акт (по текста): {{ li.act or '?' }} от {{ li.date or '?' }} по {{ li.case or '?' }}, {{ li.court or '?' }}</p></section>
 
+{% if run.path %}
+<section class="card"><h2>Пътят на делото</h2><ol>
+{% for i in run.path %}
+  <li><strong>{{ i.level }}:</strong> {{ i.court }}, дело {{ i.case }}
+    {% for a in i.acts %}<div class="muted">{{ a.type }} {% if a.number %}№ {{ a.number }} {% endif %}от {{ a.date }}{% if a.result %} — {{ a.result }}{% endif %}{% if a.url %} · <a href="{{ a.url }}">акт</a>{% endif %}</div>{% endfor %}
+    {% if i.result %}<div>Резултат: {{ i.result }}</div>{% endif %}
+    {% if i.note %}<div class="bad muted">⚠️ {{ i.note }}</div>{% endif %}
+    {% if i.source_url %}<div class="muted"><a href="{{ i.source_url }}">източник</a></div>{% endif %}
+  </li>
+{% endfor %}</ol></section>
+{% endif %}
+
 <section class="card"><h2>Изводи на въззивния съд</h2>
 {% for h in a.holdings %}<p><strong>{{ h.id }}.</strong> {{ h.summary }}</p>{{ quote(run.holding_quotes[h.id]) }}{% endfor %}
 </section>

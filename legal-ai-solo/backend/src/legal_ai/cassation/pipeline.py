@@ -79,6 +79,7 @@ class RunResult:
     prompt_version: str
     created_at: str
     cutoff: str
+    path: list = field(default_factory=list)   # case path, see legal_ai.tracing
 
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[„\"(]?[А-ЯA-Z0-9])")
@@ -397,8 +398,17 @@ def render_markdown(r: RunResult) -> str:
         "## Казусът", "", a["case_summary"], "",
         "## Обжалван пред въззивния съд акт (както е посочен в текста)", "",
         f"{li['act'] or '?'} от {li['date'] or '?'} по {li['case'] or '?'}, {li['court'] or '?'}", "",
-        "## Ключови изводи на въззивния съд", "",
     ]
+    if r.path:
+        lines += ["## Пътят на делото", ""]
+        for i in r.path:
+            acts = "; ".join(f"{a['type']} {('№ ' + a['number'] + ' ') if a['number'] else ''}от {a['date']}"
+                             + (f" — {a['result']}" if a['result'] else "") for a in i["acts"])
+            lines.append(f"- **{i['level']}:** {i['court']}, дело {i['case']}"
+                         + (f" — {acts}" if acts else "") + (f" · резултат: {i['result']}" if i["result"] else "")
+                         + (f" · ⚠️ {i['note']}" if i["note"] else ""))
+        lines.append("")
+    lines += ["## Ключови изводи на въззивния съд", ""]
     for h in a["holdings"]:
         lines += [f"**{h['id']}.** {h['summary']}", "", _q(r.holding_quotes[h["id"]]), ""]
     lines += ["## Правни въпроси и практика на ВКС", ""]
