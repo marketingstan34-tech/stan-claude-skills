@@ -69,7 +69,7 @@ def _vks_transport():
 
 def test_pipeline_verifies_quotes_and_groups_by_stance():
     transport, calls = _ai_transport()
-    ai = OpenAIProvider(AIConfig("model-a", "model-b", max_calls=10), transport=transport, sleep=lambda s: None)
+    ai = OpenAIProvider(AIConfig("model-a", "model-b", max_calls=10, assess_model="model-c"), transport=transport, sleep=lambda s: None)
     vks = PoliteClient(["www.vks.bg"], transport=_vks_transport(), sleep=lambda s: None)
     doc = SourceDoc("Синтетично дело", "file:///synthetic", APPELLATE, "txt", "2026-01-01")
     r = run_analysis(ai, vks, doc, date(2022, 1, 1))
@@ -81,7 +81,8 @@ def test_pipeline_verifies_quotes_and_groups_by_stance():
     assert a.stance == "противоречи" and a.quote.status == "text_verified"
     assert a.proceeding_article == "290"
     assert r.usage["calls"] == 2
-    assert all(c["model"] == "model-a" for c in calls)
+    assert [c["model"] for c in calls] == ["model-a", "model-c"]
+    assert calls[1]["reasoning"]["effort"] == "low"
 
     md = render_markdown(r)
     assert "Противоречи на въззивния съд" in md

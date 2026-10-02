@@ -45,6 +45,8 @@ class AIConfig:
     light_model: str
     max_calls: int = 60          # hard cap per analysis run
     reasoning_effort: str = "medium"
+    assess_model: str = ""       # per-decision assessments; defaults to light_model
+    assess_effort: str = "low"
 
 
 def load_ai_config() -> AIConfig:
@@ -58,6 +60,8 @@ def load_ai_config() -> AIConfig:
         light_model=model("AI_QUERY_MODEL"),
         max_calls=int(os.environ.get("AI_MAX_CALLS_PER_RUN", "60")),
         reasoning_effort=os.environ.get("AI_REASONING_EFFORT", "medium"),
+        assess_model=os.environ.get("AI_ASSESS_MODEL", "") or model("AI_QUERY_MODEL"),
+        assess_effort=os.environ.get("AI_ASSESS_EFFORT", "low"),
     )
 
 

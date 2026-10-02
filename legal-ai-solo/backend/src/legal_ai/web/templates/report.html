@@ -12,7 +12,7 @@
 {% block content %}
 <h1>{{ run.appellate.label }}</h1>
 <p class="muted"><a href="{{ run.appellate.url }}">Източник</a> · анализ {{ run.created_at[:16].replace('T',' ') }} UTC ·
-модел {{ run.models.analysis }} · промпт {{ run.prompt_version }} · практика на ВКС до {{ run.cutoff }}</p>
+анализ: {{ run.models.analysis }}{% if run.models.assess %} · оценки: {{ run.models.assess }}{% endif %} · промпт {{ run.prompt_version }} · практика на ВКС до {{ run.cutoff }}</p>
 <div class="notice">Помощен анализ, не правно становище. Търсенето е в сайта на ВКС по точни думи и може да пропусне
 практика; тълкувателните решения още не са включени. Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
 

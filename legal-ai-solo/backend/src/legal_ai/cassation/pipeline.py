@@ -274,8 +274,9 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     def assess(job: tuple[dict, str, str]) -> Assessment | str:
         q, sid, user = job
         try:
-            a = ai.structured(model=cfg.analysis_model, system=P.SYSTEM_BASE, user=user,
-                              schema_name="vks_assessment", schema=P.ASSESS_SCHEMA)
+            a = ai.structured(model=cfg.assess_model or cfg.light_model, system=P.SYSTEM_BASE,
+                              user=user, schema_name="vks_assessment", schema=P.ASSESS_SCHEMA,
+                              effort=cfg.assess_effort)
         except Exception as exc:  # noqa: BLE001 - one failed assessment must not sink the run
             return f"{found[sid]['row'].link_text}: AI оценката не успя ({exc})"
         act = acts[sid]
@@ -300,7 +301,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
         assessments=assessments, searches=searches, skipped=skipped,
         usage={"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,
                "output_tokens": ai.usage.output_tokens, "by_model": ai.usage.by_model},
-        models={"analysis": cfg.analysis_model, "light": cfg.light_model},
+        models={"analysis": cfg.analysis_model, "assess": cfg.assess_model or cfg.light_model,
+                "assess_effort": cfg.assess_effort},
         prompt_version=P.PROMPT_VERSION, created_at=datetime.now(timezone.utc).isoformat(),
         cutoff=cutoff.isoformat())
 
@@ -329,7 +331,7 @@ def render_markdown(r: RunResult) -> str:
         "",
         f"Източник: {r.appellate.url}  ",
         f"Анализът е направен {r.created_at[:16].replace('T', ' ')} UTC · модел {r.models['analysis']}"
-        f" · промпт {r.prompt_version} · практика на ВКС до {r.cutoff}",
+        f" · оценки: {r.models.get('assess', '-')} · промпт {r.prompt_version} · практика на ВКС до {r.cutoff}",
         "",
         "> Това е помощен анализ, не правно становище. Всеки цитат е проверен дословно спрямо "
         "източника (✅) или е маркиран (⚠️). Търсенето е в сайта на ВКС по точни думи и може да "
