@@ -10,14 +10,12 @@
 from __future__ import annotations
 
 import json
-import random
 import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
-from urllib.parse import urlparse
 
 import httpx
 
@@ -25,77 +23,18 @@ from legal_ai.sources.vks import HOST, LIST_TRUNCATION_LIMIT
 from legal_ai.sources.vks.parser import parse_list
 from legal_ai.sources.vks.urls import CHAMBERS, ListQuery, act_url, list_url
 
-MAX_BYTES = 5 * 1024 * 1024
-MAX_ATTEMPTS = 3
+from legal_ai.http import FetchError, Fetched, PoliteClient  # noqa: F401  (re-exported)
 
 
-class FetchError(Exception):
-    pass
+class VksClient(PoliteClient):
+    """Polite client restricted to www.vks.bg."""
 
-
-@dataclass
-class Fetched:
-    url: str
-    status: int
-    body: bytes
-    retrieved_at: str
-
-
-class VksClient:
     def __init__(self, min_interval: float = 2.0, user_agent: str = "legal-ai-solo/0.1",
                  transport: httpx.BaseTransport | None = None,
                  sleep: Callable[[float], None] = time.sleep,
                  clock: Callable[[], float] = time.monotonic) -> None:
-        self._min_interval = max(2.0, min_interval)
-        self._sleep = sleep
-        self._clock = clock
-        self._last: float | None = None
-        self._http = httpx.Client(
-            timeout=httpx.Timeout(30.0),
-            headers={"User-Agent": user_agent},
-            follow_redirects=False,
-            transport=transport,
-        )
-
-    def close(self) -> None:
-        self._http.close()
-
-    def _wait_turn(self) -> None:
-        if self._last is not None:
-            remaining = self._min_interval - (self._clock() - self._last)
-            if remaining > 0:
-                self._sleep(remaining)
-        self._last = self._clock()
-
-    def get(self, url: str) -> Fetched:
-        parsed = urlparse(url)
-        if parsed.scheme != "https" or parsed.hostname != HOST:
-            raise FetchError(f"URL извън разрешения домейн: {url}")
-        last_error = ""
-        for attempt in range(1, MAX_ATTEMPTS + 1):
-            self._wait_turn()
-            try:
-                with self._http.stream("GET", url) as resp:
-                    if resp.status_code in (429,) or resp.status_code >= 500:
-                        last_error = f"HTTP {resp.status_code}"
-                        retry_after = resp.headers.get("Retry-After", "")
-                        delay = float(retry_after) if retry_after.isdigit() else 2 ** attempt
-                        self._sleep(min(delay, 60) + random.uniform(0, 1))
-                        continue
-                    if resp.status_code != 200:
-                        raise FetchError(f"HTTP {resp.status_code} за {url}")
-                    chunks, size = [], 0
-                    for chunk in resp.iter_bytes():
-                        size += len(chunk)
-                        if size > MAX_BYTES:
-                            raise FetchError(f"Отговорът е над {MAX_BYTES} байта: {url}")
-                        chunks.append(chunk)
-                    return Fetched(url, 200, b"".join(chunks),
-                                   datetime.now(timezone.utc).isoformat())
-            except (httpx.TimeoutException, httpx.TransportError) as exc:
-                last_error = type(exc).__name__
-                self._sleep(2 ** attempt + random.uniform(0, 1))
-        raise FetchError(f"Неуспешно след {MAX_ATTEMPTS} опита ({last_error}): {url}")
+        super().__init__([HOST], min_interval, user_agent, transport=transport,
+                         sleep=sleep, clock=clock)
 
 
 @dataclass
