@@ -146,8 +146,17 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
             q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type, words=words,
                           chamber=only)
             name = f"{y}-Q{(q_start - 1) // 3 + 1}-{q_start:02d}-{q_end:02d}{suffix}"
-            if fetch_list(q, name) >= LIST_TRUNCATION_LIMIT:
+            if fetch_list(q, name) < LIST_TRUNCATION_LIMIT:
+                continue
+            if only:
                 report.truncated.append(name)
+                continue
+            for chamber in CHAMBERS:  # a truncated quarter list is split like a month list
+                part_q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type,
+                                   words=words, chamber=chamber)
+                part = f"{name}__{_slug(chamber)}"
+                if fetch_list(part_q, part) >= LIST_TRUNCATION_LIMIT:
+                    report.truncated.append(part)
 
     for source_id, link_text in ids.items():
         path = out_dir / "acts" / f"{source_id}.html"

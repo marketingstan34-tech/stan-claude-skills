@@ -128,7 +128,8 @@ def cmd_build_corpus(args) -> int:
                 with open(log, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 print(json.dumps(entry, ensure_ascii=False), flush=True)
-                if report.acts and ok == len(report.acts):  # an empty quarter is re-checked
+                # an empty or still truncated quarter is not marked done, so it is re-checked
+                if report.acts and ok == len(report.acts) and not report.truncated:
                     done_flag.write_text(entry["quarter"], encoding="utf-8")
     finally:
         client.close()
