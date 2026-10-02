@@ -14,7 +14,7 @@ from datetime import date
 
 import lxml.html
 
-PARSER_VERSION = "vks-2"
+PARSER_VERSION = "vks-4"
 
 _LIST_LINK = re.compile(
     r'pregled-akt\.jsp\?type=ot-spisak&(?:amp;)?id=([0-9A-F]{32})"[^>]*>([^<]*)<'
@@ -91,10 +91,55 @@ _COLLEGE_ADJ = {"граждан": "гражданско", "търгов": "тъ�
 _PROCEEDING = re.compile(
     r"Производството\s+е\s+по\s+(?:реда\s+на\s+)?чл\.\s*(\d+[а-я]?)", re.IGNORECASE
 )
-_ADMISSION_HINT = re.compile(r"допус(?:нато|ка|нал|кане)[^.]{0,40}касационно\s+обжалване", re.IGNORECASE)
-_ART_280 = re.compile(
-    r"чл\.\s*280\s*,?\s*ал\.\s*(\d)(?:\s*,?\s*(?:т\.\s*(\d)|предл\.\s*(\d)))?", re.IGNORECASE
+_ADMISSION_HINT = re.compile(
+    r"допус(?:нато|ка|нал|кане)[^.]{0,40}касационно\s+обжалване"
+    r"|касационно(?:то)?\s+обжалване[^.]{0,60}?\s(?:е\s+)?допуснато",
+    re.IGNORECASE,
 )
+_ART_280 = re.compile(r"чл\.\s*280\b", re.IGNORECASE)
+# "ал. 1, т. 1", "ал.2, предл.2", "ал. 2, пр. 3" following a "чл. 280" mention
+_ART_280_PART = re.compile(
+    r"ал\.\s*(\d)(?:\s*,?\s*(?:т\.\s*(\d)|пр(?:едл)?\.\s*(\d|първо|второ|трето|последно)))?",
+    re.IGNORECASE,
+)
+# Art. 280(2) GPK has three alternatives ("предложения"); "последно" is the third.
+_PROPOSAL_WORDS = {"първо": "1", "второ": "2", "трето": "3", "последно": "3"}
+# Grounds of art. 280(2) GPK stated in words, in the order of the provision.
+_ART_280_2_WORDS = (
+    (re.compile(r"вероятна\s+нищожност", re.IGNORECASE), "чл. 280, ал. 2, предл. 1"),
+    (re.compile(r"вероятна\s+(?:нищожност\s+или\s+)?недопустимост", re.IGNORECASE),
+     "чл. 280, ал. 2, предл. 2"),
+    (re.compile(r"очевидн\w*\s+неправилност|очевидно\s+неправилн", re.IGNORECASE),
+     "чл. 280, ал. 2, предл. 3"),
+)
+ADMISSION_WINDOW = 2  # grounds are often stated in the paragraph(s) after the admission sentence
+
+
+def extract_280_grounds(text: str) -> list[str]:
+    grounds: list[str] = []
+
+    def add(label: str) -> None:
+        if label not in grounds:
+            grounds.append(label)
+
+    for m in _ART_280.finditer(text):
+        tail = text[m.end(): m.end() + 120]
+        stop = re.search(r"ГПК|чл\.\s*(?!280)\d", tail)
+        for g in _ART_280_PART.finditer(tail[: stop.start()] if stop else tail):
+            label = f"чл. 280, ал. {g.group(1)}"
+            if g.group(2):
+                label += f", т. {g.group(2)}"
+            elif g.group(3):
+                label += f", предл. {_PROPOSAL_WORDS.get(g.group(3).lower(), g.group(3))}"
+            add(label)
+    for pattern, label in _ART_280_2_WORDS:
+        if pattern.search(text):
+            add(label)
+    # A bare "ал. 2" adds nothing when a specific alternative of the same paragraph is known.
+    specific = {g.rsplit(",", 1)[0] for g in grounds if g.count(",") == 2}
+    return [g for g in grounds if g not in specific]
+
+
 _SPACED_HEADING = re.compile(r"^(?:[А-Я]\s){3,}[А-Я]$")
 _DISPOSITIVE = re.compile(r"^(?:Р\s*Е\s*Ш\s*И|О\s*П\s*Р\s*Е\s*Д\s*Е\s*Л\s*И|Р\s*А\s*З\s*П\s*О\s*Р\s*Е\s*Д\s*И)\s*:?\s*$")
 
@@ -207,15 +252,12 @@ def parse_act(html: str) -> ParsedAct:
 
     admission_nos: list[int] = []
     grounds: list[str] = []
-    for p in paragraphs:
-        if p.section == "reasoning" and _ADMISSION_HINT.search(p.text):
+    reasoning = [p for p in paragraphs if p.section == "reasoning"]
+    for i, p in enumerate(reasoning):
+        if _ADMISSION_HINT.search(p.text):
             admission_nos.append(p.no)
-            for g in _ART_280.finditer(p.text):
-                label = f"чл. 280, ал. {g.group(1)}"
-                if g.group(2):
-                    label += f", т. {g.group(2)}"
-                elif g.group(3):
-                    label += f", предл. {g.group(3)}"
+            window = " ".join(x.text for x in reasoning[i: i + 1 + ADMISSION_WINDOW])
+            for label in extract_280_grounds(window):
                 if label not in grounds:
                     grounds.append(label)
 

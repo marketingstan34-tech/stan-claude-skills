@@ -86,3 +86,33 @@ def test_chamber_variants_and_proceeding_por_reda():
 def test_chamber_not_guessed_without_college():
     act = _act("Върховният касационен съд, Второ отделение, в открито заседание")
     assert act.chamber is None and "chamber_not_found" in act.warnings
+
+
+def test_extract_280_grounds_variants():
+    from legal_ai.sources.vks.parser import extract_280_grounds
+    assert extract_280_grounds(
+        "в приложното поле на чл. 280, ал. 1, т. 1 и ал. 2, пр. 3 ГПК") == [
+        "чл. 280, ал. 1, т. 1", "чл. 280, ал. 2, предл. 3"]
+    assert extract_280_grounds("на основание чл.280, ал.2, предл.2 ГПК") == ["чл. 280, ал. 2, предл. 2"]
+    assert extract_280_grounds("поради вероятна недопустимост на въззивното решение") == [
+        "чл. 280, ал. 2, предл. 2"]
+    assert extract_280_grounds("по чл. 280, ал. 1, т. 3 ГПК, а по чл. 290, ал. 2 ГПК") == [
+        "чл. 280, ал. 1, т. 3"]
+
+
+def test_admission_in_reverse_word_order_and_grounds_in_next_paragraph():
+    html = ('<div id="Content">Р Е Ш Е Н И Е<br>Второ гражданско отделение<br>'
+            'Производството е по чл. 290 ГПК.<br>'
+            'Касационното обжалване е допуснато с определение № 1.<br>'
+            'Допускането е на основание чл. 280, ал. 1, т. 1 ГПК по въпроса за делбата.<br>'
+            'Р Е Ш И:<br>ОСТАВЯ В СИЛА.</div>')
+    act = parse_act(html)
+    assert len(act.admission_paragraph_nos) == 1
+    assert act.admission_grounds == ["чл. 280, ал. 1, т. 1"]
+
+
+def test_extract_280_grounds_proposal_words():
+    from legal_ai.sources.vks.parser import extract_280_grounds
+    assert extract_280_grounds("на основание чл.280, ал.2, предл.последно ГПК") == ["чл. 280, ал. 2, предл. 3"]
+    assert extract_280_grounds("по чл. 280, ал. 2, предл. второ ГПК") == ["чл. 280, ал. 2, предл. 2"]
+    assert extract_280_grounds("по чл. 280, ал. 2 ГПК") == ["чл. 280, ал. 2"]

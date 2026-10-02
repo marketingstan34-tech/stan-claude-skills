@@ -86,6 +86,6 @@ def word_matches(word: str, terms: list[Term]) -> bool:
     for t in terms:
         if t.kind == "word" and word.startswith(t.value):
             return True
-        if t.kind == "phrase" and word in t.value.split():
+        if t.kind == "phrase" and word.isdigit() and word in t.value.split():
             return True
     return False
