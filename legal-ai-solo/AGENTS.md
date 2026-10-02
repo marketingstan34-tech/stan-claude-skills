@@ -21,7 +21,7 @@
 - Не измисляй актове, номера на дела, URL адреси, законови текстове, API endpoints или benchmark резултати.
 - Не представяй mock, fixture или manual import като работещ live източник.
 - Не заобикаляй CAPTCHA, login, КЕП, rate limits или забрани за достъп. Не автоматизирай Апис/Сиела.
-- Не добавяй SaaS неща: login, users, organizations, tenants, RLS, Stripe, billing, Redis, Celery, Next.js.
+- Не добавяй SaaS неща: users, organizations, tenants, multi-tenant RLS политики, Stripe, billing, Redis, Celery, Next.js. (RLS без политики, само за да е заключен публичният API на Supabase, е разрешен.)
 - Не създавай Phase C таблици (`cases`, `documents`, `facts` и др.) преди search gate.
 - Не публикувай портове извън `127.0.0.1`; Postgres няма публикуван порт.
 - Не commit-вай клиентски данни, сурови съдебни актове (докато правата не са изяснени), API ключове, `.env` или raw prompts.
