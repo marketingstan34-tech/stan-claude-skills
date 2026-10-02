@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Legal AI Solo{% endblock %}</title>
+<style>
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --text: #1d1d1b; --muted: #6b6a66; --border: #e3e0d8;
+  --accent: #23486b; --accent-soft: #e8eef5; --mark: #fde68a; --warn-bg: #fff4e0; --warn: #8a5300;
+  --target: #fff8d6;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615; --surface: #1f1f1d; --text: #ecebe6; --muted: #a2a09a; --border: #34332f;
+    --accent: #8fb5dc; --accent-soft: #23303d; --mark: #6b5310; --warn-bg: #3a2c12; --warn: #f2c47c;
+    --target: #3a3418;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 16px/1.55 "Segoe UI", system-ui, -apple-system, sans-serif; }
+a { color: var(--accent); }
+header { border-bottom: 1px solid var(--border); background: var(--surface); }
+header .wrap { display: flex; align-items: baseline; gap: 16px; }
+header a.brand { font-weight: 650; text-decoration: none; color: var(--text); font-size: 18px; }
+.wrap { max-width: 960px; margin: 0 auto; padding: 14px 16px; }
+.muted { color: var(--muted); font-size: 14px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 16px 18px; margin: 14px 0; }
+.notice { background: var(--warn-bg); color: var(--warn); border-radius: 8px; padding: 10px 14px;
+  margin: 12px 0; font-size: 14px; }
+mark { background: var(--mark); color: inherit; padding: 0 1px; border-radius: 2px; }
+.tag { display: inline-block; font-size: 12px; padding: 1px 8px; border-radius: 999px;
+  background: var(--accent-soft); color: var(--accent); margin-right: 6px; }
+blockquote { margin: 10px 0; padding: 8px 12px; border-left: 3px solid var(--accent);
+  background: var(--bg); border-radius: 0 6px 6px 0; }
+input[type=text] { width: 100%; font: inherit; padding: 10px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+button { font: inherit; padding: 10px 18px; border-radius: 8px; border: 0; background: var(--accent);
+  color: var(--bg); cursor: pointer; }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.grow { flex: 1 1 320px; }
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <a class="brand" href="/">Legal AI Solo</a>
+  <span class="muted">Практика на ВКС · локален експеримент · правното качество не е валидирано</span>
+</div></header>
+<main class="wrap">
+{% block content %}{% endblock %}
+</main>
+</body>
+</html>

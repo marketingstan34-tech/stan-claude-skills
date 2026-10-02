@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}{{ (d.act_type or 'Акт')|capitalize }} № {{ d.act_number }} · Legal AI Solo{% endblock %}
+{% block content %}
+<p class="muted"><a href="/?q={{ q|urlencode }}">← към резултатите</a></p>
+<div class="card">
+  <h1 style="font-size:20px;margin:0 0 6px">
+    {{ (d.act_type or 'акт')|capitalize }} № {{ d.act_number or '?' }}{% if d.act_date %}/{{ d.act_date.strftime('%d.%m.%Y') }}{% endif %}
+    по {{ d.case_type or '' }} дело № {{ d.case_number or '?' }}/{{ d.case_year or '?' }}
+  </h1>
+  <div class="muted">
+    ВКС{% if d.chamber %}, {{ d.chamber }}{% endif %}
+    {% if d.proceeding_article %}<span class="tag">чл. {{ d.proceeding_article }} ГПК</span>{% endif %}
+    {% for g in d.admission_grounds %}<span class="tag">допуснато: {{ g }}</span>{% endfor %}
+  </div>
+  <div class="muted" style="margin-top:8px">
+    Източник: <a href="{{ d.canonical_url }}" target="_blank" rel="noopener noreferrer">{{ d.canonical_url }}</a><br>
+    Изтеглено: {{ d.retrieved_at.strftime('%d.%m.%Y %H:%M UTC') if d.retrieved_at else 'неизвестно' }} ({{ d.acquisition }}) ·
+    версия на текста {{ d.text_hash[:12] }} · парсер {{ d.parser_version }}
+  </div>
+</div>
+<div class="card">
+{% for p in paragraphs %}
+  <p id="p-{{ p.paragraph_no }}" style="margin:6px 0;{% if target is not none and p.paragraph_no == target %}background:var(--target);outline:2px solid var(--mark);border-radius:4px;padding:4px 6px{% endif %}">
+    {% if p.is_admission %}<span class="tag">основание за допускане</span>{% endif %}
+    {{ highlight(p.exact_text, terms) if terms else p.exact_text }}
+  </p>
+{% endfor %}
+</div>
+{% endblock %}

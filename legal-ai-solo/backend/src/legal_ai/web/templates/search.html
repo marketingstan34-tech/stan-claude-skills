@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block content %}
+<form method="get" action="/" class="card">
+  <div class="row">
+    <input class="grow" type="text" name="q" value="{{ q }}" autofocus
+           placeholder="Напр.: възлагане на неподеляем имот при делба чл. 349 ГПК" aria-label="Търсене">
+    <button type="submit">Търси</button>
+  </div>
+  <label class="muted"><input type="checkbox" name="only_290" value="true" {% if only_290 %}checked{% endif %}>
+    Само решения по чл. 290 ГПК</label>
+</form>
+
+<p class="muted">
+  Корпус: {{ corpus.n }} акта{% if corpus.n %}, {{ corpus.first.strftime('%d.%m.%Y') }} – {{ corpus.last.strftime('%d.%m.%Y') }}, от тях {{ corpus.n290 }} по чл. 290 ГПК{% endif %}.
+  Търсене по думи (без семантично търсене засега). Пълнотата на корпуса не е проверена.
+  {% if corpus.truncated_lists %}<br><strong>Внимание:</strong> {{ corpus.truncated_lists }} списък(а) от източника са отрязани на 249 резултата.{% endif %}
+</p>
+
+{% if corpus.n == 0 %}
+  <div class="notice">Корпусът е празен. Заредете актове с <code>legal-ai ingest</code>.</div>
+{% elif result %}
+  {% if result.note %}<div class="notice">{{ result.note }}</div>{% endif %}
+  {% if not result.decisions %}
+    <div class="notice">Няма намерени актове в корпуса за това търсене. Това не доказва, че няма такава практика: корпусът е ограничен.</div>
+  {% else %}
+    <p class="muted">{{ result.decisions|length }} акта · подредени по брой съвпаднали думи и плътност на съвпаденията, не по правна значимост</p>
+  {% endif %}
+  {% for d in result.decisions %}
+  <article class="card">
+    <div>
+      <strong>{{ (d.act_type or 'акт')|capitalize }} № {{ d.act_number or '?' }}{% if d.act_date %}/{{ d.act_date.strftime('%d.%m.%Y') }}{% endif %}</strong>
+      по {{ d.case_type or '' }} дело № {{ d.case_number or '?' }}/{{ d.case_year or '?' }}
+    </div>
+    <div class="muted">
+      ВКС{% if d.chamber %}, {{ d.chamber }}{% endif %}
+      {% if d.proceeding_article %}<span class="tag">чл. {{ d.proceeding_article }} ГПК</span>{% endif %}
+      {% for g in d.admission_grounds %}<span class="tag">допуснато: {{ g }}</span>{% endfor %}
+      <span class="tag">{{ d.terms_matched }} от {{ result.terms|length }} думи</span>
+    </div>
+    {% for p in d.passages %}
+      <blockquote>
+        {% if p.is_admission %}<span class="tag">основание за допускане</span>{% endif %}
+        {% if p.section == 'dispositive' %}<span class="tag">диспозитив</span>{% endif %}
+        {{ highlight(p.text, result.terms) }}
+        <div class="muted"><a href="/decisions/{{ d.decision_id }}?p={{ p.paragraph_no }}&q={{ q|urlencode }}#p-{{ p.paragraph_no }}">Отвори в контекст (абзац {{ p.paragraph_no + 1 }})</a></div>
+      </blockquote>
+    {% endfor %}
+    <div class="muted"><a href="{{ d.canonical_url }}" target="_blank" rel="noopener noreferrer">Оригинал на vks.bg ↗</a></div>
+  </article>
+  {% endfor %}
+{% endif %}
+{% endblock %}
