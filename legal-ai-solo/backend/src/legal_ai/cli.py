@@ -91,6 +91,7 @@ def cmd_build_corpus(args) -> int:
     from legal_ai.db import connect
     from legal_ai.ingestion.vks_ingest import ingest_raw_dir
     from legal_ai.sources.vks.crawler import VksClient, crawl, quarters_between
+    from legal_ai.sources.vks.urls import COMMERCIAL_CHAMBERS
 
     settings = load_settings()
     root = settings.private_storage_path.resolve()
@@ -107,12 +108,17 @@ def cmd_build_corpus(args) -> int:
                 while pause.exists():  # lets other jobs use vks.bg alone; checked between quarters
                     time.sleep(20)
                 slug = "gr" if case_type == "гр." else "targ"
+                # commercial decisions are listed per chamber (AktVidDelo=търг. misses
+                # decisions before 2023; docs/source-discovery.md 1.9)
+                query_type, chambers = ((case_type, None) if case_type == "гр." else
+                                        ("empty", COMMERCIAL_CHAMBERS))
                 out = root / "raw" / "vks-corpus" / slug / f"{y}-{m1:02d}-{m2:02d}"
                 done_flag = out / ".ingested"
                 if done_flag.exists():
                     continue
                 t0 = time.time()
-                report = crawl(client, out, (y, m1), (y, m2), act_type="15", case_type=case_type)
+                report = crawl(client, out, (y, m1), (y, m2), act_type="15", case_type=query_type,
+                               chambers=chambers)
                 with connect(settings.database_url) as conn:
                     stats = ingest_raw_dir(conn, out, root, "direct", f"ВКС, решения, {case_type}")
                 ok = sum(1 for a in report.acts if a.get("ok"))
@@ -122,7 +128,7 @@ def cmd_build_corpus(args) -> int:
                 with open(log, "a", encoding="utf-8") as f:
                     f.write(json.dumps(entry, ensure_ascii=False) + "\n")
                 print(json.dumps(entry, ensure_ascii=False), flush=True)
-                if ok == len(report.acts):
+                if report.acts and ok == len(report.acts):  # an empty quarter is re-checked
                     done_flag.write_text(entry["quarter"], encoding="utf-8")
     finally:
         client.close()

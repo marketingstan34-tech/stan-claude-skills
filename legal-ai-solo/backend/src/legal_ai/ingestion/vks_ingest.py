@@ -95,7 +95,12 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
             stats.lists += 1
             if truncated:
                 stats.truncated_lists.append(list_path.stem)
-            case_type = parse_qs(urlparse(url).query).get("AktVidDelo", [None])[0]
+            qs = parse_qs(urlparse(url).query)
+            case_type = qs.get("AktVidDelo", [None])[0]
+            if case_type in (None, "empty") and qs.get("AktOtdelenie", [""])[0].endswith("тър."):
+                case_type = "търг."  # commercial decisions are listed per chamber
+            elif case_type == "empty":
+                case_type = None
             for r in rows:
                 rows_by_id.setdefault(r.source_id, r)
                 if case_type:

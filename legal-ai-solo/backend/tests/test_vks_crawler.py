@@ -124,3 +124,28 @@ def test_slim_html_keeps_act_text_and_result_table():
     assert [r.source_id for r in parse_list(slim.decode())] == ["C" * 32]
     assert parse_act(slim.decode()).proceeding_article == parse_act(page.decode()).proceeding_article == "290"
     assert parse_act(slim.decode()).canonical_text == parse_act(page.decode()).canonical_text
+
+
+def test_commercial_lists_are_queried_per_chamber(tmp_path):
+    # Live 02.10.2026: AktVidDelo=търг. returns 0 decisions for 2022, while the
+    # commercial chambers return them with AktVidDelo=empty.
+    seen = []
+
+    def handler(request):
+        q = parse_qs(urlparse(str(request.url)).query)
+        if request.url.path.endswith("spisak-aktove.jsp"):
+            seen.append((q["AktVidDelo"][0], q["AktOtdelenie"][0]))
+            ids = {"1-во тър.": ["A" * 32], "2-ро тър.": ["B" * 32]}[q["AktOtdelenie"][0]]
+            return httpx.Response(200, text=_list_html(ids))
+        return httpx.Response(200, text='<div id="Content">текст</div>')
+
+    from legal_ai.sources.vks.urls import COMMERCIAL_CHAMBERS
+    client, _ = _client(handler)
+    report = crawl(client, tmp_path, (2022, 4), (2022, 5), case_type="empty",
+                   chambers=COMMERCIAL_CHAMBERS)
+    assert [e["name"] for e in report.lists] == [
+        "2022-04__1-во-тър", "2022-04__2-ро-тър", "2022-05__1-во-тър", "2022-05__2-ро-тър",
+        "2022-Q2-04-05__1-во-тър", "2022-Q2-04-05__2-ро-тър"]
+    assert {ct for ct, _ in seen} == {"empty"}
+    assert sorted(a["id"] for a in report.acts) == ["A" * 32, "B" * 32]
+    assert report.truncated == []

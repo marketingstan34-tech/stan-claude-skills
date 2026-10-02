@@ -98,7 +98,11 @@ def quarters_between(start: tuple[int, int], end: tuple[int, int]) -> list[tuple
 
 
 def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[int, int],
-          words: str = "", act_type: str = "15", case_type: str = "гр.") -> CrawlReport:
+          words: str = "", act_type: str = "15", case_type: str = "гр.",
+          chambers: list[str] | None = None) -> CrawlReport:
+    """`chambers`: list each month and quarter per chamber instead of all chambers at once
+    (commercial decisions before 2023 are not returned for AktVidDelo=търг., only per chamber;
+    docs/source-discovery.md 1.9)."""
     report = CrawlReport()
     ids: dict[str, str] = {}
 
@@ -115,27 +119,35 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
                              "retrieved_at": fetched.retrieved_at})
         return len(rows)
 
+    parts = [(c, f"__{_slug(c)}") for c in chambers] if chambers else [(None, "")]
     for y, m in months_between(start, end):
-        base = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words)
-        name = f"{y}-{m:02d}"
-        if fetch_list(base, name) < LIST_TRUNCATION_LIMIT:
-            continue
-        for chamber in CHAMBERS:
-            q = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
-                          chamber=chamber)
-            part = f"{name}__{_slug(chamber)}"
-            if fetch_list(q, part) >= LIST_TRUNCATION_LIMIT:
-                report.truncated.append(part)
+        for only, suffix in parts:
+            base = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
+                             chamber=only)
+            name = f"{y}-{m:02d}{suffix}"
+            if fetch_list(base, name) < LIST_TRUNCATION_LIMIT:
+                continue
+            if only:
+                report.truncated.append(name)
+                continue
+            for chamber in CHAMBERS:
+                q = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
+                              chamber=chamber)
+                part = f"{name}__{_slug(chamber)}"
+                if fetch_list(q, part) >= LIST_TRUNCATION_LIMIT:
+                    report.truncated.append(part)
 
     # Monthly lists were observed to omit decisions that a quarter list returns
     # (docs/source-discovery.md 1.2.1 p.5), so also list by quarter and merge by id.
     for y, q_start, q_end in quarters_between(start, end):
         if q_start == q_end:
             continue
-        q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type, words=words)
-        name = f"{y}-Q{(q_start - 1) // 3 + 1}-{q_start:02d}-{q_end:02d}"
-        if fetch_list(q, name) >= LIST_TRUNCATION_LIMIT:
-            report.truncated.append(name)
+        for only, suffix in parts:
+            q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type, words=words,
+                          chamber=only)
+            name = f"{y}-Q{(q_start - 1) // 3 + 1}-{q_start:02d}-{q_end:02d}{suffix}"
+            if fetch_list(q, name) >= LIST_TRUNCATION_LIMIT:
+                report.truncated.append(name)
 
     for source_id, link_text in ids.items():
         path = out_dir / "acts" / f"{source_id}.html"
@@ -156,7 +168,7 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
     (out_dir / "manifest.json").write_text(json.dumps({
         "created_at": datetime.now(timezone.utc).isoformat(),
         "query": {"source": "vks", "acquisition": "direct", "act_type": act_type,
-                  "case_type": case_type, "words": words,
+                  "case_type": case_type, "chambers": chambers or [], "words": words,
                   "from": f"{start[0]}-{start[1]:02d}", "to": f"{end[0]}-{end[1]:02d}"},
         "lists": report.lists,
         "truncated": report.truncated,
