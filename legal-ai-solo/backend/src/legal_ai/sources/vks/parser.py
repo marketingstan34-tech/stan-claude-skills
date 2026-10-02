@@ -74,21 +74,20 @@ def parse_list(html: str) -> list[ListRow]:
 
 _BLOCK_TAGS = {"div", "p", "table", "tr", "li", "ul", "ol", "h1", "h2", "h3", "h4", "center"}
 
+# Chamber headings seen live (02.10.2026): "Първо гражданско отделение", "трето гр. отделение",
+# "IІІ гражданско отделение" (mixed Latin/Cyrillic numerals), "ГК, ІІІ г.о.", "ТК, I т.о.",
+# "ГК, ІV отд.", "Търговска колегия, I-во отделение", "първо отделение на Гражданска колегия".
+_ORD = r"(?<!\w)(първо|второ|трето|четвърто|пето|iv|v|i{1,3})(?:\s*-\s*(?:во|ро|то))?"
 _CHAMBER = re.compile(
-    r"(Първо|Второ|Трето|Четвърто|Пето)\s+(гражданско|търговско|наказателно|гр\.|търг?\.|нак\.)"
-    r"\s*отделение",
-    re.IGNORECASE,
-)
-_ABBR_ADJ = {"гр.": "гражданско", "тър.": "търговско", "търг.": "търговско", "нак.": "наказателно"}
+    _ORD + r"\s+(гражданско|търговско|наказателно|гр\.|търг?\.|нак\.)\s*отделение", re.IGNORECASE)
+_SHORT_CHAMBER = re.compile(_ORD + r"\s*([гтн])\.\s*о\.", re.IGNORECASE)
+_ORDINAL_CHAMBER = re.compile(_ORD + r"\s+(?:отделение|отд\.)", re.IGNORECASE)
+_ABBR_ADJ = {"гр.": "гражданско", "тър.": "търговско", "търг.": "търговско", "нак.": "наказателно",
+             "г": "гражданско", "т": "търговско", "н": "наказателно"}
 _ORDINALS = {
     "първо": "Първо", "второ": "Второ", "трето": "Трето", "четвърто": "Четвърто", "пето": "Пето",
     "i": "Първо", "ii": "Второ", "iii": "Трето", "iv": "Четвърто", "v": "Пето",
 }
-# "Гражданска колегия, Първо отделение", "първо отделение на Гражданска колегия", "I-во отделение"
-_ORDINAL_CHAMBER = re.compile(
-    r"\b(първо|второ|трето|четвърто|пето|iv|v|i{1,3})(?:\s*-\s*(?:во|ро|то))?\s+отделение",
-    re.IGNORECASE,
-)
 _COLLEGE = re.compile(r"(граждан|търгов|наказат)\w*\s+колегия", re.IGNORECASE)
 # "ТК, II отделение" (seen live 02.10.2026)
 _COLLEGE_ABBR = re.compile(r"\b(ГК|ТК|НК)\b")
@@ -207,10 +206,10 @@ def html_to_lines(content_html_element) -> list[str]:
 
 def _detect_chamber(head: str) -> str | None:
     head = head.replace("І", "I").replace("і", "i")  # Cyrillic І used as a Roman numeral
-    m = _CHAMBER.search(head)
+    m = _CHAMBER.search(head) or _SHORT_CHAMBER.search(head)
     if m:
         kind = m.group(2).lower()
-        return f"{m.group(1).capitalize()} {_ABBR_ADJ.get(kind, kind)} отделение"
+        return f"{_ORDINALS[m.group(1).lower()]} {_ABBR_ADJ.get(kind, kind)} отделение"
     ordinal = _ORDINAL_CHAMBER.search(head)
     college = _COLLEGE.search(head)
     if ordinal and college:
