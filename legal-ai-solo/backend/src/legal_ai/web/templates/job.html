@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Анализът тече · Legal AI Solo{% endblock %}
+{% block content %}
+{% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="5">{% endif %}
+<h1>{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}</h1>
+<div class="card">
+  {% if job.status == 'failed' %}
+    <p class="bad"><strong>Анализът не успя.</strong></p><p>{{ job.message }}</p>
+    <p><a href="/analyze">Назад</a></p>
+  {% else %}
+    <p><strong>{{ 'В опашката' if job.status == 'queued' else 'Работи…' }}</strong> {{ job.message }}</p>
+    <p class="muted">Страницата се обновява сама на всеки 5 секунди. Обикновено отнема 3–10 минути.</p>
+  {% endif %}
+</div>
+{% endblock %}

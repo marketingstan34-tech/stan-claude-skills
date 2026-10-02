@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% set a = run.analysis %}
+{% block title %}{{ run.appellate.label }} · Legal AI Solo{% endblock %}
+{% macro quote(q) -%}
+  {% if q and q.text %}
+  <blockquote>„{{ q.text }}“
+    {% if q.status == 'text_verified' %}<div class="ok muted">✅ цитатът е проверен дословно в текста</div>
+    {% else %}<div class="bad muted">⚠️ цитатът не е намерен дословно — не го използвайте без проверка</div>{% endif %}
+  </blockquote>
+  {% endif %}
+{%- endmacro %}
+{% block content %}
+<h1>{{ run.appellate.label }}</h1>
+<p class="muted"><a href="{{ run.appellate.url }}">Източник</a> · анализ {{ run.created_at[:16].replace('T',' ') }} UTC ·
+модел {{ run.models.analysis }} · промпт {{ run.prompt_version }} · практика на ВКС до {{ run.cutoff }}</p>
+<div class="notice">Помощен анализ, не правно становище. Търсенето е в сайта на ВКС по точни думи и може да пропусне
+практика; тълкувателните решения още не са включени. Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
+
+<section class="card"><h2>Казусът</h2><p>{{ a.case_summary }}</p>
+{% set li = a.lower_instance %}
+<p class="muted">Обжалван пред въззивния съд акт (по текста): {{ li.act or '?' }} от {{ li.date or '?' }} по {{ li.case or '?' }}, {{ li.court or '?' }}</p></section>
+
+<section class="card"><h2>Изводи на въззивния съд</h2>
+{% for h in a.holdings %}<p><strong>{{ h.id }}.</strong> {{ h.summary }}</p>{{ quote(run.holding_quotes[h.id]) }}{% endfor %}
+</section>
+
+<h2>Правни въпроси и практика на ВКС</h2>
+{% for q in a.questions %}
+<section class="card">
+  <h3>{{ q.id }}. {{ q.text }}</h3>
+  <p><span class="tag">{{ q.kind }}</span><span class="tag">чл. 280, ал. 1, {{ q.ground }} ГПК (предложение)</span></p>
+  <p class="muted">{{ q.why_decisive }}</p>
+  {% set found = by_q.get(q.id, []) %}
+  {% if not found %}<p class="muted">Не е намерена относима практика с това търсене.</p>{% endif %}
+  {% for stance, title, cls in [('противоречи','Противоречи на въззивния съд','stance-contra'),('неясно','Относимо, посоката не е ясна','stance-unclear'),('подкрепя','Подкрепя въззивния съд — внимание','stance-support')] %}
+    {% set group = found|selectattr('stance','equalto',stance)|list %}
+    {% if group %}<h4>{{ title }}</h4>{% endif %}
+    {% for x in group %}
+      <div class="card {{ cls }}">
+        <a href="{{ x.url }}">{{ x.label }}</a> <span class="muted">· {{ x.chamber or '?' }}</span>
+        <p>{{ x.vks_rule }}</p><p class="muted">{{ x.explanation }}</p>
+        {{ quote(x.quote) }}
+      </div>
+    {% endfor %}
+  {% endfor %}
+  <details><summary>Търсения в сайта на ВКС</summary><ul>
+  {% for s in run.searches if s.question_id == q.id and s.rows is defined %}
+    <li>{{ s.words|join(' + ') }} ({{ s.case_type }}): {{ s.rows }} резултата{% if s.truncated %} — отрязан списък{% endif %}</li>
+  {% endfor %}</ul></details>
+</section>
+{% endfor %}
+
+<details class="card"><summary>Технически данни</summary>
+<p class="muted">AI заявки: {{ run.usage.calls }} · токени вход/изход: {{ run.usage.input_tokens }}/{{ run.usage.output_tokens }}</p>
+<ul>{% for s in run.skipped %}<li class="muted">{{ s }}</li>{% endfor %}</ul></details>
+{% endblock %}

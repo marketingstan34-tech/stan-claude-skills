@@ -13,6 +13,7 @@ dependencies = [
     "alembic==1.14.1",
     "sqlalchemy==2.0.37",
     "pypdf==6.19.0",
+    "python-multipart==0.0.32",
 ]
 
 [project.optional-dependencies]

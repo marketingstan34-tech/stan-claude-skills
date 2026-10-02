@@ -1,13 +1,15 @@
-"""Local web UI (read-only in this stage: no mutations, so no CSRF surface yet)."""
+"""Local web UI. The only mutation (starting an analysis) checks Origin against the Host."""
 
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -16,6 +18,8 @@ from legal_ai.config import load_settings
 from legal_ai.db import connect
 from legal_ai.retrieval.lexical import search
 from legal_ai.retrieval.text import Term, normalize_for_search, parse_query, word_matches
+from legal_ai.sources.courts import COURTS
+from legal_ai.web.jobs import JobRunner, list_runs, load_run
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _WORD = re.compile(r"[0-9A-Za-zА-Яа-яѝЍ]+")
@@ -86,5 +90,55 @@ def create_app() -> FastAPI:
         return _TEMPLATES.TemplateResponse(request, "decision.html", {
             "d": d, "paragraphs": paragraphs, "target": p, "terms": parse_query(q), "q": q,
         })
+
+    runs_dir = Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs"
+    runner = JobRunner(runs_dir)
+
+    def same_origin(request: Request) -> bool:
+        origin = request.headers.get("origin") or request.headers.get("referer") or ""
+        return bool(origin) and urlparse(origin).netloc == request.headers.get("host", "")
+
+    @app.get("/analyze", response_class=HTMLResponse)
+    def analyze_form(request: Request):
+        return _TEMPLATES.TemplateResponse(request, "analyze.html", {
+            "courts": COURTS, "runs": list_runs(runs_dir),
+            "jobs": sorted(runner.jobs.values(), key=lambda j: j.started, reverse=True),
+            "busy": runner.busy(),
+        })
+
+    @app.post("/analyze")
+    def analyze_start(request: Request, court: str = Form(...), case: int = Form(..., ge=1, le=999999),
+                      year: int = Form(..., ge=2000, le=2100), case_type: str = Form(""),
+                      until: str = Form("")):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if court not in COURTS or case_type not in ("", "Гражданско", "Търговско"):
+            raise HTTPException(400, "Невалиден съд или вид дело.")
+        if until and not re.fullmatch(r"\d{4}-\d{2}", until):
+            raise HTTPException(400, "Датата трябва да е ГГГГ-ММ.")
+        if runner.busy():
+            raise HTTPException(409, "Вече тече анализ. Изчакайте да приключи.")
+        job = runner.start({"court": court, "case": case, "year": year, "type": case_type, "until": until})
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.get("/jobs/{job_id}", response_class=HTMLResponse)
+    def job_status(request: Request, job_id: str):
+        job = runner.jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, "Няма такъв анализ.")
+        if job.status == "done" and job.run_dir:
+            return RedirectResponse(f"/runs/{job.run_dir}", status_code=303)
+        return _TEMPLATES.TemplateResponse(request, "job.html", {"job": job, "courts": COURTS})
+
+    @app.get("/runs/{run_id}", response_class=HTMLResponse)
+    def run_report(request: Request, run_id: str):
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        by_q: dict[str, list] = {}
+        for a in run["assessments"]:
+            if a["relevant"] and a["stance"] != "неотносимо":
+                by_q.setdefault(a["question_id"], []).append(a)
+        return _TEMPLATES.TemplateResponse(request, "report.html", {"run": run, "by_q": by_q})
 
     return app

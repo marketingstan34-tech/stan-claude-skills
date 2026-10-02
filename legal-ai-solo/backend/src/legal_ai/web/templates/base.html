@@ -41,12 +41,22 @@ button { font: inherit; padding: 10px 18px; border-radius: 8px; border: 0; backg
   color: var(--bg); cursor: pointer; }
 .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
 .grow { flex: 1 1 320px; }
+select, input[type=number] { font: inherit; padding: 9px 10px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+label.field { display: flex; flex-direction: column; gap: 4px; font-size: 14px; color: var(--muted); }
+.ok { color: #1f7a3a; } .bad { color: #a0342b; }
+@media (prefers-color-scheme: dark) { .ok { color: #7fd39a; } .bad { color: #f19a90; } }
+.stance-contra { border-left: 4px solid #1f7a3a; } .stance-support { border-left: 4px solid #a0342b; }
+.stance-unclear { border-left: 4px solid var(--muted); }
+details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
+nav a { text-decoration: none; font-size: 15px; }
 </style>
 </head>
 <body>
 <header><div class="wrap">
   <a class="brand" href="/">Legal AI Solo</a>
-  <span class="muted">Практика на ВКС · локален експеримент · правното качество не е валидирано</span>
+  <nav class="row"><a href="/analyze">Касационен анализ</a><a href="/">Търсене в корпуса</a></nav>
+  <span class="muted">локален експеримент · правното качество не е валидирано</span>
 </div></header>
 <main class="wrap">
 {% block content %}{% endblock %}
