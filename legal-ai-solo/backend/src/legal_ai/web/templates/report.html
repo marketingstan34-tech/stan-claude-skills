@@ -12,13 +12,17 @@
 {% block content %}
 <h1>{{ run.appellate.label }}</h1>
 <p class="muted"><a href="{{ run.appellate.url }}">Източник</a> · анализ {{ run.created_at[:16].replace('T',' ') }} UTC ·
-анализ: {{ run.models.analysis }}{% if run.models.assess %} · оценки: {{ run.models.assess }}{% endif %} · промпт {{ run.prompt_version }} · практика на ВКС до {{ run.cutoff }}</p>
-<div class="notice">Помощен анализ, не правно становище. Търсенето е в сайта на ВКС по точни думи и може да пропусне
-практика; тълкувателните решения още не са включени. Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
+анализ: {{ run.models.analysis }}{% if run.models.assess %} · филтър: {{ run.models.assess }}{% endif %}{% if run.models.stance %} · посока: {{ run.models.stance }}{% endif %} · промпт {{ run.prompt_version }} · практика на ВКС до {{ run.cutoff }}</p>
+{% set local = run.searches|selectattr('local','defined')|list %}
+<div class="notice">Помощен анализ, не правно становище.
+{% if local %}Търсено е в сайта на ВКС и в собствената база (решения по чл. 290 и тълкувателни решения); базата може да не е пълна.
+{% else %}Търсено е само в сайта на ВКС по точни думи (без собствена база и без тълкувателни решения) и може да е пропусната практика.{% endif %}
+Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
 
 <section class="card"><h2>Казусът</h2><p>{{ a.case_summary }}</p>
 {% set li = a.lower_instance %}
-<p class="muted">Обжалван пред въззивния съд акт (по текста): {{ li.act or '?' }} от {{ li.date or '?' }} по {{ li.case or '?' }}, {{ li.court or '?' }}</p></section>
+{% set parts = [] %}{% for v in [li.act, li.date, li.case, li.court] %}{% if v and not (parts|select('in', [v])|list) and (parts|join(' ')).find(v) < 0 %}{% set _ = parts.append(v) %}{% endif %}{% endfor %}
+<p class="muted">Обжалван пред въззивния съд акт (по текста): {{ parts|join(' · ') or '—' }}</p></section>
 
 {% if run.path %}
 <section class="card"><h2>Пътят на делото</h2><ol>
