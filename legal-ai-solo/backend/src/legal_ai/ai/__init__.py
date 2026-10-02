@@ -45,8 +45,10 @@ class AIConfig:
     light_model: str
     max_calls: int = 60          # hard cap per analysis run
     reasoning_effort: str = "medium"
-    assess_model: str = ""       # per-decision assessments; defaults to light_model
+    assess_model: str = ""       # stage 1: relevance filter; defaults to light_model
     assess_effort: str = "low"
+    stance_model: str = ""       # stage 2: stance + quote for relevant acts; defaults to analysis_model
+    stance_effort: str = "low"
 
 
 def load_ai_config() -> AIConfig:
@@ -62,6 +64,8 @@ def load_ai_config() -> AIConfig:
         reasoning_effort=os.environ.get("AI_REASONING_EFFORT", "medium"),
         assess_model=os.environ.get("AI_ASSESS_MODEL", "") or model("AI_QUERY_MODEL"),
         assess_effort=os.environ.get("AI_ASSESS_EFFORT", "low"),
+        stance_model=os.environ.get("AI_STANCE_MODEL", "") or model("AI_ANALYSIS_MODEL"),
+        stance_effort=os.environ.get("AI_STANCE_EFFORT", "low"),
     )
 
 

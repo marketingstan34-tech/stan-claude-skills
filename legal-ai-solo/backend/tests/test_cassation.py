@@ -35,6 +35,7 @@ def _ai_transport():
                         "kind": "материалноправен", "holding_ids": ["H1"], "ground": "т.1",
                         "why_decisive": "Изходът зависи от това."}],
          "search": [{"question_id": "В1", "word_sets": [["волята", "платеца"]]}]},
+        {"relevant": True, "stance": "подкрепя", "vks_rule": "Филтър.", "quote": "", "explanation": "-"},
         {"relevant": True, "stance": "противоречи", "vks_rule": "Меродавна е волята на платеца.",
          "quote": "Меродавна за това е волята на платеца.", "explanation": "Обратно на въззивния съд."},
     ]
@@ -69,7 +70,7 @@ def _vks_transport():
 
 def test_pipeline_verifies_quotes_and_groups_by_stance():
     transport, calls = _ai_transport()
-    ai = OpenAIProvider(AIConfig("model-a", "model-b", max_calls=10, assess_model="model-c"), transport=transport, sleep=lambda s: None)
+    ai = OpenAIProvider(AIConfig("model-a", "model-b", max_calls=10, assess_model="model-c", stance_model="model-a"), transport=transport, sleep=lambda s: None)
     vks = PoliteClient(["www.vks.bg"], transport=_vks_transport(), sleep=lambda s: None)
     doc = SourceDoc("Синтетично дело", "file:///synthetic", APPELLATE, "txt", "2026-01-01")
     r = run_analysis(ai, vks, doc, date(2022, 1, 1))
@@ -80,9 +81,11 @@ def test_pipeline_verifies_quotes_and_groups_by_stance():
     a = r.assessments[0]
     assert a.stance == "противоречи" and a.quote.status == "text_verified"
     assert a.proceeding_article == "290"
-    assert r.usage["calls"] == 2
-    assert [c["model"] for c in calls] == ["model-a", "model-c"]
+    assert r.usage["calls"] == 3
+    # analysis, then relevance filter (cheap), then stance by the stronger model
+    assert [c["model"] for c in calls] == ["model-a", "model-c", "model-a"]
     assert calls[1]["reasoning"]["effort"] == "low"
+    assert r.assessments[0].stage == "посока"
 
     md = render_markdown(r)
     assert "Противоречи на въззивния съд" in md

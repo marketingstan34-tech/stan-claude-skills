@@ -64,6 +64,7 @@ class Assessment:
     quote: Quote
     explanation: str
     matched_word_sets: list[list[str]]
+    stage: str = ""          # "филтър" (cheap model only) | "посока" (stronger model decided)
 
 
 @dataclass
@@ -335,9 +336,18 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     def assess(job: tuple[dict, str, str]) -> Assessment | str:
         q, sid, user = job
         try:
+            # stage 1: a cheap model filters out unrelated acts
             a = ai.structured(model=cfg.assess_model or cfg.light_model, system=P.SYSTEM_BASE,
                               user=user, schema_name="vks_assessment", schema=P.ASSESS_SCHEMA,
                               effort=cfg.assess_effort)
+            stage = "филтър"
+            # stage 2: the stronger model decides stance and quote for related acts only
+            stance_model = cfg.stance_model or cfg.analysis_model
+            if a["relevant"] and stance_model and stance_model != (cfg.assess_model or cfg.light_model):
+                a = ai.structured(model=stance_model, system=P.SYSTEM_BASE, user=user,
+                                  schema_name="vks_assessment", schema=P.ASSESS_SCHEMA,
+                                  effort=cfg.stance_effort)
+                stage = "посока"
         except Exception as exc:  # noqa: BLE001 - one failed assessment must not sink the run
             return f"{found[sid]['label']}: AI оценката не успя ({exc})"
         act = acts[sid]
@@ -347,7 +357,7 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
             relevant=bool(a["relevant"]), stance=a["stance"], vks_rule=a["vks_rule"],
             quote=check_quote(act.canonical_text, a["quote"]) if a["quote"] else Quote("", "empty"),
             explanation=a["explanation"],
-            matched_word_sets=found[sid]["by_question"].get(q["id"], []))
+            matched_word_sets=found[sid]["by_question"].get(q["id"], []), stage=stage)
 
     assessments: list[Assessment] = []
     with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
@@ -363,7 +373,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
         usage={"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,
                "output_tokens": ai.usage.output_tokens, "by_model": ai.usage.by_model},
         models={"analysis": cfg.analysis_model, "assess": cfg.assess_model or cfg.light_model,
-                "assess_effort": cfg.assess_effort},
+                "assess_effort": cfg.assess_effort,
+                "stance": cfg.stance_model or cfg.analysis_model, "stance_effort": cfg.stance_effort},
         prompt_version=P.PROMPT_VERSION, created_at=datetime.now(timezone.utc).isoformat(),
         cutoff=cutoff.isoformat(), assess_inputs=assess_inputs)
 
