@@ -28,6 +28,41 @@ def cmd_migrate(_args) -> int:
     return 0
 
 
+def cmd_check_db(_args) -> int:
+    from legal_ai.config import load_settings
+    from legal_ai.db import connect, describe_target
+
+    settings = load_settings()
+    print(f"База: {describe_target(settings.database_url)}")
+    try:
+        conn = connect(settings.database_url)
+    except Exception as exc:  # noqa: BLE001 - report any connection failure plainly
+        print(f"НЕУСПЕШНА ВРЪЗКА: {type(exc).__name__}: {exc}")
+        return 1
+    with conn, conn.cursor() as cur:
+        cur.execute("SELECT version() AS v, current_setting('ssl', true) AS ssl_on")
+        row = cur.fetchone()
+        cur.execute("SELECT ssl FROM pg_stat_ssl WHERE pid = pg_backend_pid()")
+        ssl_row = cur.fetchone()
+        print(f"PostgreSQL: {row['v'].split(',')[0]}")
+        print(f"Криптирана връзка (SSL): {'да' if ssl_row and ssl_row['ssl'] else 'не'}")
+        cur.execute("SELECT to_regclass('public.alembic_version') IS NOT NULL AS ok")
+        if cur.fetchone()["ok"]:
+            cur.execute("SELECT version_num FROM alembic_version")
+            print(f"Миграции: {cur.fetchone()['version_num']}")
+        else:
+            print("Миграции: не са приложени (пуснете legal-ai migrate)")
+        cur.execute("""SELECT count(*) FILTER (WHERE relrowsecurity) AS locked, count(*) AS total
+                       FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                       WHERE n.nspname = 'public' AND c.relkind = 'r'
+                         AND c.relname <> 'alembic_version'""")
+        r = cur.fetchone()
+        print(f"Таблици със защита (RLS): {r['locked']}/{r['total']}")
+        cur.execute("SELECT 1 FROM pg_available_extensions WHERE name = 'vector'")
+        print(f"pgvector наличен: {'да' if cur.fetchone() else 'не'}")
+    return 0
+
+
 def cmd_crawl(args) -> int:
     from legal_ai.config import load_settings
     from legal_ai.sources.vks.crawler import VksClient, crawl
@@ -104,6 +139,7 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     sub.add_parser("migrate", help="Приложи миграциите").set_defaults(func=cmd_migrate)
+    sub.add_parser("check-db", help="Провери връзката с базата").set_defaults(func=cmd_check_db)
 
     c = sub.add_parser("crawl-vks", help="Свали списъци и актове от vks.bg (директно)")
     c.add_argument("--from", dest="start", required=True, help="ГГГГ-ММ")
