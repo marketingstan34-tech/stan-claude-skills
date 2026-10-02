@@ -80,6 +80,7 @@ class RunResult:
     created_at: str
     cutoff: str
     path: list = field(default_factory=list)   # case path, see legal_ai.tracing
+    assess_inputs: list = field(default_factory=list)  # private: exact assessment prompts
 
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[„\"(]?[А-ЯA-Z0-9])")
@@ -328,6 +329,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                     f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
                     f"{excerpt(act, qwords)}")
             jobs.append((q, sid, user))
+    assess_inputs = [{"question_id": q["id"], "key": sid, "label": found[sid]["label"], "prompt": u}
+                     for q, sid, u in jobs]
 
     def assess(job: tuple[dict, str, str]) -> Assessment | str:
         q, sid, user = job
@@ -362,7 +365,7 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
         models={"analysis": cfg.analysis_model, "assess": cfg.assess_model or cfg.light_model,
                 "assess_effort": cfg.assess_effort},
         prompt_version=P.PROMPT_VERSION, created_at=datetime.now(timezone.utc).isoformat(),
-        cutoff=cutoff.isoformat())
+        cutoff=cutoff.isoformat(), assess_inputs=assess_inputs)
 
 
 # ---------- report ----------
@@ -457,6 +460,9 @@ def save_run(r: RunResult, out_dir: Path) -> Path:
     d.mkdir(parents=True, exist_ok=True)
     (d / "report.md").write_text(render_markdown(r), encoding="utf-8")
     data = asdict(r)
+    with open(d / "assess_inputs.jsonl", "w", encoding="utf-8") as f:
+        for item in data.pop("assess_inputs"):
+            f.write(json.dumps(item, ensure_ascii=False) + "\n")
     data["appellate"]["text_chars"] = len(r.appellate.text)
     data["appellate"].pop("text")
     (d / "run.json").write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str),

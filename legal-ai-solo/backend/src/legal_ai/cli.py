@@ -100,9 +100,12 @@ def cmd_build_corpus(args) -> int:
     client = VksClient(settings.source_min_interval_seconds, settings.source_user_agent)
     log = root / "raw" / "vks-corpus" / "progress.jsonl"
     log.parent.mkdir(parents=True, exist_ok=True)
+    pause = log.parent / "PAUSE"
     try:
         for y, m1, m2 in quarters:
             for case_type in args.case_types.split(","):
+                while pause.exists():  # lets other jobs use vks.bg alone; checked between quarters
+                    time.sleep(20)
                 slug = "gr" if case_type == "гр." else "targ"
                 out = root / "raw" / "vks-corpus" / slug / f"{y}-{m1:02d}-{m2:02d}"
                 done_flag = out / ".ingested"
@@ -246,6 +249,45 @@ def cmd_analyze(args) -> int:
     return 0
 
 
+def cmd_reassess(args) -> int:
+    """Re-run the saved assessment prompts of a run with another model and compare stances."""
+    import json
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
+    from legal_ai.ai import AIConfig, OpenAIProvider
+    from legal_ai.cassation import prompts as P
+
+    runs = Path(args.runs or Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs")
+    run_dir = runs / args.run_id
+    items = [json.loads(line) for line in (run_dir / "assess_inputs.jsonl").read_text(encoding="utf-8").splitlines()]
+    base = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    before = {(a["question_id"], a["source_id"]): a for a in base["assessments"]}
+    ai = OpenAIProvider(AIConfig(args.model, args.model, max_calls=len(items) + 1, reasoning_effort=args.effort))
+
+    def one(it):
+        try:
+            return it, ai.structured(model=args.model, system=P.SYSTEM_BASE, user=it["prompt"],
+                                     schema_name="vks_assessment", schema=P.ASSESS_SCHEMA, effort=args.effort)
+        except Exception as exc:  # noqa: BLE001
+            return it, {"error": str(exc)}
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        results = list(pool.map(one, items))
+    same = 0
+    for it, new in results:
+        old = before.get((it["question_id"], it["key"]), {})
+        o = f"{old.get('relevant')}/{old.get('stance')}"
+        n = f"{new.get('relevant')}/{new.get('stance')}" if "error" not in new else new["error"][:60]
+        same += int(o == n)
+        print(f"{it['question_id']:4} {it['label'][:55]:55} {o:22} -> {n}")
+    print(f"Съвпадение: {same}/{len(results)} · {args.model} токени {ai.usage.input_tokens}/{ai.usage.output_tokens}")
+    out = run_dir / f"reassess-{args.model}-{args.effort}.json"
+    out.write_text(json.dumps([{"item": {k: v for k, v in it.items() if k != "prompt"}, "result": new}
+                               for it, new in results], ensure_ascii=False, indent=1), encoding="utf-8")
+    return 0
+
+
 def cmd_serve(args) -> int:
     import uvicorn
 
@@ -306,6 +348,13 @@ def main(argv: list[str] | None = None) -> int:
     a.add_argument("--until", help="Практика на ВКС до ГГГГ-ММ (по подразбиране: 2 месеца след решението)")
     a.add_argument("--out", help="Папка за резултатите (по подразбиране data/runs)")
     a.set_defaults(func=cmd_analyze)
+
+    ra = sub.add_parser("reassess", help="Същите оценки с друг модел (сравнение)")
+    ra.add_argument("run_id")
+    ra.add_argument("--model", required=True)
+    ra.add_argument("--effort", default="medium")
+    ra.add_argument("--runs")
+    ra.set_defaults(func=cmd_reassess)
 
     v = sub.add_parser("serve", help="Стартирай уеб интерфейса")
     v.add_argument("--host", default="127.0.0.1")
