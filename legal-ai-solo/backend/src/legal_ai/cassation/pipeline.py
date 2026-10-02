@@ -23,7 +23,7 @@ from legal_ai.sources.vks import LIST_TRUNCATION_LIMIT
 from legal_ai.sources.vks.parser import ParsedAct, parse_act, parse_list
 from legal_ai.sources.vks.urls import ListQuery, act_url, list_url
 
-MAX_LIST_QUERIES = 24
+MAX_LIST_QUERIES = 30
 PER_QUESTION = 4
 MAX_ACTS = 24
 EXCERPT_CHARS = 7000
@@ -129,38 +129,40 @@ def _words_ok(ws: list[str]) -> list[str]:
 
 def search_vks(vks: PoliteClient, search_plan: list[dict], cutoff: date,
                searches_log: list[dict]) -> dict[str, dict]:
-    """source_id -> {row, by_question: {qid: [word_set, ...]}}"""
+    """source_id -> {row, by_question: {qid: [word_set, ...]}}
+
+    One query per word set over all case types (criminal acts are dropped later by
+    chamber); the query budget is split evenly between the questions.
+    """
     found: dict[str, dict] = {}
-    n_queries = 0
+    per_question = max(2, MAX_LIST_QUERIES // max(1, len(search_plan)))
     for item in search_plan:
         qid = item["question_id"]
-        for ws in item["word_sets"][:4]:
+        used = 0
+        for ws in item["word_sets"]:
             ws = _words_ok(ws)
-            if len(ws) < 1:
+            if not ws:
                 continue
-            for case_type in ("гр.", "търг."):
-                if n_queries >= MAX_LIST_QUERIES:
-                    searches_log.append({"question_id": qid, "words": ws, "case_type": case_type,
-                                         "skipped": "лимит на заявките"})
+            if used >= per_question:
+                searches_log.append({"question_id": qid, "words": ws, "skipped": "лимит на заявките"})
+                continue
+            q = ListQuery(2008, 1, cutoff.year, cutoff.month, act_type="15",
+                          case_type="empty", words=" ".join(ws))
+            url = list_url(q)
+            used += 1
+            try:
+                rows = parse_list(vks.get(url).body.decode("utf-8", errors="replace"))
+            except FetchError as exc:
+                searches_log.append({"question_id": qid, "words": ws, "url": url, "error": str(exc)})
+                continue
+            searches_log.append({"question_id": qid, "words": ws, "case_type": "всички",
+                                 "url": url, "rows": len(rows),
+                                 "truncated": len(rows) >= LIST_TRUNCATION_LIMIT})
+            for r in rows:
+                if r.act_date and r.act_date > cutoff:
                     continue
-                q = ListQuery(2008, 1, cutoff.year, cutoff.month, act_type="15",
-                              case_type=case_type, words=" ".join(ws))
-                url = list_url(q)
-                try:
-                    rows = parse_list(vks.get(url).body.decode("utf-8", errors="replace"))
-                except FetchError as exc:
-                    searches_log.append({"question_id": qid, "words": ws, "case_type": case_type,
-                                         "url": url, "error": str(exc)})
-                    continue
-                n_queries += 1
-                searches_log.append({"question_id": qid, "words": ws, "case_type": case_type,
-                                     "url": url, "rows": len(rows),
-                                     "truncated": len(rows) >= LIST_TRUNCATION_LIMIT})
-                for r in rows:
-                    if r.act_date and r.act_date > cutoff:
-                        continue
-                    e = found.setdefault(r.source_id, {"row": r, "by_question": {}})
-                    e["by_question"].setdefault(qid, []).append(ws)
+                e = found.setdefault(r.source_id, {"row": r, "by_question": {}})
+                e["by_question"].setdefault(qid, []).append(ws)
     return found
 
 
@@ -234,6 +236,9 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                     skipped.append(f"{sid}: {exc}")
             act = acts[sid]
             if act is None:
+                continue
+            if act.chamber and "наказател" in act.chamber.lower():
+                skipped.append(f"{found[sid]['row'].link_text}: наказателно дело")
                 continue
             if act.proceeding_article != "290":
                 skipped.append(f"{found[sid]['row'].link_text}: не е решение по чл. 290 ГПК")

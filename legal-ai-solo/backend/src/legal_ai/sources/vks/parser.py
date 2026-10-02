@@ -16,8 +16,9 @@ import lxml.html
 
 PARSER_VERSION = "vks-4"
 
+# The live site quotes href with ' (verified 02.10.2026); Firecrawl output used ".
 _LIST_LINK = re.compile(
-    r'pregled-akt\.jsp\?type=ot-spisak&(?:amp;)?id=([0-9A-F]{32})"[^>]*>([^<]*)<'
+    r"""pregled-akt\.jsp\?type=ot-spisak&(?:amp;)?id=([0-9A-F]{32})["'][^>]*>([^<]*)<"""
 )
 _LINK_TEXT = re.compile(
     r"^\s*(?P<type>[А-Яа-я]+)\s*№\s*(?P<no>\d+)\s*/\s*(?P<date>\d{2}\.\d{2}\.\d{4})"

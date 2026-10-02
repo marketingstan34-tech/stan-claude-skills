@@ -116,3 +116,11 @@ def test_extract_280_grounds_proposal_words():
     assert extract_280_grounds("на основание чл.280, ал.2, предл.последно ГПК") == ["чл. 280, ал. 2, предл. 3"]
     assert extract_280_grounds("по чл. 280, ал. 2, предл. второ ГПК") == ["чл. 280, ал. 2, предл. 2"]
     assert extract_280_grounds("по чл. 280, ал. 2 ГПК") == ["чл. 280, ал. 2"]
+
+
+def test_parse_list_accepts_single_quoted_links_as_served_by_the_live_site():
+    # SYNTHETIC, shaped like the direct (non-Firecrawl) response.
+    html = ("<div id='TablicaRezultati'><div><div><a href='pregled-akt.jsp?type=ot-spisak&id="
+            + "B" * 32 + "'>Решение №5/02.03.2016 по дело №7/2015</a></div><div>анотация</div></div></div>")
+    rows = parse_list(html)
+    assert len(rows) == 1 and rows[0].source_id == "B" * 32 and rows[0].act_number == "5"
