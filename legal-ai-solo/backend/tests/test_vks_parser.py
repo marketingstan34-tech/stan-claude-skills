@@ -124,3 +124,10 @@ def test_parse_list_accepts_single_quoted_links_as_served_by_the_live_site():
             + "B" * 32 + "'>Решение №5/02.03.2016 по дело №7/2015</a></div><div>анотация</div></div></div>")
     rows = parse_list(html)
     assert len(rows) == 1 and rows[0].source_id == "B" * 32 and rows[0].act_number == "5"
+
+
+def test_proceeding_article_with_po_deloto_phrasing():
+    from legal_ai.sources.vks.parser import _PROCEEDING
+    m = _PROCEEDING.search("Производството по делото е по реда на чл. 290 ГПК в редакцията на текста")
+    assert m and m.group(1) == "290"
+    assert _PROCEEDING.search("Производството е образувано по чл. 290 ГПК").group(1) == "290"

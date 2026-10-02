@@ -104,3 +104,12 @@ def test_locate_quote_tolerates_only_whitespace():
     assert locate_quote(text, "Меродавна е волята на платеца.") is None
     assert check_quote(text, "волята на платеца").status == "text_verified"
     assert check_quote(text, "волята на длъжника").status == "not_found"
+
+
+def test_non_contiguous_sentences_are_verified_separately_and_marked():
+    text = "Първо изречение тук. Пропуснато изречение по средата. Трето изречение накрая."
+    q = check_quote(text, "Първо изречение тук. Трето изречение накрая.")
+    assert q.status == "text_verified"
+    assert q.text == "Първо изречение тук. […] Трето изречение накрая."
+    assert check_quote(text, "Трето изречение накрая. Първо изречение тук.").status == "not_found"
+    assert check_quote(text, "Първо изречение тук. Измислено изречение.").status == "not_found"

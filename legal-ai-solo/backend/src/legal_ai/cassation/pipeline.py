@@ -79,10 +79,29 @@ class RunResult:
     cutoff: str
 
 
+_SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[„\"(]?[А-ЯA-Z0-9])")
+
+
 def check_quote(text: str, quote: str) -> Quote:
+    """Whole quote verbatim, or else every sentence verbatim and in order.
+
+    In the second case the sentences are not contiguous in the source; they are shown
+    joined by " […] " so the reader sees that something was left out between them.
+    """
     loc = locate_quote(text, quote) if quote.strip() else None
     if loc and verify_quote(text, loc[0], loc[1], quote) == TextStatus.TEXT_VERIFIED:
         return Quote(quote, "text_verified", loc[0], loc[1])
+    parts = [s for s in _SENTENCE.split(quote.strip()) if s.strip()]
+    if len(parts) > 1:
+        spans, pos = [], 0
+        for part in parts:
+            found = locate_quote(text[pos:], part)
+            if not found:
+                return Quote(quote, "not_found")
+            spans.append((pos + found[0], pos + found[1]))
+            pos += found[1]
+        shown = " […] ".join(" ".join(text[a:b].split()) for a, b in spans)
+        return Quote(shown, "text_verified", spans[0][0], spans[-1][1])
     return Quote(quote, "not_found")
 
 

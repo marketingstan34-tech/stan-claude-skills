@@ -14,7 +14,7 @@ from datetime import date
 
 import lxml.html
 
-PARSER_VERSION = "vks-4"
+PARSER_VERSION = "vks-5"
 
 # The live site quotes href with ' (verified 02.10.2026); Firecrawl output used ".
 _LIST_LINK = re.compile(
@@ -89,8 +89,11 @@ _ORDINAL_CHAMBER = re.compile(
 )
 _COLLEGE = re.compile(r"(граждан|търгов|наказат)\w*\s+колегия", re.IGNORECASE)
 _COLLEGE_ADJ = {"граждан": "гражданско", "търгов": "търговско", "наказат": "наказателно"}
+# "Производството е по чл. 290", "... е по реда на чл. 290", "Производството по делото е по реда
+# на чл. 290 ГПК в редакцията ..." (seen live 02.10.2026), "... е образувано по чл. 290".
 _PROCEEDING = re.compile(
-    r"Производството\s+е\s+по\s+(?:реда\s+на\s+)?чл\.\s*(\d+[а-я]?)", re.IGNORECASE
+    r"Производството(?:\s+по\s+делото)?\s+е\s+(?:образувано\s+)?по\s+(?:реда\s+на\s+)?"
+    r"чл\.\s*(\d+[а-я]?)", re.IGNORECASE
 )
 _ADMISSION_HINT = re.compile(
     r"допус(?:нато|ка|нал|кане)[^.]{0,40}касационно\s+обжалване"
