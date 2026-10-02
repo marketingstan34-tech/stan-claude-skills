@@ -14,7 +14,7 @@ from datetime import date
 
 import lxml.html
 
-PARSER_VERSION = "vks-5"
+PARSER_VERSION = "vks-5"  # chamber detection changes do not touch text or passages
 
 # The live site quotes href with ' (verified 02.10.2026); Firecrawl output used ".
 _LIST_LINK = re.compile(
@@ -75,9 +75,11 @@ def parse_list(html: str) -> list[ListRow]:
 _BLOCK_TAGS = {"div", "p", "table", "tr", "li", "ul", "ol", "h1", "h2", "h3", "h4", "center"}
 
 _CHAMBER = re.compile(
-    r"(Първо|Второ|Трето|Четвърто|Пето)\s+(гражданско|търговско|наказателно)\s+отделение",
+    r"(Първо|Второ|Трето|Четвърто|Пето)\s+(гражданско|търговско|наказателно|гр\.|търг?\.|нак\.)"
+    r"\s*отделение",
     re.IGNORECASE,
 )
+_ABBR_ADJ = {"гр.": "гражданско", "тър.": "търговско", "търг.": "търговско", "нак.": "наказателно"}
 _ORDINALS = {
     "първо": "Първо", "второ": "Второ", "трето": "Трето", "четвърто": "Четвърто", "пето": "Пето",
     "i": "Първо", "ii": "Второ", "iii": "Трето", "iv": "Четвърто", "v": "Пето",
@@ -88,6 +90,9 @@ _ORDINAL_CHAMBER = re.compile(
     re.IGNORECASE,
 )
 _COLLEGE = re.compile(r"(граждан|търгов|наказат)\w*\s+колегия", re.IGNORECASE)
+# "ТК, II отделение" (seen live 02.10.2026)
+_COLLEGE_ABBR = re.compile(r"\b(ГК|ТК|НК)\b")
+_ABBR_COLLEGE = {"ГК": "гражданско", "ТК": "търговско", "НК": "наказателно"}
 _COLLEGE_ADJ = {"граждан": "гражданско", "търгов": "търговско", "наказат": "наказателно"}
 # "Производството е по чл. 290", "... е по реда на чл. 290", "Производството по делото е по реда
 # на чл. 290 ГПК в редакцията ..." (seen live 02.10.2026), "... е образувано по чл. 290".
@@ -201,13 +206,19 @@ def html_to_lines(content_html_element) -> list[str]:
 
 
 def _detect_chamber(head: str) -> str | None:
+    head = head.replace("І", "I").replace("і", "i")  # Cyrillic І used as a Roman numeral
     m = _CHAMBER.search(head)
     if m:
-        return f"{m.group(1).capitalize()} {m.group(2).lower()} отделение"
-    ordinal, college = _ORDINAL_CHAMBER.search(head), _COLLEGE.search(head)
+        kind = m.group(2).lower()
+        return f"{m.group(1).capitalize()} {_ABBR_ADJ.get(kind, kind)} отделение"
+    ordinal = _ORDINAL_CHAMBER.search(head)
+    college = _COLLEGE.search(head)
     if ordinal and college:
         name = _ORDINALS[ordinal.group(1).lower()]
         return f"{name} {_COLLEGE_ADJ[college.group(1).lower()]} отделение"
+    abbr = _COLLEGE_ABBR.search(head)
+    if ordinal and abbr:
+        return f"{_ORDINALS[ordinal.group(1).lower()]} {_ABBR_COLLEGE[abbr.group(1)]} отделение"
     return None
 
 
