@@ -32,13 +32,34 @@ def hosted() -> bool:
     return bool(os.environ.get("RAILWAY_ENVIRONMENT") or os.environ.get("APP_REQUIRE_LOGIN"))
 
 
+def _key_file_secret() -> str:
+    """A random key kept in private storage, so sessions survive restarts without SECRET_KEY."""
+    path = os.path.join(os.environ.get("PRIVATE_STORAGE_PATH", "data"), ".session_key")
+    try:
+        with open(path, encoding="utf-8") as f:
+            key = f.read().strip()
+        if len(key) >= 32:
+            return key
+    except OSError:
+        pass
+    key = secrets.token_hex(32)
+    try:
+        os.makedirs(os.path.dirname(path) or ".", exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(key)
+    except OSError:
+        pass   # read-only storage: the key lives for this process only
+    return key
+
+
 def _secret() -> bytes:
-    # SECRET_KEY signs cookies; without it a per-process key is used (sessions end on restart).
-    key = os.environ.get("SECRET_KEY") or _secret.fallback
-    return hashlib.sha256(("las:" + key + ":" + password()).encode()).digest()
+    if not _secret.key:
+        _secret.key = os.environ.get("SECRET_KEY") or _key_file_secret()
+    return hashlib.sha256(("las:" + _secret.key + ":" + password()).encode()).digest()
 
 
-_secret.fallback = secrets.token_hex(32)
+_secret.key = ""
 
 
 def make_cookie(now: float | None = None) -> str:
@@ -63,15 +84,29 @@ def check_password(given: str) -> bool:
     return bool(expected) and hmac.compare_digest(given.encode(), expected.encode())
 
 
+GLOBAL = "*"
+
+
+def client_address(forwarded_for: str, peer: str) -> str:
+    """The address the hosting proxy saw. Railway appends it as the LAST X-Forwarded-For entry;
+    earlier entries come from the client and cannot be trusted."""
+    parts = [p.strip() for p in (forwarded_for or "").split(",") if p.strip()]
+    return parts[-1] if parts else (peer or "?")
+
+
 def too_many_failures(client: str, now: float | None = None) -> bool:
-    """At most 5 wrong passwords per 10 minutes per client address."""
+    """At most 5 wrong passwords per 10 minutes per client, and 30 in total (the password is shared)."""
     now = now if now is not None else time.time()
     with _lock:
-        recent = [t for t in _failures.get(client, []) if now - t < 600]
-        _failures[client] = recent
-        return len(recent) >= 5
+        for key in list(_failures):
+            _failures[key] = [t for t in _failures[key] if now - t < 600]
+            if not _failures[key]:
+                del _failures[key]
+        return len(_failures.get(client, [])) >= 5 or len(_failures.get(GLOBAL, [])) >= 30
 
 
 def record_failure(client: str, now: float | None = None) -> None:
+    t = now if now is not None else time.time()
     with _lock:
-        _failures.setdefault(client, []).append(now if now is not None else time.time())
+        _failures.setdefault(client, []).append(t)
+        _failures.setdefault(GLOBAL, []).append(t)

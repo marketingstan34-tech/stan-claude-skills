@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from datetime import date
+
 import psycopg
 
 from legal_ai.retrieval.text import Term, build_tsquery, parse_query
@@ -76,13 +78,15 @@ hits AS (
     CROSS JOIN q
     WHERE p.tsv @@ q.q
       AND (%(only_290)s = false OR d.proceeding_article = '290')
+      AND (%(articles)s::text[] IS NULL OR d.proceeding_article = ANY(%(articles)s::text[]))
+      AND (%(until)s::date IS NULL OR d.act_date IS NULL OR d.act_date <= %(until)s::date)
 ),
 per_decision AS (
     SELECT decision_version_id,
            {decision_cov} AS coverage,
            max(rank) + 0.1 * ln(1 + count(*)) AS score
     FROM hits GROUP BY decision_version_id
-    ORDER BY coverage DESC, score DESC
+    ORDER BY coverage DESC, score DESC, decision_version_id
     LIMIT %(limit)s
 )
 SELECT d.id AS decision_id, pd.decision_version_id AS version_id, pd.score, pd.coverage,
@@ -93,13 +97,15 @@ SELECT d.id AS decision_id, pd.decision_version_id AS version_id, pd.score, pd.c
 FROM per_decision pd
 JOIN decisions d ON d.current_version_id = pd.decision_version_id
 JOIN hits h ON h.decision_version_id = pd.decision_version_id
-ORDER BY pd.coverage DESC, pd.score DESC, passage_coverage DESC, h.rank DESC, h.paragraph_no
+ORDER BY pd.coverage DESC, pd.score DESC, pd.decision_version_id, passage_coverage DESC, h.rank DESC, h.paragraph_no
 """
 
 
 def _run(conn: psycopg.Connection, terms: list[Term], mode: str, only_290: bool, limit: int,
-         passages_per_decision: int) -> list[DecisionHit]:
-    params = {"tsq": build_tsquery(terms, mode), "only_290": only_290, "limit": limit}
+         passages_per_decision: int, articles: list[str] | None = None,
+         until: date | None = None) -> list[DecisionHit]:
+    params = {"tsq": build_tsquery(terms, mode), "only_290": only_290, "limit": limit,
+              "articles": list(articles) if articles else None, "until": until}
     params.update({f"t{i}": t.to_tsquery() for i, t in enumerate(terms)})
     with conn.cursor() as cur:
         cur.execute(_build_sql(len(terms)), params)
@@ -135,15 +141,17 @@ def corpus_size(conn: psycopg.Connection) -> int:
 
 
 def search(conn: psycopg.Connection, query: str, *, only_290: bool = False, limit: int = 30,
-           passages_per_decision: int = 3) -> SearchResult:
+           passages_per_decision: int = 3, articles: list[str] | None = None,
+           until: date | None = None) -> SearchResult:
     """Candidates match at least one term; decisions covering more distinct terms (across
-    all their paragraphs) rank first."""
+    all their paragraphs) rank first. `articles` and `until` filter before the limit, so
+    excluded decisions never crowd out valid ones."""
     limit = max(1, min(limit, MAX_LIMIT))
     terms = parse_query(query)
     size = corpus_size(conn)
     if not terms:
         return SearchResult(query, terms, "any", [], size, note="Няма думи за търсене след филтриране.")
-    decisions = _run(conn, terms, "any", only_290, limit, passages_per_decision)
+    decisions = _run(conn, terms, "any", only_290, limit, passages_per_decision, articles, until)
     note = None
     if decisions and decisions[0].terms_matched < len(terms):
         note = "Нито един акт не съдържа всички думи. Показани са актовете с най-много съвпадения."

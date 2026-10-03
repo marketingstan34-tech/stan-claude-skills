@@ -19,8 +19,48 @@ from legal_ai.sources.courts.acts import acts_url, parse_acts
 
 VKS = "https://www.vks.bg"
 
-# Lower court of each supported appellate court (same city), checked by case lookup.
+# Lower court of each supported appellate court (same city). It is used only when the appellate
+# decision names that court (or an abbreviation that fits it) and the act date matches.
 LOWER_COURT = {"as-plovdiv": "os-plovdiv", "os-plovdiv": "rs-plovdiv"}
+_LEVEL = {"os-plovdiv": "окръжен", "rs-plovdiv": "районен"}
+_CITY = {"os-plovdiv": "ПЛОВДИВ", "rs-plovdiv": "ПЛОВДИВ"}
+# Stems of other court towns: the district courts and the district/regional courts in the
+# Plovdiv appellate region (a reference naming any of them is another court).
+_OTHER_TOWNS = ("БЛАГОЕВГР", "БУРГАС", "ВАРН", "ВЕЛИКО ТЪРН", "ВЕЛИКОТЪРН", "ВИДИН", "ВРАЦ", "ГАБРОВ", "ДОБРИЧ",
+                "КЪРДЖАЛ", "КЮСТЕНДИЛ", "ЛОВЕЧ", "МОНТАН", "ПАЗАРДЖ", "ПЕРНИ", "ПЛЕВЕН", "ПЛЕВЕНС", "РАЗГРАД",
+                "РУСЕ", "РУСЕНС", "СИЛИСТР", "СЛИВЕН", "СМОЛЯН", "СОФИ", "СТАРА ЗАГОР", "СТАРОЗАГОР", "ТЪРГОВИЩ",
+                "ХАСКОВ", "ШУМЕН", "ЯМБОЛ", "АСЕНОВГР", "КАРЛОВ", "ПЪРВОМА", "ПЕЩЕР", "ВЕЛИНГРАД", "ПАНАГЮРИЩ",
+                "ДЕВИН", "ЧЕПЕЛАР", "МАДАН", "ЗЛАТОГРАД", "КАЗАНЛЪК", "ЧИРПАН", "РАДНЕВ", "ГЪЛЪБОВ",
+                "ДИМИТРОВГР", "ХАРМАНЛ", "СВИЛЕНГР", "ИВАЙЛОВГР", "ТОПОЛОВГР", "МОМЧИЛГР", "КРУМОВГР",
+                "АРДИНО", "ДЖЕБЕЛ")
+
+
+def lower_court_match(text: str, lower_key: str) -> bool | None:
+    """Does the court named in the appellate decision fit `lower_key`?
+
+    True: town and level written and both fit. False: another town or level is named, so the
+    case must not be looked up there. None: abbreviated or missing (e.g. "О.С.-П."): the lookup
+    is a candidate only and is confirmed by the act date.
+    """
+    t = " ".join((text or "").upper().replace("–", "-").split())
+    if not t:
+        return None
+    level = _LEVEL[lower_key]
+    is_os = "ОКРЪЖ" in t or re.search(r"(?<![А-Я])(?:[А-Я]{0,2})О\.?\s?С\.?(?![А-Я])", t) is not None
+    is_rs = "РАЙОН" in t or re.search(r"(?<![А-Я])(?:[А-Я]{0,2})Р\.?\s?С\.?(?![А-Я])", t) is not None
+    if (level == "окръжен" and is_rs and not is_os) or (level == "районен" and is_os and not is_rs):
+        return False
+    if any(town in t for town in _OTHER_TOWNS):
+        return False
+    town_ok = _CITY[lower_key] in t or re.search(r"(?<![А-Я])ПД\.?\s?[ОР]\.?\s?С", t) is not None \
+        or re.search(r"(?<![А-Я])[ОР]\.?\s?С\.?\s?-?\s?ПД(?![А-Я])", t) is not None
+    level_ok = is_os if level == "окръжен" else is_rs
+    return True if town_ok and level_ok else None
+
+
+def _same_date(want: str, got: str) -> bool:
+    want = want.replace("г.", "").replace("г", "").strip()
+    return bool(want and got) and (want.startswith(got) or got in want)
 
 
 @dataclass
@@ -77,13 +117,6 @@ def parse_vks_case(page: str) -> dict:
     return {"data": data, "acts": acts, "outcome": outcome}
 
 
-def discover_acts_page(client: PoliteClient, host: str) -> str | None:
-    """Page id of 'Съдебни актове' from the court's sitemap (verified for Plovdiv courts)."""
-    page = client.get(f"https://{host}/bg/sitemap").body.decode("utf-8", errors="replace")
-    m = re.search(r'href="/bg/(\d+)"[^>]*>\s*Съдебни актове\s*<', page)
-    return m[1] if m else None
-
-
 _CASE_REF = re.compile(r"(\d{1,6})\s*/\s*(\d{4})")
 
 
@@ -95,7 +128,9 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
     # first instance, from the reference in the appellate decision, confirmed on the court site
     lower_key = LOWER_COURT.get(court_key)
     ref = _CASE_REF.search((lower or {}).get("case", "") or "")
-    if lower_key and ref:
+    named = (lower or {}).get("court", "") or ""
+    match = lower_court_match(named, lower_key) if lower_key else False
+    if lower_key and ref and match is not False:
         lc: CourtSite = COURTS[lower_key]
         inst = Instance("първа", lc.name, f"{ref[1]}/{ref[2]}")
         try:
@@ -103,16 +138,20 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
             rows = [r for r in parse_acts(courts.get(url).body.decode("utf-8", errors="replace"))
                     if r.case_number == int(ref[1]) and r.case_year == int(ref[2])]
             inst.source_url = url
-            want = (lower or {}).get("date", "")
-            for r in rows:
-                d = r.act_date.strftime("%d.%m.%Y") if r.act_date else ""
-                inst.acts.append({"type": r.act_type, "number": "", "date": d, "result": "",
-                                  "url": r.file_url or ""})
+            want = (lower or {}).get("date", "") or ""
+            acts = [{"type": r.act_type, "number": "", "date": r.act_date.strftime("%d.%m.%Y") if r.act_date else "",
+                     "result": "", "url": r.file_url or ""} for r in rows]
             if not rows:
                 inst.note = f"Не е намерено в {lc.name} (възможно е друг съд от района)."
-            elif want and not any(want.replace("г.", "").strip().startswith(a["date"]) or a["date"] in want
-                                  for a in inst.acts):
-                inst.note = "Номерът съвпада, но датата на акта не съвпада с посочената във въззивното решение."
+            elif not any(_same_date(want, a["date"]) for a in acts):
+                # the same number and year can belong to another case: nothing is linked
+                inst.note = (f"В {lc.name} има дело {ref[1]}/{ref[2]}, но датата на акта не съвпада с посочената "
+                             "във въззивното решение (или липсва) – не е свързано. Проверете ръчно.")
+            else:
+                inst.acts = acts
+                if match is None:
+                    inst.note = (f"Съдът е посочен съкратено („{named or '—'}“); делото е намерено в {lc.name} "
+                                 "със същия номер, година и дата на акта.")
         except FetchError as exc:
             inst.note = f"Справката не успя: {exc}"
         path.append(inst)

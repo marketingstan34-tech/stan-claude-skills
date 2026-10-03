@@ -58,7 +58,9 @@ def build_draft(run: dict) -> list[Block]:
     for x in run.get("assessments", []):
         if x.get("relevant") and x.get("stance") == "противоречи":
             contra.setdefault(x["question_id"], []).append(x)
-    grounds = {"т.1"} | {q["ground"] for q in a["questions"] if not contra.get(q["id"])}
+    # т.1 only when the report found contradicting VKS practice; other questions keep their own ground
+    grounds = ({"т.1"} if contra else set()) | {q["ground"] for q in a["questions"] if not contra.get(q["id"])}
+    grounds = grounds or {"т.1"}
     grounds_text = " и ".join(f"чл. 280, ал. 1, {g.replace('т.', 'т. ')}" for g in sorted(grounds)) + " от ГПК"
 
     out = [Block("note", DISCLAIMER),

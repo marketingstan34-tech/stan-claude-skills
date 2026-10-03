@@ -76,16 +76,21 @@ def read_upload(filename: str, body: bytes) -> tuple[str, str, list[str]]:
     if len(body) > MAX_BYTES:
         raise UploadError("Файлът е над 20 MB.")
     warnings: list[str] = []
-    if ext == ".docx":
-        text, fmt = _normalize(_docx_text(body)), "docx"
-    elif ext == ".txt":
-        text, fmt = _normalize(_txt(body)), "txt"
-    else:
-        try:
+    try:
+        if ext == ".docx":
+            text, fmt = _normalize(_docx_text(body)), "docx"
+        elif ext == ".txt":
+            text, fmt = _normalize(_txt(body)), "txt"
+        else:
             t = extract_text(body, "text/html" if ext in (".html", ".htm") else "")
-        except DocumentError as exc:
-            raise UploadError(str(exc)) from exc
-        text, fmt, warnings = t.text, t.fmt, t.warnings
+            text, fmt, warnings = t.text, t.fmt, t.warnings
+    except UploadError:
+        raise
+    except DocumentError as exc:
+        raise UploadError(str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001 - broken, encrypted or truncated files from users
+        raise UploadError("Файлът не може да се прочете (повреден или защитен с парола). "
+                          "Запазете го наново като PDF или .docx.") from exc
     if len(text) < 300:
         raise UploadError("В документа почти няма текст (може да е сканиран). Качете PDF с текст или Word файл.")
     if not re.search(r"[А-Яа-я]{3}", text):

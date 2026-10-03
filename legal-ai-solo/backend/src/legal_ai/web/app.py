@@ -79,9 +79,8 @@ def create_app() -> FastAPI:
     runner = JobRunner(runs_dir, traces_dir)
 
     def render(request: Request, name: str, ctx: dict, status_code: int = 200):
-        running = [j for j in runner.jobs.values() if j.status in ("queued", "running")]
         return _TEMPLATES.TemplateResponse(request, name, {
-            "running_job": running[0] if running else None,
+            "running_job": runner.running(),
             "today": date.today().strftime("%d.%m.%Y"), **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
@@ -113,8 +112,9 @@ def create_app() -> FastAPI:
     @app.post("/login")
     def login(request: Request, password: str = Form("", max_length=500), next: str = Form("/analyze", max_length=500),
               remember: str = Form("")):
-        client = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
-            (request.client.host if request.client else "?")
+        # X-Forwarded-For is set by Railway's edge; without that proxy the header is the client's own
+        forwarded = request.headers.get("x-forwarded-for", "") if os.environ.get("RAILWAY_ENVIRONMENT") else ""
+        client = auth.client_address(forwarded, request.client.host if request.client else "")
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
         error = ""
@@ -148,14 +148,14 @@ def create_app() -> FastAPI:
     def index(request: Request, q: str = Query("", max_length=500), only_290: bool = False,
               d: str = Query("", max_length=10)):
         result, day, day_list = None, None, []
-        if q.strip():
-            with connect(settings.database_url) as conn:
-                result = search(conn, q, only_290=only_290)
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
             try:
                 day = date.fromisoformat(d)
             except ValueError:
                 day = None
+        if q.strip() and not day:   # a calendar day is its own list; the search box starts a new search
+            with connect(settings.database_url) as conn:
+                result = search(conn, q, only_290=only_290)
         with connect(settings.database_url) as conn, conn.cursor() as cur:
             corpus = corpus_counts(cur)
             if day:   # the decisions of one day (from the calendar)
@@ -163,7 +163,8 @@ def create_app() -> FastAPI:
                     SELECT id, source, act_type, act_number, act_date, case_type, case_number, case_year,
                            chamber, proceeding_article FROM decisions
                     WHERE act_date = %s AND current_version_id IS NOT NULL
-                    ORDER BY source DESC, chamber, act_number""", (day,))
+                    ORDER BY source DESC, chamber,
+                             NULLIF(regexp_replace(act_number, '\\D', '', 'g'), '')::bigint NULLS LAST""", (day,))
                 day_list = cur.fetchall()
         return render(request, "search.html", {
             "q": q, "only_290": only_290, "result": result, "corpus": corpus, "day": day, "day_list": day_list,
@@ -230,7 +231,7 @@ def create_app() -> FastAPI:
     def analyze_start(request: Request, court: str = Form(""), case: int | None = Form(None, ge=1, le=999999),
                       year: int | None = Form(None, ge=2000, le=2100), case_type: str = Form(""),
                       until: str = Form(""), mode: str = Form("noai"),
-                      document: UploadFile | None = File(None)):
+                      document: UploadFile | None = File(None), text: str = Form("", max_length=400_000)):
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
 
@@ -241,12 +242,29 @@ def create_app() -> FastAPI:
         if (court and court not in COURTS) or case_type not in ("", "Гражданско", "Търговско") \
                 or mode not in ("noai", "ai"):
             return form_error("Невалиден съд, вид дело или режим.")
-        if until and not re.fullmatch(r"\d{4}-\d{2}", until):
+        if until and not re.fullmatch(r"\d{4}-(0[1-9]|1[0-2])", until):
             return form_error("„Практика до“ трябва да е във вида ГГГГ-ММ, напр. 2022-05.")
         if runner.busy():
             return form_error("Вече тече справка. Изчакайте да приключи.", 409)
         params = {"court": court, "case": case, "year": year, "type": case_type, "until": until, "mode": mode}
-        if document is not None and document.filename:
+        text = text.strip()
+        if document is not None and document.filename and text:
+            return form_error("Качете документ или поставете текст, не и двете.")
+        if text:   # pasted text (the decision, or a description of the case) is treated like an uploaded .txt
+            from legal_ai.upload import UploadError, read_upload
+            body = text.encode("utf-8")
+            try:
+                read_upload("text.txt", body)
+            except UploadError as exc:
+                return form_error(str(exc).replace("В документа почти няма текст (може да е сканиран). "
+                                                   "Качете PDF с текст или Word файл.",
+                                                   "Текстът е твърде кратък: поставете поне 300 знака."))
+            uploads = storage / "uploads"
+            uploads.mkdir(parents=True, exist_ok=True)
+            name = f"{uuid4().hex}.txt"
+            (uploads / name).write_bytes(body)
+            params.update(file=f"uploads/{name}", filename="Поставен текст.txt", pasted=True)
+        elif document is not None and document.filename:
             from legal_ai.upload import MAX_BYTES, UploadError, extension, read_upload
             body = document.file.read(MAX_BYTES + 1)
             try:
@@ -259,8 +277,10 @@ def create_app() -> FastAPI:
             (uploads / name).write_bytes(body)
             params.update(file=f"uploads/{name}", filename=os.path.basename(document.filename)[:120])
         elif not (court and case and year):
-            return form_error("Въведете съд, номер и година на делото или качете документ.")
+            return form_error("Въведете съд, номер и година на делото, качете документ или поставете текст.")
         job = runner.start(params)
+        if job is None:
+            return form_error("Вече тече справка. Изчакайте да приключи.", 409)
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)

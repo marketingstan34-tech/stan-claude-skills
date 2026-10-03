@@ -56,8 +56,11 @@ def list_reports(runs_dir: Path, traces_dir: Path) -> list[dict]:
             f = d / name
             if not (d.is_dir() and d.name.isdigit() and f.exists()):
                 continue
-            data = json.loads(f.read_text(encoding="utf-8"))
-            label = data["appellate"]["label"]
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                label = data["appellate"]["label"]
+            except (OSError, ValueError, KeyError):
+                continue   # a broken report must not break the pages that list reports
             item = {"id": d.name, "kind": kind, "url": f"/{'traces' if kind == 'trace' else 'runs'}/{d.name}",
                     "label": label, "created_at": data["created_at"], "created": _when(data["created_at"]),
                     **_short(label), **_path_summary(data.get("path") or [])}

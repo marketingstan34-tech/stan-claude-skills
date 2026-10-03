@@ -79,7 +79,8 @@ def local_candidates(conn: psycopg.Connection, word_sets: list[list[str]], cutof
     found: dict[str, dict] = {}
     for ws in word_sets:
         query = " ".join(ws)
-        result = search(conn, query, only_290=False, limit=40, passages_per_decision=1)
+        result = search(conn, query, only_290=False, limit=40, passages_per_decision=1,
+                        articles=["290", "ТР"], until=cutoff)
         n_terms = len(result.terms)
         kept = 0
         for d in result.decisions:

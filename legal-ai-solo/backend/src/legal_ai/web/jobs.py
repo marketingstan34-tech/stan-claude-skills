@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import calendar
 import json
 import os
-import re
 import threading
 import traceback
 import uuid
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Callable
 
 
 @dataclass
@@ -21,6 +22,7 @@ class Job:
     message: str = ""
     run_dir: str | None = None
     started: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    cleanup: Callable[[], None] | None = field(default=None, repr=False)
 
 
 class JobRunner:
@@ -31,11 +33,19 @@ class JobRunner:
         self._lock = threading.Lock()
 
     def busy(self) -> bool:
-        return any(j.status in ("queued", "running") for j in self.jobs.values())
-
-    def start(self, params: dict) -> Job:
-        job = Job(uuid.uuid4().hex[:12], params)
         with self._lock:
+            return any(j.status in ("queued", "running") for j in self.jobs.values())
+
+    def running(self) -> Job | None:
+        with self._lock:
+            return next((j for j in self.jobs.values() if j.status in ("queued", "running")), None)
+
+    def start(self, params: dict) -> Job | None:
+        """Start a job unless one is already running (one at a time, so the court sites see one client)."""
+        with self._lock:
+            if any(j.status in ("queued", "running") for j in self.jobs.values()):
+                return None
+            job = Job(uuid.uuid4().hex[:12], params)
             self.jobs[job.id] = job
         threading.Thread(target=self._run, args=(job,), daemon=True).start()
         return job
@@ -55,14 +65,15 @@ class JobRunner:
             interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
             ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
             ai = OpenAIProvider(load_ai_config())
+            job.cleanup = ai.close
             with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
                     PoliteClient([VKS_HOST], interval, ua) as vks:
                 job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
                 appellate = self._appellate(courts, p)
                 cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
-                if p.get("until"):
+                if p.get("until"):   # practice up to the end of that month
                     y, m = (int(x) for x in p["until"].split("-"))
-                    cutoff = date(y, m, 28)
+                    cutoff = date(y, m, calendar.monthrange(y, m)[1])
                 job.message = f"Анализ на „{appellate.label}“ и търсене във ВКС…"
                 conn = None
                 if os.environ.get("DATABASE_URL"):
@@ -78,12 +89,14 @@ class JobRunner:
                     job.message = "Проследяване на делото по инстанции…"
                     result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
                                                  appellate.act_date, result.analysis.get("lower_instance")))
-            ai.close()
             job.run_dir = save_run(result, self.runs_dir).name
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user
             self._fail(job, exc)
+        finally:
+            if job.cleanup:
+                job.cleanup()
 
     def _appellate(self, courts, p: dict):
         """The appellate decision: an uploaded document, or downloaded from the court's site."""
@@ -92,7 +105,8 @@ class JobRunner:
             from legal_ai.upload import first_date, read_upload
             body = (self.runs_dir.parent / p["file"]).read_bytes()
             text, fmt, warnings = read_upload(p["filename"], body)
-            return SourceDoc(f"Качен документ: {p['filename']}", "", text, fmt,
+            label = "Поставен текст" if p.get("pasted") else f"Качен документ: {p['filename']}"
+            return SourceDoc(label, "", text, fmt,
                              datetime.now(timezone.utc).isoformat(), first_date(text), warnings)
         return fetch_appellate(courts, p["court"], p["case"], p["year"], p["type"])[1]
 
@@ -137,16 +151,16 @@ class JobRunner:
                 with connect(os.environ["DATABASE_URL"]) as conn:
                     match_citations(conn, cites)
             created = datetime.now(timezone.utc).isoformat()
-            d = self.traces_dir / re.sub(r"[^0-9]", "", created)[:14]
-            d.mkdir(parents=True, exist_ok=True)
+            from legal_ai.cassation.pipeline import unique_dir
+            d = unique_dir(self.traces_dir, created)
             (d / "appellate.txt").write_text(appellate.text, encoding="utf-8")
-            (d / "trace.json").write_text(json.dumps({
+            write_atomic(d / "trace.json", json.dumps({
                 "created_at": created, "params": p,
                 "appellate": {"label": appellate.label, "url": appellate.url, "fmt": appellate.fmt,
                               "act_date": appellate.act_date, "retrieved_at": appellate.retrieved_at,
                               "warnings": appellate.warnings, "text_chars": len(appellate.text)},
                 "lower_instance": lower, "path": path, "citations": cites_dicts(cites),
-            }, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+            }, ensure_ascii=False, indent=2, default=str))
             job.run_dir = d.name
             job.status = "done"
             job.message = "Готово."
@@ -154,40 +168,11 @@ class JobRunner:
             self._fail(job, exc)
 
 
-def list_runs(runs_dir: Path) -> list[dict]:
-    out = []
-    if not runs_dir.exists():
-        return out
-    for d in sorted(runs_dir.iterdir(), reverse=True):
-        f = d / "run.json"
-        if d.is_dir() and f.exists():
-            data = json.loads(f.read_text(encoding="utf-8"))
-            out.append({"id": d.name, "label": data["appellate"]["label"], "created_at": data["created_at"],
-                        "questions": len(data["analysis"]["questions"]),
-                        "contra": sum(1 for a in data["assessments"]
-                                      if a["relevant"] and a["stance"] == "противоречи")})
-    return out
-
-
 def load_run(runs_dir: Path, run_id: str) -> dict | None:
     if not run_id.isdigit():
         return None
     f = runs_dir / run_id / "run.json"
     return json.loads(f.read_text(encoding="utf-8")) if f.exists() else None
-
-
-def list_traces(traces_dir: Path) -> list[dict]:
-    out = []
-    if not traces_dir.exists():
-        return out
-    for d in sorted(traces_dir.iterdir(), reverse=True):
-        f = d / "trace.json"
-        if d.is_dir() and f.exists():
-            data = json.loads(f.read_text(encoding="utf-8"))
-            out.append({"id": d.name, "label": data["appellate"]["label"], "created_at": data["created_at"],
-                        "citations": len(data["citations"]),
-                        "in_corpus": sum(1 for c in data["citations"] if c["decision_id"])})
-    return out
 
 
 def load_trace(traces_dir: Path, trace_id: str) -> dict | None:
@@ -200,3 +185,10 @@ def load_trace(traces_dir: Path, trace_id: str) -> dict | None:
     text = traces_dir / trace_id / "appellate.txt"
     data["text"] = text.read_text(encoding="utf-8") if text.exists() else ""
     return data
+
+
+def write_atomic(path: Path, text: str) -> None:
+    """Write via a temporary file and rename, so readers never see a half-written report."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)

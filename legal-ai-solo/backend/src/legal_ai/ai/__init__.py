@@ -136,6 +136,7 @@ class OpenAIProvider:
         self._max_wait = max_wait
         self._lock = threading.Lock()  # usage and the call cap are shared by worker threads
         self._started = 0  # model requests sent or about to be sent; the cap counts these
+        self.uncertain = 0  # POSTs whose outcome is unknown (may have been created and billed)
         self.usage = Usage()
         headers = {"Content-Type": "application/json"}
         key = os.environ.get("OPENAI_API_KEY", "")
@@ -170,7 +171,6 @@ class OpenAIProvider:
             payload["background"] = True  # long reasoning must not hold one HTTP connection open
         last = ""
         for _ in range(2):
-            self._reserve_call()
             data = self._run(payload)
             usage = data.get("usage") or {}
             with self._lock:
@@ -193,16 +193,37 @@ class OpenAIProvider:
                 last = f"невалиден JSON: {exc}"
         raise AIError(f"AI отговорът не е валиден след 2 опита ({last}).")
 
-    def _request(self, method: str, url: str, **kw) -> dict[str, Any]:
+    def _uncertain(self, why: str) -> AIError:
+        with self._lock:
+            self.uncertain += 1
+        return AIError(f"OpenAI: {why}. Не е ясно дали заявката е приета (възможно е да е таксувана); "
+                       "не е изпратена повторно.")
+
+    def _request(self, method: str, url: str, *, create: bool = False, **kw) -> dict[str, Any]:
+        """One API call. Status checks (GET) are retried freely. A request that creates a model
+        response (POST, `create`) counts against the cap on every attempt and is sent again only
+        when it surely did not reach OpenAI (no connection, 429 or 503); after a lost answer
+        it is not repeated, so one question is never billed twice."""
         last = ""
         for attempt in range(4):
+            if create:
+                self._reserve_call()
             try:
                 resp = self._http.request(method, url, **kw)
             except httpx.ReadTimeout as exc:
                 if "timeout" in kw:  # a direct (non-background) call that used up the max wait
+                    if create:
+                        with self._lock:
+                            self.uncertain += 1
                     raise AIError(f"AI заявката не приключи за {self._max_wait:.0f} сек.") from exc
+                if create:
+                    raise self._uncertain(type(exc).__name__) from exc
                 last = type(exc).__name__
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.PoolTimeout) as exc:
+                last = type(exc).__name__   # never sent
             except httpx.TransportError as exc:
+                if create:
+                    raise self._uncertain(type(exc).__name__) from exc
                 last = type(exc).__name__
             else:
                 if resp.status_code == 200:
@@ -211,6 +232,8 @@ class OpenAIProvider:
                 if any(code in resp.text for code in _QUOTA_CODES):
                     raise AIQuotaError("Кредитът в OpenAI е изчерпан. Добавете кредит в "
                                        "platform.openai.com → Billing и пуснете анализа отново.")
+                if create and resp.status_code in (500, 502, 504):
+                    raise self._uncertain(f"HTTP {resp.status_code}")
                 if resp.status_code not in (429, 500, 502, 503, 504):
                     break
             self._sleep(2 ** attempt * 2)
@@ -218,9 +241,9 @@ class OpenAIProvider:
 
     def _run(self, payload: dict[str, Any]) -> dict[str, Any]:
         if payload.get("background"):
-            data = self._request("POST", OPENAI_URL, json=payload)
+            data = self._request("POST", OPENAI_URL, create=True, json=payload)
         else:  # direct request: the answer comes in this response, so wait up to max_wait
-            data = self._request("POST", OPENAI_URL, json=payload,
+            data = self._request("POST", OPENAI_URL, create=True, json=payload,
                                  timeout=httpx.Timeout(self._max_wait, connect=30.0))
         waited = 0.0
         delays = poll_delays(self._poll, self.config.poll_backoff)

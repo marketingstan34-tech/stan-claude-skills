@@ -561,11 +561,23 @@ def render_markdown(r: RunResult) -> str:
     return "\n".join(lines) + "\n"
 
 
+def unique_dir(base: Path, created_at: str) -> Path:
+    """base/<yyyymmddhhmmss>, or with a numeric suffix if a result of the same second exists
+    (names stay digits only, so the pages can validate them)."""
+    base.mkdir(parents=True, exist_ok=True)
+    stamp = re.sub(r"[^0-9]", "", created_at)[:14]
+    for n in range(100):
+        d = base / (stamp if n == 0 else f"{stamp}{n:02d}")
+        try:
+            d.mkdir()
+            return d
+        except FileExistsError:
+            continue
+    raise RuntimeError("Твърде много резултати в една секунда.")
+
+
 def save_run(r: RunResult, out_dir: Path) -> Path:
-    out_dir.mkdir(parents=True, exist_ok=True)
-    stamp = re.sub(r"[^0-9]", "", r.created_at)[:14]
-    d = out_dir / stamp
-    d.mkdir(parents=True, exist_ok=True)
+    d = unique_dir(out_dir, r.created_at)
     (d / "report.md").write_text(render_markdown(r), encoding="utf-8")
     data = asdict(r)
     with open(d / "assess_inputs.jsonl", "w", encoding="utf-8") as f:
@@ -573,7 +585,9 @@ def save_run(r: RunResult, out_dir: Path) -> Path:
             f.write(json.dumps(item, ensure_ascii=False) + "\n")
     data["appellate"]["text_chars"] = len(r.appellate.text)
     data["appellate"].pop("text")
-    (d / "run.json").write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str),
-                                encoding="utf-8")
     (d / "appellate.txt").write_text(r.appellate.text, encoding="utf-8")
+    # run.json last and atomically: the web lists a report as soon as run.json exists
+    tmp = d / "run.json.tmp"
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=2, default=str), encoding="utf-8")
+    os.replace(tmp, d / "run.json")
     return d

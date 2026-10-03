@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import asdict, dataclass
+from datetime import date
 
 _WS = re.compile(r"\s+")
 _DATE = r"(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{2,4})"
@@ -31,6 +32,7 @@ _CASE_RE = re.compile(_CASE, re.IGNORECASE)
 _TR = re.compile(r"(?:\bТР|тълкувателно\s+решение)\s*(?:№|N)\s*(\d{1,3})(?:\s*/\s*(\d{4}))?",
                  re.IGNORECASE)
 _YEAR = re.compile(r"\b(\d{4})\s*г")
+_COLLEGE = re.compile(r"\b(ОСГТК|ОСГК|ОСТК|ОСНК)\b")
 _VKS = re.compile(r"\bВКС\b|Върховния(?:т)?\s+касационен\s+съд")
 _UNIT_START = re.compile(r"решение|определение|\bТР\b|тълкувателно|\bпо\s+(?:гр|т)\.?\s*д", re.IGNORECASE)
 
@@ -78,6 +80,7 @@ class Citation:
     case_number: str = ""
     case_year: int | None = None
     tr_year: int | None = None
+    college: str = ""             # for ТР: ОСГТК | ОСГК | ОСТК | ОСНК, if written
     decision_id: str | None = None
     label: str = ""
 
@@ -109,7 +112,9 @@ def extract_vks_citations(text: str) -> list[Citation]:
         if tr:
             year = tr.group(2) or (case.group(2) if case else None) or \
                 (_YEAR.search(unit).group(1) if _YEAR.search(unit) else None)
-            c = Citation("ТР", unit, act_number=tr.group(1), tr_year=_year(year) if year else None)
+            col = _COLLEGE.search(unit)
+            c = Citation("ТР", unit, act_number=tr.group(1), tr_year=_year(year) if year else None,
+                         college=col.group(1) if col else "")
         elif act:
             c = Citation(act.group(1).lower(), unit, act_number=act.group(2),
                          act_date=_date(act.group(3), act.group(4), act.group(5)))
@@ -119,7 +124,7 @@ def extract_vks_citations(text: str) -> list[Citation]:
             continue
         if case and c.kind != "ТР":
             c.case_number, c.case_year = case.group(1), _year(case.group(2))
-        key = (c.kind, c.act_number, c.act_date, c.case_number, c.case_year, c.tr_year)
+        key = (c.kind, c.act_number, c.act_date, c.case_number, c.case_year, c.tr_year, c.college)
         if key in seen:
             continue
         seen.add(key)
@@ -133,13 +138,17 @@ def match_citations(conn, cites: list[Citation]) -> list[Citation]:
         for c in cites:
             row = None
             if c.kind == "ТР" and c.tr_year:
+                # the same number and year exist in several colleges: match the college when it is
+                # written, otherwise only when exactly one decision fits
                 cur.execute("""SELECT id, act_number, case_year, chamber FROM decisions
                                WHERE source = 'vks-tr' AND act_number = %s AND case_year = %s
-                               LIMIT 1""", (c.act_number, c.tr_year))
-                row = cur.fetchone()
+                                 AND (%s = '' OR chamber = %s)""",
+                            (c.act_number, c.tr_year, c.college, c.college))
+                rows = cur.fetchall()
+                row = rows[0] if len(rows) == 1 else None
                 if row:
                     c.label = f"Тълкувателно решение № {row['act_number']}/{row['case_year']} на {row['chamber']}"
-            elif c.act_number and c.act_date:
+            elif c.act_number and c.act_date and _valid_date(c.act_date):
                 d, m, y = c.act_date.split(".")
                 cur.execute("""SELECT id, act_number, act_date, case_number, case_year FROM decisions
                                WHERE source = 'vks' AND act_number = %s AND act_date = %s
@@ -157,6 +166,15 @@ def match_citations(conn, cites: list[Citation]) -> list[Citation]:
                     c.label = (f"Решение №{row['act_number']}/{when} по дело "
                                f"№{row['case_number']}/{row['case_year']}")
     return cites
+
+
+def _valid_date(dmy: str) -> bool:
+    try:
+        d, m, y = (int(x) for x in dmy.split("."))
+        date(y, m, d)
+        return True
+    except ValueError:
+        return False
 
 
 def as_dicts(cites: list[Citation]) -> list[dict]:
