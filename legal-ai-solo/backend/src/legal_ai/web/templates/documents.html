@@ -40,5 +40,18 @@
       <button class="kit-submit" type="submit">Добави образец</button>
     </form>{% endif %}
   </div>
+  <div class="card page-card doc-row" id="archive">
+    <div class="doc-head"><span class="doc-title">Архив на адвоката</span>
+      <span class="count-chip">{{ archive_docs|length }} документа</span></div>
+    <p class="muted small">Всички ваши стари жалби, изложения и отговори – по всяко дело (до 150; може цяла папка или ZIP). При всяка нова жалба програмата намира в тях доводите и практиката, които пасват на въпросите по делото, и AI ги ползва – без фактите от другите дела. Ако няма образци на стила, първите два документа от архива служат за стил. Пазят се само в частната папка на сървъра.</p>
+    {% if archive_docs %}<details><summary class="link" style="cursor:pointer">Покажи документите</summary><table class="doc-table">
+      {% for d in archive_docs %}<tr><td><b>{{ d.kind or 'сканиран – ще се разчете' }}</b> · {{ d.filename }}</td>
+        <td class="doc-links"><form method="post" action="/archive/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }} от архива?')"><button type="submit" class="link-button">Махни</button></form></td></tr>{% endfor %}
+    </table></details>{% endif %}
+    <form method="post" action="/archive" enctype="multipart/form-data" class="docs-upload">
+      <label class="kit-submit" style="cursor:pointer">Качи папка<input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
+      <label class="kit-submit light" style="cursor:pointer">Файлове или ZIP<input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.zip" hidden onchange="this.form.submit()"></label>
+    </form>
+  </div>
 </div>
 {% endblock %}

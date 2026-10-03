@@ -19,6 +19,8 @@ from legal_ai.upload import ALLOWED, MAX_BYTES, extension, first_date, read_stor
 
 MAX_CASE_DOCS = 60
 MAX_STYLE = 3
+MAX_ARCHIVE = 150
+ARCHIVE_CHARS = 20_000
 ZIP_MAX_TOTAL = 200 * 1024 * 1024
 
 # (kind, pattern at the top of the document, priority: lower goes first when the prompt is full)
@@ -192,3 +194,44 @@ def case_docs(storage: Path, run_id: str) -> FileList:
 
 def style_samples(storage: Path) -> FileList:
     return FileList(storage / "style" / "index.json", storage / "style", MAX_STYLE)
+
+
+def archive(storage: Path) -> FileList:
+    """All the lawyer's own past filings (any case): reused arguments and his own practice."""
+    return FileList(storage / "archive" / "index.json", storage / "archive", MAX_ARCHIVE)
+
+
+def _stems(text: str) -> set[str]:
+    return {w[:6].lower() for w in re.findall(r"[А-Яа-яA-Za-z]{5,}", text)}
+
+
+_COMMON = _stems("съдът решението въззивния касационна жалба което който която дело делото страната следва "
+                 "обжалване правото приема прието съответно поради когато изложение настоящия според")
+
+
+def archive_excerpts(items: list[tuple[str, str]], topic: str, limit: int = ARCHIVE_CHARS) -> list[tuple[str, str]]:
+    """The passages of the lawyer's past filings that share most words with `topic` (questions and
+    holdings): each paragraph with its neighbours, best first, up to `limit` characters in all."""
+    want = _stems(topic) - _COMMON
+    if not want:
+        return []
+    scored = []
+    for name, text in items:
+        paras = [p for p in text.split("\n") if p.strip()]
+        for i, p in enumerate(paras):
+            hits = len(_stems(p) & want)
+            if hits >= 3:
+                scored.append((hits, name, i, paras))
+    scored.sort(key=lambda x: -x[0])
+    out: dict[str, list[str]] = {}
+    used, total = set(), 0
+    for _, name, i, paras in scored:
+        if (name, i) in used:
+            continue
+        window = "\n".join(paras[max(0, i - 1): i + 2])
+        if total + len(window) > limit:
+            break
+        used.update({(name, j) for j in range(i - 1, i + 2)})
+        out.setdefault(name, []).append(window)
+        total += len(window)
+    return [(name, "\n[…]\n".join(parts)) for name, parts in out.items()]

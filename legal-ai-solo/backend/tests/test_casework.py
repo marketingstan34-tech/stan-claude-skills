@@ -554,3 +554,43 @@ def test_vks_judge_review_and_page(client, monkeypatch):
     (d / "judge.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
     page = c.get("/runs/20260102030405/judge").text
     assert "Обща преценка: средно" in page and "вероятно не се допуска" in page and "Няма т. 3 обосновка." in page
+
+
+def test_other_filings(client, monkeypatch):
+    import legal_ai.web.jobs as jobs
+    from legal_ai.cassation.appeal import generate
+    from legal_ai.cassation.filings import FILINGS, build_filing, instructions
+    from legal_ai.cassation.draft import to_text
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    for kind in FILINGS:
+        assert "Още няма чернова" in c.get(f"/runs/20260102030405/filing/{kind}").text
+    assert c.get("/runs/20260102030405/filing/nyama").status_code == 404
+    started = []
+    monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
+    r = c.post("/runs/20260102030405/filing/otgovor", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[0] == {"mode": "filing", "run_id": "20260102030405", "kind": "otgovor"}
+    ai = FakeAI(ANSWER)
+    result = generate(ai, RUN, APPELLATE, ["Q2"], instructions=instructions("otgovor"),
+                      decision_title=FILINGS["otgovor"]["decision_title"], stance="подкрепя")
+    assert "чл. 287, ал. 1 ГПК" in ai.prompts[0] and "„ПОДКРЕПЯ“" in ai.prompts[0]
+    text = to_text(build_filing("otgovor", RUN, result, {"opponent": "Банка АД"}, "125"))
+    assert "ОТГОВОР" in text and "по касационната жалба на Банка АД" in text and "да не допускате" in text
+    (d / "filing-vazzivna.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    assert "ВЪЗЗИВНА ЖАЛБА" in c.get("/runs/20260102030405/filing/vazzivna").text
+    assert c.get("/runs/20260102030405/filing-docx/vazzivna").status_code == 200
+
+
+def test_lawyer_archive_excerpts_and_upload(client):
+    from legal_ai.web.casedocs import archive, archive_excerpts
+    c, d = client
+    past = [("stara.txt", "Увод.\nДругото дело е за наем.\nПлащането погасява най-обременителното задължение "
+                          "според чл. 76 ЗЗД – еднородни задължения, главница и лихви.\nКрай.")]
+    got = archive_excerpts(past, "Как се погасяват еднородни задължения при плащане – главница, лихви, чл. 76 ЗЗД?")
+    assert got and "най-обременителното" in got[0][1] and archive_excerpts(past, "развод и издръжка") == []
+    body = ("КАСАЦИОННА ЖАЛБА\n" + "доводи по чл. 76 ЗЗД " * 30).encode()
+    r = c.post("/archive", files=[("files", ("stara.txt", body, "text/plain"))],
+               headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
+    assert r.headers["location"] == "/documents#archive"
+    assert archive(d.parent.parent).items()[0]["kind"] == "касационна жалба"
+    assert "Архив на адвоката" in c.get("/documents").text

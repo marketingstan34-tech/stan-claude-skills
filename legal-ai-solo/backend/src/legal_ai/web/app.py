@@ -588,6 +588,58 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"/runs/{run_id}/judge?busy=1", status_code=303)
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
+    def filing_blocks(run_id: str, kind: str):
+        import json as _json
+
+        from legal_ai.cassation.filings import FILINGS, build_filing
+        if kind not in FILINGS:
+            raise HTTPException(404, "Няма такъв документ.")
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        try:
+            filing = _json.loads((runs_dir / run_id / f"filing-{kind}.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            filing = None
+        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
+        blocks = build_filing(kind, run, filing, ctx["case"], ctx["act_number"]) if filing else []
+        return run, ctx, filing, blocks
+
+    @app.get("/runs/{run_id}/filing/{kind}", response_class=HTMLResponse)
+    def run_filing(request: Request, run_id: str, kind: str):
+        from legal_ai.ai.pricing import TYPICAL_APPEAL_USD, cost_usd
+        from legal_ai.cassation.filings import FILINGS
+        run, ctx, filing, blocks = filing_blocks(run_id, kind)
+        cost = cost_usd({filing["model"]: [filing["usage"]["input_tokens"], filing["usage"]["output_tokens"]]}) \
+            if filing and filing.get("usage") else None
+        return render(request, "filing.html", {"run": run, "run_id": run_id, "kind": kind, "spec": FILINGS[kind],
+                                               "filings": FILINGS, "filing": filing, "blocks": blocks, "cost": cost,
+                                               "price_range": TYPICAL_APPEAL_USD, "busy": runner.busy(), **ctx})
+
+    @app.post("/runs/{run_id}/filing/{kind}")
+    def run_filing_start(request: Request, run_id: str, kind: str):
+        from legal_ai.cassation.filings import FILINGS
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if kind not in FILINGS or load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        job = runner.start({"mode": "filing", "run_id": run_id, "kind": kind})
+        if job is None:
+            return RedirectResponse(f"/runs/{run_id}/filing/{kind}?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.get("/runs/{run_id}/filing-docx/{kind}")
+    def run_filing_docx(run_id: str, kind: str):
+        from fastapi.responses import Response
+
+        from legal_ai.cassation.draft import to_docx
+        _, _, filing, blocks = filing_blocks(run_id, kind)
+        if not filing:
+            raise HTTPException(404, "Още няма чернова.")
+        return Response(to_docx(blocks),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f'attachment; filename="{kind}-{run_id}.docx"'})
+
     @app.post("/runs/{run_id}/case")
     async def run_case(request: Request, run_id: str):
         run = load_run(runs_dir, run_id)
@@ -775,6 +827,19 @@ def create_app() -> FastAPI:
         from legal_ai.web.casedocs import style_samples
         return await add_files(request, style_samples(storage), "/documents#style")
 
+    @app.post("/archive")
+    async def archive_add(request: Request):
+        from legal_ai.web.casedocs import archive
+        return await add_files(request, archive(storage), "/documents#archive")
+
+    @app.post("/archive/{item_id}/delete")
+    def archive_delete(request: Request, item_id: str):
+        from legal_ai.web.casedocs import archive
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        archive(storage).remove(item_id)
+        return RedirectResponse("/documents#archive", status_code=303)
+
     @app.post("/style/{item_id}/delete")
     def style_delete(request: Request, item_id: str):
         from legal_ai.web.casedocs import style_samples
@@ -861,7 +926,9 @@ def create_app() -> FastAPI:
                          "has_appeal": (d / "appeal.json").exists() or bool(appeal_edit),
                          "appeal_edited": appeal_edit["saved_at"][:10] if appeal_edit else ""})
         from legal_ai.web.casedocs import style_samples
-        return render(request, "documents.html", {"docs": docs, "style_docs": style_samples(storage).items()})
+        from legal_ai.web.casedocs import archive
+        return render(request, "documents.html", {"docs": docs, "style_docs": style_samples(storage).items(),
+                                                  "archive_docs": archive(storage).items()})
 
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str, error: str = Query("", max_length=200)):

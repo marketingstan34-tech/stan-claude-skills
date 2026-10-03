@@ -28,21 +28,21 @@ DISCLAIMER = ("[ЧЕРНОВА НА КАСАЦИОННА ЖАЛБА, генер�
               "цитирано решение преди подаване. Текстът в квадратни скоби се попълва или премахва.]")
 
 
-def contra_list(run: dict, chosen: list[str] | None) -> dict[str, str]:
-    """label -> the rule of each "противоречи" decision for the chosen questions."""
+def contra_list(run: dict, chosen: list[str] | None, stance: str = "противоречи") -> dict[str, str]:
+    """label -> the rule of each decision with this stance ("противоречи" by default) for the chosen questions."""
     out: dict[str, str] = {}
     for x in run.get("assessments", []):
-        if x.get("relevant") and x.get("stance") == "противоречи" and (not chosen or x["question_id"] in chosen):
+        if x.get("relevant") and x.get("stance") == stance and (not chosen or x["question_id"] in chosen):
             out.setdefault(x["label"], x.get("vks_rule", ""))
     return out
 
 
-def contra_quotes(run: dict, chosen: list[str] | None) -> dict[str, str]:
-    """label -> the verified quote of each "противоречи" decision (only quotes found verbatim)."""
+def contra_quotes(run: dict, chosen: list[str] | None, stance: str = "противоречи") -> dict[str, str]:
+    """label -> the verified quote of each decision with this stance (only quotes found verbatim)."""
     out: dict[str, str] = {}
     for x in run.get("assessments", []):
         q = x.get("quote") if isinstance(x.get("quote"), dict) else {}
-        if (x.get("relevant") and x.get("stance") == "противоречи" and (not chosen or x["question_id"] in chosen)
+        if (x.get("relevant") and x.get("stance") == stance and (not chosen or x["question_id"] in chosen)
                 and q.get("status") == "text_verified" and q.get("text")):
             out.setdefault(x["label"], q["text"])
     return out
@@ -50,20 +50,23 @@ def contra_quotes(run: dict, chosen: list[str] | None) -> dict[str, str]:
 
 def appeal_prompt(run: dict, text: str, chosen: list[str] | None,
                   context_docs: list[tuple[str, str]] | None = None,
-                  style_docs: list[tuple[str, str]] | None = None) -> str:
+                  style_docs: list[tuple[str, str]] | None = None,
+                  instructions: str = "", decision_title: str = "ВЪЗЗИВНО РЕШЕНИЕ", stance: str = "противоречи",
+                  archive_docs: list[tuple[str, str]] | None = None) -> str:
     a = run["analysis"]
     holdings = "\n".join(f"{h['id']}. {h['summary']}" for h in a.get("holdings", []))
     questions = "\n".join(f"{q['id']}. {q['text']}" for q in a["questions"] if not chosen or q["id"] in chosen)
-    quotes = contra_quotes(run, chosen)
+    quotes = contra_quotes(run, chosen, stance)
     vks = "\n".join(f"- {label}: {rule}" + (f"\n  Дословен цитат от решението: „{quotes[label]}“" if label in quotes else "")
-                    for label, rule in contra_list(run, chosen).items()) or "(няма)"
+                    for label, rule in contra_list(run, chosen, stance).items()) or "(няма)"
     notes = (run.get("notes") or "").strip()
-    return (f"{P.APPEAL_INSTRUCTIONS}\n\n=== ИЗВОДИ НА ВЪЗЗИВНИЯ СЪД ===\n{holdings}\n\n"
-            f"=== ИЗБРАНИ ПРАВНИ ВЪПРОСИ ===\n{questions}\n\n=== РЕШЕНИЯ НА ВКС „ПРОТИВОРЕЧИ“ ===\n{vks}\n\n"
-            f"=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{text}"
+    return (f"{instructions or P.APPEAL_INSTRUCTIONS}\n\n=== ИЗВОДИ НА ВЪЗЗИВНИЯ СЪД (от справката) ===\n{holdings}\n\n"
+            f"=== ИЗБРАНИ ПРАВНИ ВЪПРОСИ ===\n{questions}\n\n=== РЕШЕНИЯ НА ВКС „{stance.upper()}“ ===\n{vks}\n\n"
+            f"=== {decision_title} ===\n{text}"
             + (f"\n\n{P.NOTES_HEADER}\n{notes}" if notes else "")
             + (P.context_block(context_docs, P.APPEAL_CONTEXT_EACH, P.APPEAL_CONTEXT_TOTAL) if context_docs else "")
-            + (P.context_block(style_docs, P.STYLE_EACH, P.STYLE_TOTAL, P.STYLE_HEADER) if style_docs else ""))
+            + (P.context_block(style_docs, P.STYLE_EACH, P.STYLE_TOTAL, P.STYLE_HEADER) if style_docs else "")
+            + (P.context_block(archive_docs, P.STYLE_EACH, P.STYLE_TOTAL, P.ARCHIVE_HEADER) if archive_docs else ""))
 
 
 _INLINE_QUOTE = re.compile(r"„([^“”\n]{40,})[“”]")
@@ -86,13 +89,16 @@ def mark_quotes(paragraph: str, sources: list[str]) -> tuple[str, int]:
 
 def generate(ai, run: dict, text: str, chosen: list[str] | None,
              context_docs: list[tuple[str, str]] | None = None,
-             style_docs: list[tuple[str, str]] | None = None) -> dict:
+             style_docs: list[tuple[str, str]] | None = None,
+             instructions: str = "", decision_title: str = "ВЪЗЗИВНО РЕШЕНИЕ", stance: str = "противоречи",
+             archive_docs: list[tuple[str, str]] | None = None) -> dict:
     """The AI part, checked: quotations found verbatim in the documents, VKS labels from the report only."""
     raw = ai.structured(model=ai.config.analysis_model, system=P.SYSTEM_BASE,
-                        user=appeal_prompt(run, text, chosen, context_docs, style_docs),
+                        user=appeal_prompt(run, text, chosen, context_docs, style_docs, instructions,
+                                           decision_title, stance, archive_docs),
                         schema_name="cassation_appeal", schema=P.APPEAL_SCHEMA)
-    allowed = contra_list(run, chosen)
-    sources = [text, *(t for _, t in context_docs or ()), *contra_quotes(run, chosen).values()]
+    allowed = contra_list(run, chosen, stance)
+    sources = [text, *(t for _, t in context_docs or ()), *contra_quotes(run, chosen, stance).values()]
     unverified = 0
 
     def checked(par: str) -> str:
@@ -110,6 +116,7 @@ def generate(ai, run: dict, text: str, chosen: list[str] | None,
             "petitum_scope": raw["petitum_scope"], "petitum_part": raw["petitum_part"],
             "petitum_request": raw["petitum_request"], "unverified_quotes": unverified,
             "context_names": [n for n, _ in context_docs or ()], "style_names": [n for n, _ in style_docs or ()],
+            "archive_names": [n for n, _ in archive_docs or ()],
             "version": P.APPEAL_VERSION,
             "model": ai.config.analysis_model, "created_at": datetime.now(timezone.utc).isoformat(),
             "usage": {"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,

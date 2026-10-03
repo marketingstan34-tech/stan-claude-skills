@@ -414,3 +414,6 @@ body { overflow: visible !important; }
 .judge-verdict { font-size: 12px; font-weight: 800; padding: 3px 10px; border-radius: 999px; }
 .judge-verdict.good { background: #ecfdf5; color: #047857; } .judge-verdict.mid { background: #fffbeb; color: #92400e; } .judge-verdict.bad { background: #fef2f2; color: #b91c1c; }
 .judge-issue { padding: 8px 0; border-top: 1px solid #f1f3f8; } .judge-issue p { margin: 6px 0 0; }
+.filing-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.filing-tabs .status-chip { text-decoration: none; padding: 7px 14px !important; font-size: 12.5px !important; }
+.filing-tabs .status-chip.active { background: var(--fs-purple) !important; color: #fff !important; }

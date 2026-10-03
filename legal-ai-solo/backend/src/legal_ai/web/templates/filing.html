@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "parts_case.html" import case_profile with context %}
+{% block title %}{{ spec.short }} · Legal AI Solo{% endblock %}
+{% block page_title %}{{ spec.title }}{% endblock %}
+{% block page_hint %}Същият двигател като касационната жалба: обстойно, в стила на адвоката, от документите в „Папка на делото“; цитатите се проверяват дословно. Свалете като Word и проверете всичко.{% endblock %}
+{% block content %}
+<div class="filing-tabs no-print">
+  {% for k, f in filings.items() %}<a class="status-chip {{ 'active' if k == kind }}" href="/runs/{{ run_id }}/filing/{{ k }}">{{ f.short }}</a>{% endfor %}
+  <a class="status-chip" href="/runs/{{ run_id }}/appeal">Касационна жалба</a>
+</div>
+<div class="dash-grid-container">
+  <div class="dash-col-left no-print">
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
+    <div class="card details-card">
+      <h2 class="details-title">{{ spec.short }}</h2>
+      {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
+      {% if kind == 'otgovor' %}<p>За отговора качете касационната жалба и изложението на насрещната страна в „Папка на делото“.</p>
+      {% elif kind == 'vazzivna' %}<p>Обжалва се първоинстанционното решение – сваля се от сайта на съда или се взима от „Папка на делото“.</p>
+      {% else %}<p>Качете обжалваното определение в „Папка на делото“ – взима се най-новото определение.</p>{% endif %}
+      <a class="kit-submit light" href="/runs/{{ run_id }}/appeal#docs" style="display:block;text-align:center">Папка на делото</a>
+      {% if filing %}<a class="kit-submit" href="/runs/{{ run_id }}/filing-docx/{{ kind }}" style="display:block;text-align:center">Свали като Word</a>
+        <p class="muted small">Написан на {{ filing.created_at[:10].split('-')|reverse|join('.') }} · {{ filing.model }}{% if cost is not none %} · ≈ {{ '%.2f'|format(cost) }} ${% endif %}</p>{% endif %}
+      <form method="post" action="/runs/{{ run_id }}/filing/{{ kind }}" onsubmit="return confirm('Да напише ли AI {{ spec.short }}? Една платена заявка, около {{ '%.2f'|format(price_range[0]) }}–{{ '%.2f'|format(price_range[1]) }} $.')">
+        <button class="kit-submit {{ 'light' if filing }}" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else ('Напиши наново с AI' if filing else 'Напиши с AI') }}</button></form>
+      <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if filing %}
+    <div class="notice no-print">Чернова с AI – не е правно становище.{% if filing.unverified_quotes %} <b>{{ filing.unverified_quotes }} цитата не са намерени дословно и са маркирани.</b>{% endif %}</div>
+    <div class="card page-card legal-text draft-text">
+      {% for b in blocks %}
+        {% if b.kind == 'heading' %}<p><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'center' %}<p style="text-align:center"><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'note' %}<p><mark>{{ b.text }}</mark></p>
+        {% else %}<p>{{ b.text }}</p>{% endif %}
+      {% endfor %}
+    </div>
+    {% else %}<div class="card page-card"><p>Още няма чернова. Добавете документите в „Папка на делото“ и натиснете „Напиши с AI“.</p></div>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -57,6 +57,8 @@ class JobRunner:
             return self._run_appeal(job)
         if job.params.get("mode") == "judge":
             return self._run_judge(job)
+        if job.params.get("mode") == "filing":
+            return self._run_filing(job)
         from legal_ai.ai import OpenAIProvider, load_ai_config
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
@@ -131,7 +133,7 @@ class JobRunner:
                 context = [(c["name"], c["text"]) for c in json.loads((d / "context.json").read_text(encoding="utf-8"))]
             except (OSError, ValueError, KeyError, TypeError):
                 context = []
-            from legal_ai.web.casedocs import case_docs, style_samples
+            from legal_ai.web.casedocs import case_docs
             storage = self.runs_dir.parent
             job.message = "Четене на документите по делото (сканираните се разчитат – до минута-две)…"
             folder = case_docs(storage, run_id)
@@ -140,9 +142,9 @@ class JobRunner:
                 context.insert(0, ("Хронология на делото (документите по дата)", folder.chronology()))
             job.message = "Сваляне на първоинстанционното решение от сайта на съда…"
             context = self._first_instance(run) + context
-            style = style_samples(storage).texts()
+            style, past = self._style_and_archive(storage, run, chosen)
             job.message = "AI пише жалбата (обстойна – обикновено 3–8 минути)…"
-            appeal = generate(ai, run, text, chosen, context, style)
+            appeal = generate(ai, run, text, chosen, context, style, archive_docs=past)
             write_atomic(d / "appeal.json", json.dumps(appeal, ensure_ascii=False, indent=1))
             job.run_dir = run_id
             job.status = "done"
@@ -152,6 +154,80 @@ class JobRunner:
         finally:
             if job.cleanup:
                 job.cleanup()
+
+    def _run_filing(self, job: Job) -> None:
+        """Answer (чл. 287), appeal against the first-instance decision or private appeal (one AI call)."""
+        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.cassation import casefile
+        from legal_ai.cassation.appeal import generate
+        from legal_ai.cassation.filings import FILINGS, instructions
+        from legal_ai.web.casedocs import case_docs
+        job.status = "running"
+        run_id, kind = job.params["run_id"], job.params["kind"]
+        spec = FILINGS[kind]
+        try:
+            d = self.runs_dir / run_id
+            run = load_run(self.runs_dir, run_id)
+            if run is None:
+                raise ValueError("Няма такава справка.")
+            storage = self.runs_dir.parent
+            job.message = "Четене на документите по делото…"
+            try:
+                context = [(c["name"], c["text"]) for c in json.loads((d / "context.json").read_text(encoding="utf-8"))]
+            except (OSError, ValueError, KeyError, TypeError):
+                context = []
+            folder = case_docs(storage, run_id)
+            docs = folder.read_all()
+            context += [(f"{x['kind']} – {x['filename']}", x["text"]) for x in docs]
+            if spec["needs"] is None:
+                main = (d / "appellate.txt").read_text(encoding="utf-8")
+                context = self._first_instance(run) + context
+            elif spec["needs"] == "първоинстанционно решение":
+                own = [x for x in docs if x["kind"] == "първоинстанционно решение"]
+                fetched = self._first_instance(run) if not own else []
+                if not own and not fetched:
+                    raise ValueError("Няма първоинстанционно решение – качете го в „Папка на делото“ на страницата на жалбата.")
+                main = own[0]["text"] if own else fetched[0][1]
+                context = [(n, t) for n, t in context if t != main]
+                context.insert(0, ("Въззивно решение (по-късен акт по делото)", (d / "appellate.txt").read_text(encoding="utf-8")))
+            else:
+                rulings = sorted((x for x in docs if x["kind"] == "определение"), key=lambda x: x["date"] or "")
+                if not rulings:
+                    raise ValueError("Няма определение – качете обжалваното определение в „Папка на делото“.")
+                main = rulings[-1]["text"]
+                context = [(n, t) for n, t in context if t != main]
+            if folder.chronology():
+                context.insert(0, ("Хронология на делото (документите по дата)", folder.chronology()))
+            chosen = casefile.load_case(d).get("questions") or casefile.default_questions(run)
+            style, past = self._style_and_archive(storage, run, chosen)
+            ai = OpenAIProvider(load_ai_config())
+            job.cleanup = ai.close
+            job.message = f"AI пише: {spec['title']} (обикновено 3–8 минути)…"
+            result = generate(ai, run, main, chosen, context, style, instructions(kind), spec["decision_title"],
+                              spec["stance"], past)
+            write_atomic(d / f"filing-{kind}.json", json.dumps(result, ensure_ascii=False, indent=1))
+            job.run_dir = run_id
+            job.status = "done"
+            job.message = "Готово."
+        except Exception as exc:  # noqa: BLE001 - shown to the local user
+            self._fail(job, exc)
+        finally:
+            if job.cleanup:
+                job.cleanup()
+
+    @staticmethod
+    def _style_and_archive(storage, run: dict, chosen) -> tuple[list, list]:
+        """Style samples (or, if none, the first two archived filings) and the passages of the archive
+        that fit this case's questions and holdings."""
+        from legal_ai.web.casedocs import archive, archive_excerpts, style_samples
+        style = style_samples(storage).texts()
+        past_all = archive(storage).texts()
+        if not style:
+            style = past_all[:2]
+        a = run.get("analysis", {})
+        topic = " ".join([q["text"] for q in a.get("questions", []) if not chosen or q["id"] in chosen]
+                         + [h.get("summary", "") for h in a.get("holdings", [])])
+        return style, archive_excerpts(past_all, topic)
 
     def _run_judge(self, job: Job) -> None:
         """„Съдия от ВКС": one AI call reviews the statement and the appeal (texts given by the page)."""
