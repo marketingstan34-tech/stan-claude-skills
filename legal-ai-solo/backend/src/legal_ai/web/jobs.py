@@ -81,7 +81,7 @@ class JobRunner:
                     from legal_ai.db import connect
                     conn = connect(os.environ["DATABASE_URL"])
                 try:
-                    result = run_analysis(ai, vks, appellate, cutoff, conn=conn)
+                    result = run_analysis(ai, vks, appellate, cutoff, conn=conn, notes=p.get("notes", ""))
                 finally:
                     if conn is not None:
                         conn.close()
@@ -179,7 +179,7 @@ class JobRunner:
                 "appellate": {"label": appellate.label, "url": appellate.url, "fmt": appellate.fmt,
                               "act_date": appellate.act_date, "retrieved_at": appellate.retrieved_at,
                               "warnings": appellate.warnings, "text_chars": len(appellate.text)},
-                "lower_instance": lower, "path": path, "citations": cites_dicts(cites),
+                "lower_instance": lower, "path": path, "citations": cites_dicts(cites), "notes": p.get("notes", ""),
             }, ensure_ascii=False, indent=2, default=str))
             job.run_dir = d.name
             job.status = "done"

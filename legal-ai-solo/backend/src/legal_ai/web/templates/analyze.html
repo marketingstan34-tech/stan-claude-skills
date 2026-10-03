@@ -3,7 +3,7 @@
 {% from "parts.html" import report_card, calendar_card, events_card with context %}
 {% block title %}Нов случай · Legal AI Solo{% endblock %}
 {% block page_title %}Нов случай{% endblock %}
-{% block page_hint %}Най-лесно: качете въззивното решение като файл или поставете текста му – съдът, делото и годината се разпознават сами от документа. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
+{% block page_hint %}Най-лесно: качете въззивното решение като файл – съдът, делото и годината се разпознават сами – и добавете в полето „Текст“ бележки по казуса. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
   <form class="dash-col-left" method="post" action="/analyze" id="case" enctype="multipart/form-data">
@@ -78,9 +78,9 @@
         </label>
         <label class="detail-item-row detail-text-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
-            <div class="detail-text"><span class="detail-label">Или поставете текст – решението или описание на казуса</span>
+            <div class="detail-text"><span class="detail-label">Текст – бележки на адвоката по казуса (или самото решение, ако нямате файл)</span>
               <textarea class="detail-value detail-input detail-textarea" name="text" rows="5" maxlength="400000"
-                placeholder="Поставете текста на въззивното решение (Ctrl+V / ⌘V) или опишете казуса и спорния въпрос. Поне 300 знака."></textarea></div></div>
+                placeholder="С качен файл или номер на делото: опишете позицията на клиента и какво оспорваме – AI ще го вземе предвид. Без файл: поставете текста на въззивното решение (поне 300 знака)."></textarea></div></div>
         </label>
         <div class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>

@@ -258,9 +258,7 @@ def test_pasted_text_too_short_or_with_a_file(client, monkeypatch):
     h = {"origin": "http://127.0.0.1"}
     r = c.post("/analyze", data={"text": "кратко"}, headers=h)
     assert r.status_code == 400 and "поне 300 знака" in r.text
-    r = c.post("/analyze", data={"text": "дълъг текст " * 40}, headers=h,
-               files={"document": ("a.txt", ("текст " * 100).encode(), "text/plain")})
-    assert r.status_code == 400 and "не и двете" in r.text
+
 
 
 def test_form_has_the_text_field(client, monkeypatch):
@@ -318,3 +316,36 @@ def test_rate_limit_is_shared_between_clients(tmp_path):
                      lock_dir=str(tmp_path))
     c.get("https://other.justice.bg/z")   # another site has its own turn
     assert sleeps_a == []
+
+
+def test_document_with_notes(client, monkeypatch, tmp_path):
+    started = []
+    monkeypatch.setattr(JobRunner, "_run", lambda self, job: started.append(job.params))
+    c = _local(client, monkeypatch)
+    doc = ("Въззивният съд приема, че искът е неоснователен. " * 10).encode()
+    r = c.post("/analyze", data={"text": "Клиентът е ответник; оспорваме давността."},
+               files={"document": ("reshenie.txt", doc, "text/plain")},
+               headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
+    assert r.status_code == 303
+    p = started[0]
+    assert p["notes"] == "Клиентът е ответник; оспорваме давността." and p["filename"] == "reshenie.txt"
+    assert (tmp_path / p["file"]).read_bytes() == doc
+
+
+def test_notes_reach_the_analysis_prompt():
+    from legal_ai.cassation import prompts as P
+    from legal_ai.cassation.pipeline import run_analysis
+    seen = []
+
+    class AI:
+        config = type("C", (), {"analysis_model": "m", "workers": 1})()
+
+        def structured(self, **kw):
+            seen.append(kw["user"])
+            raise RuntimeError("stop")
+
+    from legal_ai.cassation.pipeline import SourceDoc
+    doc = SourceDoc("x", "", "Текст на решението.", "txt", "", None, [])
+    with pytest.raises(RuntimeError):
+        run_analysis(AI(), None, doc, date(2022, 1, 1), notes="Позиция на клиента.")
+    assert P.NOTES_HEADER in seen[0] and seen[0].index("Текст на решението.") < seen[0].index("Позиция на клиента.")

@@ -209,3 +209,4 @@ select.detail-input { max-width: 100%; text-overflow: ellipsis; }
 @media (max-width: 960px) { .dash-grid-container { grid-template-columns: 1fr; } }
 .current-month-name { white-space: nowrap; }
 @media (max-width: 960px) { .calendar-inbox-row { align-items: stretch; } .calendar-inbox-row > .card { width: 100%; } }
+.notes-text { white-space: pre-line; }

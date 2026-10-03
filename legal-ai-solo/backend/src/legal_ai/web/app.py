@@ -248,8 +248,13 @@ def create_app() -> FastAPI:
             return form_error("Вече тече справка. Изчакайте да приключи.", 409)
         params = {"court": court, "case": case, "year": year, "type": case_type, "until": until, "mode": mode}
         text = text.strip()
-        if document is not None and document.filename and text:
-            return form_error("Качете документ или поставете текст, не и двете.")
+        has_document = document is not None and bool(document.filename)
+        if text and (has_document or (court and case and year)):
+            # the decision comes from the file or the court's site: the text is the lawyer's notes
+            if len(text) > 20_000:
+                return form_error("Бележките са над 20 000 знака. Съкратете ги или ги качете като документ.")
+            params["notes"] = text
+            text = ""
         if text:   # pasted text (the decision, or a description of the case) is treated like an uploaded .txt
             from legal_ai.upload import UploadError, read_upload
             body = text.encode("utf-8")
@@ -264,7 +269,7 @@ def create_app() -> FastAPI:
             name = f"{uuid4().hex}.txt"
             (uploads / name).write_bytes(body)
             params.update(file=f"uploads/{name}", filename="Поставен текст.txt", pasted=True)
-        elif document is not None and document.filename:
+        elif has_document:
             from legal_ai.upload import MAX_BYTES, UploadError, extension, read_upload
             body = document.file.read(MAX_BYTES + 1)
             try:

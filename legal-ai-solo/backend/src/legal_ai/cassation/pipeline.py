@@ -99,6 +99,7 @@ class RunResult:
     created_at: str
     cutoff: str
     path: list = field(default_factory=list)   # case path, see legal_ai.tracing
+    notes: str = ""                            # the lawyer's notes given with the case
     assess_inputs: list = field(default_factory=list)  # private: exact assessment prompts
 
 
@@ -333,7 +334,7 @@ def excerpt(act: ParsedAct, words: list[str]) -> str:
 
 def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                  cutoff: date, conn=None, *, local_first: bool | None = None,
-                 overlap: bool | None = None) -> RunResult:
+                 overlap: bool | None = None, notes: str = "") -> RunResult:
     """`local_first` / `overlap` default to ANALYSIS_LOCAL_FIRST / ANALYSIS_OVERLAP.
 
     The VKS client is used only from this thread (one request at a time, as before); with
@@ -347,7 +348,8 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     workers = int(getattr(cfg, "workers", AI_WORKERS) or AI_WORKERS)
     analysis = ai.structured(
         model=cfg.analysis_model, system=P.SYSTEM_BASE,
-        user=f"{P.ANALYSIS_INSTRUCTIONS}\n\n=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{appellate.text}",
+        user=f"{P.ANALYSIS_INSTRUCTIONS}\n\n=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{appellate.text}"
+             + (f"\n\n{P.NOTES_HEADER}\n{notes.strip()}" if notes.strip() else ""),
         schema_name="cassation_analysis", schema=P.ANALYSIS_SCHEMA)
     holding_quotes = {h["id"]: check_quote(appellate.text, h["quote"]) for h in analysis["holdings"]}
 
@@ -452,7 +454,7 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                      for q, sid, u in jobs]
 
     return RunResult(
-        appellate=appellate, analysis=analysis, holding_quotes=holding_quotes,
+        appellate=appellate, analysis=analysis, holding_quotes=holding_quotes, notes=notes.strip(),
         assessments=assessments, searches=searches, skipped=skipped,
         usage={"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,
                "output_tokens": ai.usage.output_tokens, "by_model": ai.usage.by_model},
