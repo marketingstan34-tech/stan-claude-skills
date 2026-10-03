@@ -271,6 +271,26 @@ def create_app() -> FastAPI:
                 by_q.setdefault(a["question_id"], []).append(a)
         return render(request, "report.html", {"run": run, "by_q": by_q})
 
+    @app.get("/runs/{run_id}/draft", response_class=HTMLResponse)
+    def run_draft(request: Request, run_id: str):
+        from legal_ai.cassation.draft import build_draft
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return render(request, "draft.html", {"run": run, "run_id": run_id, "blocks": build_draft(run)})
+
+    @app.get("/runs/{run_id}/draft.docx")
+    def run_draft_docx(run_id: str):
+        from fastapi.responses import Response
+
+        from legal_ai.cassation.draft import build_draft, to_docx
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return Response(to_docx(build_draft(run)),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f'attachment; filename="izlozhenie-{run_id}.docx"'})
+
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str):
         t = load_trace(traces_dir, trace_id)

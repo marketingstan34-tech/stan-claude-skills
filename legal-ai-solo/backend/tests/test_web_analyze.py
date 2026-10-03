@@ -110,3 +110,14 @@ def test_upload_starts_a_job_and_errors_show_on_the_page(client, tmp_path):
     assert r.status_code == 303 and r.headers["location"].startswith("/jobs/")
     saved = list((tmp_path / "uploads").iterdir())
     assert len(saved) == 1 and saved[0].suffix == ".txt" and saved[0].read_bytes() == body
+
+
+def test_draft_page_and_word_download(client):
+    r = client.get("/runs/20260102030405")
+    assert "Чернова на изложение" in r.text
+    r = client.get("/runs/20260102030405/draft")
+    assert r.status_code == 200 and "ИЗЛОЖЕНИЕ НА КАСАЦИОННИ ОСНОВАНИЯ" in r.text and "Синтетичен въпрос?" in r.text
+    r = client.get("/runs/20260102030405/draft.docx")
+    assert r.status_code == 200 and r.content[:2] == b"PK"
+    assert "wordprocessingml" in r.headers["content-type"]
+    assert client.get("/runs/../draft").status_code == 404
