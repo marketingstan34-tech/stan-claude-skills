@@ -3,6 +3,7 @@
 {% block title %}Справката тече · Legal AI Solo{% endblock %}
 {% block page_title %}{% if job.params.file %}{{ job.params.filename }}{% else %}{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}{% endif %}{% endblock %}
 {% block view_class %}scroll-view{% endblock %}
+{% block page_hint %}Справката се изготвя. Страницата се обновява сама, не я затваряйте.{% endblock %}
 {% block content %}
 {% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="{{ 3 if job.params.mode == 'noai' else 5 }}">{% endif %}
 <div class="card job-card">

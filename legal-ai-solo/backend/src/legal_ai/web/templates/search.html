@@ -2,6 +2,7 @@
 {% from "icons.html" import icon %}
 {% block title %}Търсене в практиката · Legal AI Solo{% endblock %}
 {% block page_title %}Търсене в практиката{% endblock %}
+{% block page_hint %}Напишете 2–4 характерни думи за правния проблем и натиснете „Търси“. Жълто са отбелязани намерените думи. „Отвори в контекст“ отваря цялото решение на мястото на откъса.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
   <div class="dash-col-left">
@@ -42,6 +43,17 @@
   <div class="dash-col-right scroll-col">
     {% if corpus.n == 0 %}
       <div class="notice">Базата е празна. Заредете актове с <code>legal-ai build-corpus</code>.</div>
+    {% elif day %}
+      <div class="card page-card"><h2>Решения от {{ day.strftime('%d.%m.%Y') }} в базата: {{ day_list|length }}</h2>
+        {% if not day_list %}<p class="muted">За този ден няма решения в базата.</p>{% endif %}</div>
+      {% for d in day_list %}
+      <a class="card page-card inbox-msg-item result-head" href="/decisions/{{ d.id }}">
+        <span class="inbox-sender-avatar initials-avatar">{{ 'ТР' if d.source == 'vks-tr' else 'ВКС' }}</span>
+        <div class="inbox-msg-content"><div class="inbox-msg-sender link">{{ (d.act_type or ('тълкувателно решение' if d.source == 'vks-tr' else 'акт'))|capitalize }} № {{ d.act_number or '?' }} по {{ d.case_type or '' }} дело № {{ d.case_number or '?' }}/{{ d.case_year or '?' }}</div>
+          <div class="inbox-msg-snippet">{{ d.chamber or '' }}{% if d.proceeding_article %} · чл. {{ d.proceeding_article }}{% endif %}</div></div>
+        <span class="inbox-action-btn">{{ icon('right', 13) }}</span>
+      </a>
+      {% endfor %}
     {% elif not result %}
       <div class="card page-card"><h2>Как да търсите</h2>
         <p>Напишете 2–4 характерни думи за правния проблем, напр. „задатък неизпълнение“ или „неподеляем имот 349“.

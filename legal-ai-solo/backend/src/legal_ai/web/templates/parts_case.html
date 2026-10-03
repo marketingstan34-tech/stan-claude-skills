@@ -37,19 +37,19 @@
     {% set color = ['peach', 'blue', 'pink'][loop.index0 % 3] %}
     {% set ok = i.acts and not i.note %}
     {% set last = i.acts[-1] if i.acts else none %}
-    <div class="project-card {{ color }}-card">
+    <{{ 'a' if i.source_url else 'div' }} class="project-card {{ color }}-card" {% if i.source_url %}href="{{ i.source_url }}" target="_blank" rel="noopener noreferrer" title="Отвори делото в сайта на съда"{% endif %}>
       <div class="proj-card-top"><span class="proj-date-pill">{{ i.level if i.level == 'ВКС' else i.level|capitalize }}{{ '' if i.level == 'ВКС' else ' инстанция' }}</span>
-        {% if i.source_url %}<a class="proj-more-btn" href="{{ i.source_url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link', 13) }}</a>{% endif %}</div>
+        {% if i.source_url %}<span class="proj-more-btn" title="Източник">{{ icon('link', 13) }}</span>{% endif %}</div>
       <div class="proj-title-row"><h3 class="proj-title">{{ i.court }}</h3>
         <span class="proj-info-icon" title="{{ i.note or 'потвърдено в сайта' }}">{{ icon('info', 12) }}</span></div>
       <div class="proj-stage-row"><span class="proj-stage-text">дело {{ i.case }}</span>
         <div class="proj-progress-tag"><span class="prog-percent-bubble">{{ i.acts|length }}</span><span class="prog-text">акта</span></div></div>
       <div class="proj-progress-bar-bg {{ color }}-bar-bg"><div class="proj-progress-fill {{ color }}-fill" style="width: {{ 100 if ok else 25 }}%"></div></div>
       <div class="proj-card-footer">
-        <div class="avatar-stack">{% for a in i.acts[:3] %}{% if a.url %}<a class="stack-avatar stack-more-avatar {{ color }}-more level-avatar" href="{{ a.url }}" target="_blank" rel="noopener noreferrer" title="{{ a.type }} {{ a.number }} от {{ a.date }}">{{ a.type[:1] }}</a>{% else %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar">{{ a.type[:1] }}</span>{% endif %}{% endfor %}</div>
+        <div class="avatar-stack">{% for a in i.acts[:3] %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar" title="{{ a.type }} {{ a.number }} от {{ a.date }} (актът е в списъка под картите)">{{ a.type[:1] }}</span>{% endfor %}</div>
         <span class="days-left-pill">{{ (i.result or (last.result if last and last.result else '') or (last.date if last else '') or ('не е потвърдено' if i.note else '—'))|truncate(28, True, '…') }}</span>
       </div>
-    </div>
+    </{{ 'a' if i.source_url else 'div' }}>
   {% endfor %}
   </div>
 </div>

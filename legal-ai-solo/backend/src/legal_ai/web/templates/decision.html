@@ -2,6 +2,7 @@
 {% from "icons.html" import icon %}
 {% block title %}{{ (d.act_type or 'Акт')|capitalize }} № {{ d.act_number }} · Legal AI Solo{% endblock %}
 {% block page_title %}{{ (d.act_type or 'акт')|capitalize }} № {{ d.act_number or '?' }}{% if d.act_date %}/{{ d.act_date.strftime('%d.%m.%Y') }}{% endif %}{% endblock %}
+{% block page_hint %}Пълният текст на решението. Ако сте дошли от търсене, търсените думи са в жълто, а откъсът е отбелязан. Вляво е оригиналът в сайта на ВКС.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
   <div class="dash-col-left">

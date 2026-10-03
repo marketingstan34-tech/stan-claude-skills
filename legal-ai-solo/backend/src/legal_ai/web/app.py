@@ -145,15 +145,28 @@ def create_app() -> FastAPI:
         return JSONResponse({"status": "ok"})
 
     @app.get("/", response_class=HTMLResponse)
-    def index(request: Request, q: str = Query("", max_length=500), only_290: bool = False):
-        result = None
+    def index(request: Request, q: str = Query("", max_length=500), only_290: bool = False,
+              d: str = Query("", max_length=10)):
+        result, day, day_list = None, None, []
         if q.strip():
             with connect(settings.database_url) as conn:
                 result = search(conn, q, only_290=only_290)
+        if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
+            try:
+                day = date.fromisoformat(d)
+            except ValueError:
+                day = None
         with connect(settings.database_url) as conn, conn.cursor() as cur:
             corpus = corpus_counts(cur)
+            if day:   # the decisions of one day (from the calendar)
+                cur.execute("""
+                    SELECT id, source, act_type, act_number, act_date, case_type, case_number, case_year,
+                           chamber, proceeding_article FROM decisions
+                    WHERE act_date = %s AND current_version_id IS NOT NULL
+                    ORDER BY source DESC, chamber, act_number""", (day,))
+                day_list = cur.fetchall()
         return render(request, "search.html", {
-            "q": q, "only_290": only_290, "result": result, "corpus": corpus,
+            "q": q, "only_290": only_290, "result": result, "corpus": corpus, "day": day, "day_list": day_list,
         })
 
     @app.get("/decisions/{decision_id}", response_class=HTMLResponse)

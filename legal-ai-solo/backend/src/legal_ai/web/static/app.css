@@ -118,3 +118,19 @@ details > summary { cursor: pointer; }
 .file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
 .file-btn { background: #111413; color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 10.5px; font-weight: 600; }
 .file-name { font-size: 11px; color: #52525b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* short description under the page title */
+.page-hint { display: flex; gap: 8px; align-items: flex-start; background: rgba(255, 255, 255, 0.7); border-radius: 14px;
+  padding: 7px 12px; margin: 0 0 clamp(6px, 1vh, 10px) 64px; font-size: 12px; color: #3f3f46; line-height: 1.45; }
+.page-hint svg { flex-shrink: 0; margin-top: 2px; color: #71717a; }
+
+/* kit elements used only to show information are not buttons */
+span.white-pill-btn, span.time-slot-pill, span.meetings-badge-pill, div.detail-item-row, span.ongoing-dropdown-btn,
+span.proj-icon-circle-btn, span.view-all-link, div.project-card, div.inbox-msg-item, div.cal-day-cell,
+span.detail-action-circle, span.proj-more-btn, span.proj-info-icon { cursor: default; }
+div.project-card:hover, div.cal-day-cell:hover, div.detail-item-row:hover, span.white-pill-btn:hover { transform: none; }
+a.cal-day-cell { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+a.cal-day-cell:hover { outline: 2px solid #111413; }
+@media (max-width: 960px) { .page-hint { margin-left: 0; } }
+.dash-col-right.scroll-col { display: block; }
+.dash-col-right.scroll-col > a.card { display: flex; }

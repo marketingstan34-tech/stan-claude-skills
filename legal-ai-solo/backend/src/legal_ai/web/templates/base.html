@@ -15,10 +15,10 @@
 <body>
 {% set path = request.url.path %}
 {% set nav = [
-  ('/analyze', 'Анализ', 'case', path.startswith(('/analyze', '/jobs'))),
-  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/runs', '/traces'))),
-  ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions')),
-  ('/corpus', 'База', 'db', path.startswith('/corpus')),
+  ('/analyze', 'Анализ', 'case', path.startswith(('/analyze', '/jobs')), 'Нова справка по дело: номер на делото или качен документ'),
+  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/runs', '/traces')), 'Всички направени справки и черновите на изложения'),
+  ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
+  ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
 ] %}
 {% from "icons.html" import icon %}
 <div class="dash-canvas">
@@ -35,8 +35,8 @@
       </div>
 
       <nav class="header-nav-pill">
-        {% for href, label, ic, active in nav %}
-        <a class="nav-pill-item {{ 'active' if active }}" href="{{ href }}">{{ icon(ic) }}<span>{{ label }}</span></a>
+        {% for href, label, ic, active, desc in nav %}
+        <a class="nav-pill-item {{ 'active' if active }}" href="{{ href }}" title="{{ desc }}">{{ icon(ic) }}<span>{{ label }}</span></a>
         {% endfor %}
       </nav>
 
@@ -45,7 +45,7 @@
         <a class="utility-icon-btn {{ 'with-badge' if running_job }}" href="{{ '/jobs/' ~ running_job.id if running_job else '/analyze' }}"
            title="{{ 'Тече справка' if running_job else 'Няма текущи справки' }}">{{ icon('bell', 16) }}{% if running_job %}<span class="notification-dot"></span>{% endif %}</a>
         <a class="utility-icon-btn" href="/" title="Търсене в практиката">{{ icon('search', 16) }}</a>
-        <a class="header-user-avatar app-avatar" href="/logout" title="Изход">{{ icon('scale', 16) }}</a>
+        <a class="header-user-avatar app-avatar" href="/logout" title="Изход от програмата" onclick="return confirm('Изход от програмата?')">{{ icon('scale', 16) }}</a>
       </div>
     </header>
 
@@ -64,10 +64,13 @@
       </div>
     </div>
 
+    {% set hint %}{% block page_hint %}{% endblock %}{% endset %}
+    {% if hint|trim %}<div class="page-hint">{{ icon('info', 14) }}<span>{{ hint }}</span></div>{% endif %}
+
     <div class="dash-body-layout">
       <aside class="side-dock-nav" aria-label="Меню">
-        {% for href, label, ic, active in nav %}
-        <div class="dock-item-wrapper"><a class="dock-btn {{ 'active' if active }}" href="{{ href }}" title="{{ label }}" aria-label="{{ label }}"><span class="dock-icon-inner">{{ icon(ic, 18) }}</span></a></div>
+        {% for href, label, ic, active, desc in nav %}
+        <div class="dock-item-wrapper"><a class="dock-btn {{ 'active' if active }}" href="{{ href }}" title="{{ label }}: {{ desc }}" aria-label="{{ label }}"><span class="dock-icon-inner">{{ icon(ic, 18) }}</span></a></div>
         {% endfor %}
       </aside>
       <div class="dash-view-content {% block view_class %}{% endblock %}">
@@ -82,11 +85,11 @@
   <nav class="nav-tab1-container" aria-label="Меню">
     <svg class="nav-tab1-bg-svg" viewBox="0 0 500 70" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M 30 0 L 188 0 C 202 0 209 13 216 24 C 223 35 235 46 250 46 C 265 46 277 35 284 24 C 291 13 298 0 312 0 L 470 0 A 30 30 0 0 1 500 30 L 500 40 A 30 30 0 0 1 470 70 L 30 70 A 30 30 0 0 1 0 40 L 0 30 A 30 30 0 0 1 30 0 Z" fill="#ffffff"/></svg>
     <div class="nav-tab1-group left">
-      {% for href, label, ic, active in nav[:2] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+      {% for href, label, ic, active, desc in nav[:2] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
     </div>
     <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нова справка"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
     <div class="nav-tab1-group right">
-      {% for href, label, ic, active in nav[2:] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+      {% for href, label, ic, active, desc in nav[2:] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
     </div>
   </nav>
 </div>

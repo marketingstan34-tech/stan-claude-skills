@@ -51,7 +51,9 @@
     <a class="month-arrow-btn" href="{{ base_url }}?m={{ month.next }}" title="Следващ месец">{{ icon('right', 13) }}</a>
   </div>
   <div class="calendar-grid-matrix">
-    {% for d in month.days %}<div class="cal-day-cell cal-{{ d.type }}" title="{{ d.day }}.{{ '%02d' % month.month }}.{{ month.year }}: {{ d.n }} решения{{ ', тълкувателно решение' if d.tr }}">{{ d.day }}</div>{% endfor %}
+    {% for d in month.days %}{% set iso = '%04d-%02d-%02d' % (month.year, month.month, d.day) %}{% set tip = d.day ~ '.' ~ ('%02d' % month.month) ~ '.' ~ month.year ~ ': ' ~ d.n ~ ' решения' ~ (', тълкувателно решение' if d.tr else '') %}
+    {%- if d.n or d.tr %}<a class="cal-day-cell cal-{{ d.type }}" href="/?d={{ iso }}" title="{{ tip }} – отвори">{{ d.day }}</a>
+    {%- else %}<div class="cal-day-cell cal-{{ d.type }}" title="{{ tip }}">{{ d.day }}</div>{% endif %}{% endfor %}
   </div>
 </div>
 {%- endmacro %}
