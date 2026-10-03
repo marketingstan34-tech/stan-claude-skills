@@ -594,3 +594,10 @@ def test_lawyer_archive_excerpts_and_upload(client):
     assert r.headers["location"] == "/documents#archive"
     assert archive(d.parent.parent).items()[0]["kind"] == "касационна жалба"
     assert "Архив на адвоката" in c.get("/documents").text
+
+
+def test_judges_pages_without_database(client):
+    c, _ = client
+    assert "Базата не е достъпна" in c.get("/judges").text
+    assert c.get("/judges/Мария Петрова").status_code == 503
+    assert "/judges" in c.get("/start").text

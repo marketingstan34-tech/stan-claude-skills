@@ -21,6 +21,7 @@
   ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/traces')) or (path.startswith('/runs') and not path.endswith(('/draft', '/appeal', '/edit'))), 'Всички направени справки'),
   ('/documents', 'Документи', 'msg', path.startswith('/documents') or path.endswith(('/draft', '/appeal', '/edit')), 'Всички изложения и касационни жалби – отваряне, редакция, Word'),
   ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
+  ('/judges', 'Съдии', 'court', path.startswith('/judges'), 'Проучване по съдия: докладчици във ВКС и как допускат'),
   ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
 ] %}
 {% from "icons.html" import icon %}

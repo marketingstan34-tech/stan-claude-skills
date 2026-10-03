@@ -417,3 +417,21 @@ body { overflow: visible !important; }
 .filing-tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 .filing-tabs .status-chip { text-decoration: none; padding: 7px 14px !important; font-size: 12.5px !important; }
 .filing-tabs .status-chip.active { background: var(--fs-purple) !important; color: #fff !important; }
+/* research by judge */
+.judge-search { display: flex; gap: 8px; margin-bottom: 12px; }
+.judge-search .kit-input { flex: 1; min-width: 0; }
+.judge-search .kit-submit { width: auto !important; padding: 9px 20px !important; margin: 0 !important; }
+.judges-table td { padding: 9px 4px !important; font-size: 13px; }
+.adm-pill { display: inline-block; min-width: 46px; text-align: center; padding: 2px 8px; border-radius: 999px; font-weight: 800; font-size: 12px;
+  background: linear-gradient(90deg, #d1fae5 var(--p), #fee2e2 var(--p)); color: #1f2937; }
+.judge-stats { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; margin-bottom: 16px; }
+.judge-year { display: grid; grid-template-columns: 44px 1fr 48px; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; }
+.judge-year .adm-bar { margin: 6px 0; }
+@media (max-width: 960px) { .judge-stats { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+
+/* the main text on the left (easier to read), the narrow column with the case and actions on the right */
+@media (min-width: 961px) {
+  .dash-grid-container { grid-template-columns: minmax(0, 1fr) minmax(340px, 400px) !important; }
+  .dash-grid-container > .dash-col-right { order: 1; }
+  .dash-grid-container > .dash-col-left { order: 2; }
+}

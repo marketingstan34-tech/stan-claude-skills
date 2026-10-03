@@ -139,6 +139,35 @@ def cmd_build_corpus(args) -> int:
     return 0
 
 
+def cmd_backfill_judges(_args) -> int:
+    """Panel and reporter for acts ingested before they were parsed (from the stored text)."""
+    from psycopg.types.json import Jsonb
+
+    from legal_ai.config import load_settings
+    from legal_ai.db import connect
+    from legal_ai.judges import parse_judges
+
+    settings = load_settings()
+    done = 0
+    with connect(settings.database_url) as conn:
+        while True:
+            with conn.cursor() as cur:
+                cur.execute("""SELECT d.id, v.canonical_text FROM decisions d
+                               JOIN decision_versions v ON v.id = d.current_version_id
+                               WHERE d.source = 'vks' AND d.panel IS NULL LIMIT 500""")
+                rows = cur.fetchall()
+                if not rows:
+                    break
+                for r in rows:
+                    panel, reporter = parse_judges(r["canonical_text"])
+                    cur.execute("UPDATE decisions SET panel = %s, reporter = %s WHERE id = %s",
+                                (Jsonb(panel), reporter, r["id"]))
+            conn.commit()
+            done += len(rows)
+    print(f"Съдии: попълнени {done} акта")
+    return 0
+
+
 def cmd_fetch_tr(args) -> int:
     from legal_ai.config import load_settings
     from legal_ai.db import connect
@@ -332,6 +361,9 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--act-type", default="решение", choices=["решение", "определение"],
                    help="определение = определенията по чл. 288 ГПК (допуска / не допуска)")
     b.set_defaults(func=cmd_build_corpus)
+
+    bj = sub.add_parser("backfill-judges", help="Състав и докладчик за вече заредените актове")
+    bj.set_defaults(func=cmd_backfill_judges)
 
     tr = sub.add_parser("fetch-tr", help="Тълкувателни решения на ОСГТК/ОСГК/ОСТК (PDF)")
     tr.add_argument("--from-year", type=int, default=2008)

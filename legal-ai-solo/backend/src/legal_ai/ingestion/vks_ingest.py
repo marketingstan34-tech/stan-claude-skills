@@ -17,6 +17,8 @@ from urllib.parse import parse_qs, urlparse
 import psycopg
 from psycopg.types.json import Jsonb
 
+from legal_ai.judges import parse_judges
+
 from legal_ai.citations.verify import text_hash
 from legal_ai.retrieval.text import normalize_for_search
 from legal_ai.sources.vks import LIST_TRUNCATION_LIMIT, SOURCE
@@ -128,12 +130,13 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                 cur, url, data, str(act_path.relative_to(storage_root)), acquisition, retrieved_at
             )
             row = rows_by_id.get(source_id)
+            judges = parse_judges(parsed.canonical_text)
             cur.execute(
                 """
                 INSERT INTO decisions (source, source_record_id, court, chamber, act_type, act_number,
                     act_date, case_type, case_number, case_year, proceeding_article,
-                    admission_grounds, canonical_url, admission_result)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    admission_grounds, canonical_url, admission_result, panel, reporter)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source, source_record_id) DO UPDATE SET
                     chamber = EXCLUDED.chamber,
                     act_type = COALESCE(EXCLUDED.act_type, decisions.act_type),
@@ -144,7 +147,9 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                     case_year = COALESCE(EXCLUDED.case_year, decisions.case_year),
                     proceeding_article = EXCLUDED.proceeding_article,
                     admission_grounds = EXCLUDED.admission_grounds,
-                    admission_result = EXCLUDED.admission_result
+                    admission_result = EXCLUDED.admission_result,
+                    panel = EXCLUDED.panel,
+                    reporter = EXCLUDED.reporter
                 RETURNING id
                 """,
                 (
@@ -159,6 +164,8 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                     Jsonb(parsed.admission_grounds),
                     url,
                     parsed.admission_result,
+                    Jsonb(judges[0]),
+                    judges[1],
                 ),
             )
             decision_id = cur.fetchone()["id"]

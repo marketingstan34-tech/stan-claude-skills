@@ -242,3 +242,22 @@ def test_act_found_live_but_already_in_the_database_is_not_downloaded(conn, raw)
     assert not any("pregled-akt" in u for u in urls)
     assert [a.source_id for a in r.assessments] == [key]
     assert not r.skipped
+
+
+def test_research_by_judge(conn, raw):
+    from legal_ai.judges import judge_detail, list_judges, parse_judges
+    panel, reporter = parse_judges("в състав:\nПРЕДСЕДАТЕЛ: ИВАН ИВАНОВ\nЧЛЕНОВЕ: МАРИЯ ПЕТРОВА\nГЕОРГИ ДИМИТРОВ\n"
+                                   "като изслуша докладваното от съдия Петрова")
+    assert panel == ["Иван Иванов", "Мария Петрова", "Георги Димитров"] and reporter == "Мария Петрова"
+    ingest_raw_dir(conn, raw, raw.parent, "manual", "synthetic")
+    with conn.cursor() as cur:
+        cur.execute("""UPDATE decisions SET reporter = 'Мария Петрова', panel = '["Иван Иванов", "Мария Петрова"]',
+                       admission_result = 'допуска', proceeding_article = '288'""")
+    conn.commit()
+    rows = list_judges(conn)
+    assert rows[0]["name"] == "Мария Петрова" and rows[0]["n"] >= 1 and rows[0]["share"] == 100
+    assert list_judges(conn, "Иванов") == []
+    d = judge_detail(conn, "Иван Иванов")
+    assert d["totals"]["n"] == 0 and d["totals"]["panel"] >= 1
+    d = judge_detail(conn, "Мария Петрова")
+    assert d["totals"]["n"] == len(d["acts"]) >= 1 and d["years"]

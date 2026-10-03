@@ -640,6 +640,29 @@ def create_app() -> FastAPI:
                         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         headers={"Content-Disposition": f'attachment; filename="{kind}-{run_id}.docx"'})
 
+    @app.get("/judges", response_class=HTMLResponse)
+    def judges_page(request: Request, q: str = Query("", max_length=80)):
+        from legal_ai.judges import list_judges
+        rows, error = [], ""
+        try:
+            with connect(settings.database_url) as conn:
+                rows = list_judges(conn, q)
+        except psycopg.Error:
+            error = "Базата не е достъпна в момента."
+        return render(request, "judges.html", {"rows": rows, "q": q, "error": error})
+
+    @app.get("/judges/{name}", response_class=HTMLResponse)
+    def judge_page(request: Request, name: str, w: str = Query("", max_length=120)):
+        from legal_ai.judges import judge_detail
+        try:
+            with connect(settings.database_url) as conn:
+                data = judge_detail(conn, name[:80], w)
+        except psycopg.Error:
+            raise HTTPException(503, "Базата не е достъпна в момента.")
+        if not data["totals"]["n"] and not data["totals"]["panel"]:
+            raise HTTPException(404, "Няма такъв съдия в базата.")
+        return render(request, "judge_profile.html", {**data, "w": w})
+
     @app.post("/runs/{run_id}/case")
     async def run_case(request: Request, run_id: str):
         run = load_run(runs_dir, run_id)
