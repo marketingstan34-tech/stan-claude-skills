@@ -23,7 +23,7 @@
 
   <div class="dash-col-right scroll-col">
     <div class="notice">Без AI: всичко е извлечено от текста и от сайтовете на съдилищата с фиксирани правила. Правни въпроси и „противоречи/подкрепя“ има само в справката с AI.</div>
-    {{ path_cards(t.path) }}
+    {% if t.path %}{{ path_cards(t.path) }}{% else %}<div class="card page-card"><h2>Пътят на делото</h2><p class="muted">Справката е по качен документ без номер на делото, затова пътят не е проследен. Въведете и номера, ако искате и пътя.</p></div>{% endif %}
 
     <div class="calendar-inbox-row report-row">
       <div class="card inbox-card">

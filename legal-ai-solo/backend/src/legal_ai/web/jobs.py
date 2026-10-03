@@ -44,7 +44,7 @@ class JobRunner:
         if job.params.get("mode") == "noai":
             return self._run_noai(job)
         from legal_ai.ai import OpenAIProvider, load_ai_config
-        from legal_ai.cassation.pipeline import fetch_appellate, run_analysis, save_run
+        from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
         from legal_ai.sources.courts import ALLOWED_HOSTS
         from legal_ai.sources.vks import HOST as VKS_HOST
@@ -57,8 +57,8 @@ class JobRunner:
             ai = OpenAIProvider(load_ai_config())
             with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
                     PoliteClient([VKS_HOST], interval, ua) as vks:
-                job.message = "Сваляне на въззивното решение…"
-                _, appellate = fetch_appellate(courts, p["court"], p["case"], p["year"], p["type"])
+                job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
+                appellate = self._appellate(courts, p)
                 cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
                 if p.get("until"):
                     y, m = (int(x) for x in p["until"].split("-"))
@@ -74,15 +74,31 @@ class JobRunner:
                     if conn is not None:
                         conn.close()
                 from legal_ai.tracing import as_dicts, trace
-                job.message = "Проследяване на делото по инстанции…"
-                result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
-                                             appellate.act_date, result.analysis.get("lower_instance")))
+                if self._can_trace(p):
+                    job.message = "Проследяване на делото по инстанции…"
+                    result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
+                                                 appellate.act_date, result.analysis.get("lower_instance")))
             ai.close()
             job.run_dir = save_run(result, self.runs_dir).name
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user
             self._fail(job, exc)
+
+    def _appellate(self, courts, p: dict):
+        """The appellate decision: an uploaded document, or downloaded from the court's site."""
+        from legal_ai.cassation.pipeline import SourceDoc, fetch_appellate
+        if p.get("file"):
+            from legal_ai.upload import first_date, read_upload
+            body = (self.runs_dir.parent / p["file"]).read_bytes()
+            text, fmt, warnings = read_upload(p["filename"], body)
+            return SourceDoc(f"Качен документ: {p['filename']}", "", text, fmt,
+                             datetime.now(timezone.utc).isoformat(), first_date(text), warnings)
+        return fetch_appellate(courts, p["court"], p["case"], p["year"], p["type"])[1]
+
+    @staticmethod
+    def _can_trace(p: dict) -> bool:
+        return bool(p.get("court") and p.get("case") and p.get("year"))
 
     def _fail(self, job: Job, exc: Exception) -> None:
         job.status = "failed"
@@ -95,7 +111,6 @@ class JobRunner:
         """Case path, the appealed act and cited VKS practice, without any AI call."""
         from legal_ai.cassation.noai import (as_dicts as cites_dicts, extract_appealed,
                                              extract_vks_citations, match_citations)
-        from legal_ai.cassation.pipeline import fetch_appellate
         from legal_ai.http import PoliteClient
         from legal_ai.sources.courts import ALLOWED_HOSTS
         from legal_ai.sources.vks import HOST as VKS_HOST
@@ -108,12 +123,14 @@ class JobRunner:
             ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
             with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
                     PoliteClient([VKS_HOST], interval, ua) as vks:
-                job.message = "Сваляне на въззивното решение…"
-                _, appellate = fetch_appellate(courts, p["court"], p["case"], p["year"], p["type"])
+                job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
+                appellate = self._appellate(courts, p)
                 lower = extract_appealed(appellate.text)
-                job.message = "Проследяване на делото по инстанции…"
-                path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
-                                      appellate.act_date, lower))
+                path = []
+                if self._can_trace(p):
+                    job.message = "Проследяване на делото по инстанции…"
+                    path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
+                                          appellate.act_date, lower))
             cites = extract_vks_citations(appellate.text)
             if os.environ.get("DATABASE_URL"):
                 from legal_ai.db import connect

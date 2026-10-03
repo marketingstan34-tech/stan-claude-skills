@@ -8,10 +8,10 @@
     <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('court', 22) }}</div>
     <div class="profile-name-info"><h2 class="profile-name">{{ m[1] if m|length > 1 else label }}</h2>
       <p class="profile-role">{{ m[0] }}{% if m|length > 2 %} · {{ m[2:]|join(', ') }}{% endif %}</p></div>
-    <a class="card-options-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link') }}</a>
+    {% if url %}<a class="card-options-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link') }}</a>{% endif %}
   </div>
   <div class="profile-action-buttons">
-    <a class="action-circle-btn black-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Въззивното решение в сайта на съда">{{ icon('doc') }}</a>
+    {% if url %}<a class="action-circle-btn black-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Въззивното решение в сайта на съда">{{ icon('doc') }}</a>{% endif %}
     <a class="action-circle-btn light-btn" href="#path" title="Пътят на делото">{{ icon('path') }}</a>
     <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
     <a class="action-circle-btn light-btn" href="/reports" title="Всички справки">{{ icon('msg') }}</a>

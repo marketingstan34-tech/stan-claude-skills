@@ -95,3 +95,18 @@ def test_dashboard_pages_render_without_database(client):
         assert "/static/kit/dashboard.css" in r.text and "side-dock-nav" in r.text
     assert "Синтетичен съд, дело 1/2020" in client.get("/reports").text
     assert client.get("/static/kit/dashboard.css").status_code == 200
+
+
+def test_upload_starts_a_job_and_errors_show_on_the_page(client, tmp_path):
+    origin = {"origin": "http://127.0.0.1"}
+    r = client.post("/analyze", data={"mode": "noai"}, headers=origin)
+    assert r.status_code == 400 and "качете документ" in r.text
+    r = client.post("/analyze", data={"mode": "noai"}, headers=origin,
+                    files={"document": ("стар.doc", b"x" * 1000, "application/msword")})
+    assert "docx или PDF" in r.text
+    body = ("Синтетичен текст на решение по въззивна жалба. " * 20).encode()
+    r = client.post("/analyze", data={"mode": "noai"}, headers=origin, follow_redirects=False,
+                    files={"document": ("решение.txt", body, "text/plain")})
+    assert r.status_code == 303 and r.headers["location"].startswith("/jobs/")
+    saved = list((tmp_path / "uploads").iterdir())
+    assert len(saved) == 1 and saved[0].suffix == ".txt" and saved[0].read_bytes() == body

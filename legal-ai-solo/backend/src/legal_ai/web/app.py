@@ -7,11 +7,11 @@ import re
 from datetime import date
 from pathlib import Path
 from urllib.parse import quote, urlparse
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import psycopg
 
-from fastapi import FastAPI, Form, HTTPException, Query, Request
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -78,11 +78,11 @@ def create_app() -> FastAPI:
     traces_dir = storage / "traces"
     runner = JobRunner(runs_dir, traces_dir)
 
-    def render(request: Request, name: str, ctx: dict):
+    def render(request: Request, name: str, ctx: dict, status_code: int = 200):
         running = [j for j in runner.jobs.values() if j.status in ("queued", "running")]
         return _TEMPLATES.TemplateResponse(request, name, {
             "running_job": running[0] if running else None,
-            "today": date.today().strftime("%d.%m.%Y"), **ctx})
+            "today": date.today().strftime("%d.%m.%Y"), **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
         cur.execute("""
@@ -214,20 +214,40 @@ def create_app() -> FastAPI:
         return render(request, "corpus.html", dashboard(m))
 
     @app.post("/analyze")
-    def analyze_start(request: Request, court: str = Form(...), case: int = Form(..., ge=1, le=999999),
-                      year: int = Form(..., ge=2000, le=2100), case_type: str = Form(""),
-                      until: str = Form(""), mode: str = Form("noai")):
+    def analyze_start(request: Request, court: str = Form(""), case: int | None = Form(None, ge=1, le=999999),
+                      year: int | None = Form(None, ge=2000, le=2100), case_type: str = Form(""),
+                      until: str = Form(""), mode: str = Form("noai"),
+                      document: UploadFile | None = File(None)):
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
-        if court not in COURTS or case_type not in ("", "Гражданско", "Търговско") \
+
+        def form_error(msg: str, status: int = 400):
+            return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), "error": msg,
+                                                    **dashboard(None)}, status_code=status)
+
+        if (court and court not in COURTS) or case_type not in ("", "Гражданско", "Търговско") \
                 or mode not in ("noai", "ai"):
-            raise HTTPException(400, "Невалиден съд или вид дело.")
+            return form_error("Невалиден съд, вид дело или режим.")
         if until and not re.fullmatch(r"\d{4}-\d{2}", until):
-            raise HTTPException(400, "Датата трябва да е ГГГГ-ММ.")
+            return form_error("„Практика до“ трябва да е във вида ГГГГ-ММ, напр. 2022-05.")
         if runner.busy():
-            raise HTTPException(409, "Вече тече анализ. Изчакайте да приключи.")
-        job = runner.start({"court": court, "case": case, "year": year, "type": case_type,
-                            "until": until, "mode": mode})
+            return form_error("Вече тече справка. Изчакайте да приключи.", 409)
+        params = {"court": court, "case": case, "year": year, "type": case_type, "until": until, "mode": mode}
+        if document is not None and document.filename:
+            from legal_ai.upload import MAX_BYTES, UploadError, extension, read_upload
+            body = document.file.read(MAX_BYTES + 1)
+            try:
+                read_upload(document.filename, body)          # fail early with a plain message
+            except UploadError as exc:
+                return form_error(str(exc))
+            uploads = storage / "uploads"
+            uploads.mkdir(parents=True, exist_ok=True)
+            name = f"{uuid4().hex}{extension(document.filename)}"
+            (uploads / name).write_bytes(body)
+            params.update(file=f"uploads/{name}", filename=os.path.basename(document.filename)[:120])
+        elif not (court and case and year):
+            return form_error("Въведете съд, номер и година на делото или качете документ.")
+        job = runner.start(params)
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)

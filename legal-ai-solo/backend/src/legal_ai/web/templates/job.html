@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 {% block title %}Справката тече · Legal AI Solo{% endblock %}
-{% block page_title %}{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}{% endblock %}
+{% block page_title %}{% if job.params.file %}{{ job.params.filename }}{% else %}{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}{% endif %}{% endblock %}
 {% block view_class %}scroll-view{% endblock %}
 {% block content %}
 {% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="{{ 3 if job.params.mode == 'noai' else 5 }}">{% endif %}

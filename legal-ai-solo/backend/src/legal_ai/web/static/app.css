@@ -114,3 +114,7 @@ details > summary { cursor: pointer; }
   .calendar-inbox-row > .card { min-height: 0; }
   .dash-col-right.scroll-col, .card.scroll-card { overflow: visible; }
 }
+.file-pick { position: relative; display: inline-flex; align-items: center; gap: 8px; margin-top: 3px; cursor: pointer; }
+.file-input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; }
+.file-btn { background: #111413; color: #fff; border-radius: 999px; padding: 3px 10px; font-size: 10.5px; font-weight: 600; }
+.file-name { font-size: 11px; color: #52525b; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
