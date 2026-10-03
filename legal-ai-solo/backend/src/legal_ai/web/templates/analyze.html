@@ -48,7 +48,7 @@
                 {% if group %}<optgroup label="{{ title }}">{% for c in group %}<option value="{{ c.key }}" data-city="{{ c.city }}" {{ 'selected' if c.key == 'as-plovdiv' }}>{{ c.name }}</option>{% endfor %}</optgroup>{% endif %}
                 {% endfor %}
               </select></div></div>
-          <div class="detail-right"><span class="online-badge online" id="court-city">Пловдив</span></div>
+          <div class="detail-right"><span class="online-badge online" id="court-city">{{ courts["as-plovdiv"].city }}</span></div>
         </label>
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
@@ -59,13 +59,13 @@
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
             <div class="detail-text"><span class="detail-label">Номер на делото</span>
-              <input class="detail-value detail-input" type="number" name="case" min="1" max="999999" placeholder="899"></div></div>
+              <input class="detail-value detail-input" type="number" name="case" min="1" max="999999" placeholder="по избор"></div></div>
           <div class="detail-right"><span class="detail-action-circle">{{ icon('hash', 11) }}</span></div>
         </label>
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
             <div class="detail-text"><span class="detail-label">Година</span>
-              <input class="detail-value detail-input" type="number" name="year" min="2000" max="2100" placeholder="2021"></div></div>
+              <input class="detail-value detail-input" type="number" name="year" min="2000" max="2100" placeholder="по избор"></div></div>
           <div class="detail-right"><span class="detail-action-circle">{{ icon('cal', 11) }}</span></div>
         </label>
         <label class="detail-item-row">
@@ -120,4 +120,12 @@
     </div>
   </div>
 </div>
+<script>
+(function () {   /* the town badge follows the selected court, also after the browser restores the form */
+  var sel = document.querySelector('select[name=court]'), badge = document.getElementById('court-city');
+  if (!sel || !badge) return;
+  function sync() { var o = sel.options[sel.selectedIndex]; badge.textContent = (o && o.dataset.city) || 'от документа'; }
+  window.addEventListener('pageshow', sync); sync();
+})();
+</script>
 {% endblock %}
