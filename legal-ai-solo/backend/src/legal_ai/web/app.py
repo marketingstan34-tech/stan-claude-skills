@@ -51,6 +51,8 @@ def create_app() -> FastAPI:
     hosts = ["127.0.0.1", "localhost"] + [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
     if os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
         hosts.append(os.environ["RAILWAY_PUBLIC_DOMAIN"])
+    if os.environ.get("RAILWAY_ENVIRONMENT"):
+        hosts.append("healthcheck.railway.app")   # Railway's healthcheck Host (only /health is open)
 
     @app.middleware("http")
     async def require_login(request: Request, call_next):

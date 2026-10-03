@@ -76,3 +76,11 @@ def test_cookie_signature_and_expiry(monkeypatch):
     assert not auth.cookie_ok(v[:-1] + ("0" if v[-1] != "0" else "1"), now=1001)
     monkeypatch.setenv("APP_PASSWORD", "changed")          # changing the password ends all sessions
     assert not auth.cookie_ok(v, now=1001)
+
+
+def test_railway_healthcheck_host_allowed(make_client, monkeypatch):
+    monkeypatch.setenv("RAILWAY_ENVIRONMENT", "production")
+    monkeypatch.setenv("APP_PASSWORD", "синтетична-парола-3")
+    c = make_client("http://healthcheck.railway.app")
+    r = c.get("/reports", follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/login")
