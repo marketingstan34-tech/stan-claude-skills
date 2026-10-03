@@ -19,43 +19,93 @@ from legal_ai.sources.courts.acts import acts_url, parse_acts
 
 VKS = "https://www.vks.bg"
 
-# Lower court of each supported appellate court (same city). It is used only when the appellate
-# decision names that court (or an abbreviation that fits it) and the act date matches.
-LOWER_COURT = {"as-plovdiv": "os-plovdiv", "os-plovdiv": "rs-plovdiv"}
-_LEVEL = {"os-plovdiv": "окръжен", "rs-plovdiv": "районен"}
-_CITY = {"os-plovdiv": "ПЛОВДИВ", "rs-plovdiv": "ПЛОВДИВ"}
-# Stems of other court towns: the district courts and the district/regional courts in the
-# Plovdiv appellate region (a reference naming any of them is another court).
-_OTHER_TOWNS = ("БЛАГОЕВГР", "БУРГАС", "ВАРН", "ВЕЛИКО ТЪРН", "ВЕЛИКОТЪРН", "ВИДИН", "ВРАЦ", "ГАБРОВ", "ДОБРИЧ",
-                "КЪРДЖАЛ", "КЮСТЕНДИЛ", "ЛОВЕЧ", "МОНТАН", "ПАЗАРДЖ", "ПЕРНИ", "ПЛЕВЕН", "ПЛЕВЕНС", "РАЗГРАД",
-                "РУСЕ", "РУСЕНС", "СИЛИСТР", "СЛИВЕН", "СМОЛЯН", "СОФИ", "СТАРА ЗАГОР", "СТАРОЗАГОР", "ТЪРГОВИЩ",
-                "ХАСКОВ", "ШУМЕН", "ЯМБОЛ", "АСЕНОВГР", "КАРЛОВ", "ПЪРВОМА", "ПЕЩЕР", "ВЕЛИНГРАД", "ПАНАГЮРИЩ",
-                "ДЕВИН", "ЧЕПЕЛАР", "МАДАН", "ЗЛАТОГРАД", "КАЗАНЛЪК", "ЧИРПАН", "РАДНЕВ", "ГЪЛЪБОВ",
-                "ДИМИТРОВГР", "ХАРМАНЛ", "СВИЛЕНГР", "ИВАЙЛОВГР", "ТОПОЛОВГР", "МОМЧИЛГР", "КРУМОВГР",
-                "АРДИНО", "ДЖЕБЕЛ")
+# The court below each level; Sofia: the city court (СГС) and the district court (СОС) are both
+# below the Sofia appellate court.
+_BELOW = {"апелативен": ("окръжен", "градски"), "окръжен": ("районен",), "градски": ("районен",)}
+_LEVEL_WORDS = re.compile(r"ОКРЪЖЕН|ОКРЪЖНИЯ|РАЙОНЕН|РАЙОННИЯ|ГРАДСКИ|ГРАДСКИЯ|СЪД|СЪДА|ГР\.?|ПО|ОПИСА|НА|"
+                          r"(?<![А-Я])[ОР]\.?\s?С\.?(?![А-Я])|(?<=[А-Яа-я])[ОР]С(?![А-Я])")
 
 
-def lower_court_match(text: str, lower_key: str) -> bool | None:
-    """Does the court named in the appellate decision fit `lower_key`?
+def _norm(text: str) -> str:
+    return " ".join((text or "").upper().replace("–", " ").replace("-", " ").replace("Ё", "Е").split())
 
-    True: town and level written and both fit. False: another town or level is named, so the
-    case must not be looked up there. None: abbreviated or missing (e.g. "О.С.-П."): the lookup
-    is a candidate only and is confirmed by the act date.
+
+def _city_forms(city: str) -> list[str]:
+    """How a town appears in a court reference: "Стара Загора", "Старозагорски", "Пазарджишки"."""
+    c = _norm(city)
+    words = c.split()
+    stem = c[:-2] if len(c) >= 7 else c[:-1] if len(c) >= 5 else c
+    forms = {c, stem}
+    if len(words) == 2:
+        first = words[0][:-1] + "О" if words[0][-1] in "АО" else words[0]
+        last = words[1][:-2] if len(words[1]) >= 6 else words[1][:-1]
+        forms.add(first + last)
+    return sorted(forms, key=len, reverse=True)
+
+
+def _level_named(t: str) -> set[str]:
+    out = set()
+    if "ОКРЪЖ" in t or re.search(r"(?<![А-Я])[А-Я]{0,2}О\.?\s?С\.?(?![А-Я])|(?<=[А-Я][а-я])ОС\b", t):
+        out.add("окръжен")
+    if "РАЙОН" in t or re.search(r"(?<![А-Я])[А-Я]{0,2}Р\.?\s?С\.?(?![А-Я])", t):
+        out.add("районен")
+    if "ГРАДСКИ" in t or re.search(r"(?<![А-Я])СГС(?![А-Я])", t):
+        out.add("градски")
+    return out
+
+
+def _subsequence(abbr: str, city: str) -> bool:
+    """"ПД" fits "ПЛОВДИВ" (first letter equal, the rest in order)."""
+    city = city.replace(" ", "")
+    if not abbr or not city.startswith(abbr[0]):
+        return False
+    i = 1
+    for ch in city[1:]:
+        if i < len(abbr) and ch == abbr[i]:
+            i += 1
+    return i == len(abbr)
+
+
+def resolve_lower_court(text: str, appellate: CourtSite) -> tuple[CourtSite | None, bool]:
+    """The first-instance court named in the appellate decision: (court, written in full).
+
+    A town written in full (or as its adjective) decides. An abbreviation ("О.С.-П.", "ПдОС") is
+    resolved among the lower courts of the region; if several fit, the court in the appellate
+    court's own town is taken only if it is one of them. Such a match is a candidate only: the
+    trace links it only when the act date matches. (None, False) when nothing fits or another
+    level is named.
     """
-    t = " ".join((text or "").upper().replace("–", "-").split())
-    if not t:
-        return None
-    level = _LEVEL[lower_key]
-    is_os = "ОКРЪЖ" in t or re.search(r"(?<![А-Я])(?:[А-Я]{0,2})О\.?\s?С\.?(?![А-Я])", t) is not None
-    is_rs = "РАЙОН" in t or re.search(r"(?<![А-Я])(?:[А-Я]{0,2})Р\.?\s?С\.?(?![А-Я])", t) is not None
-    if (level == "окръжен" and is_rs and not is_os) or (level == "районен" and is_os and not is_rs):
-        return False
-    if any(town in t for town in _OTHER_TOWNS):
-        return False
-    town_ok = _CITY[lower_key] in t or re.search(r"(?<![А-Я])ПД\.?\s?[ОР]\.?\s?С", t) is not None \
-        or re.search(r"(?<![А-Я])[ОР]\.?\s?С\.?\s?-?\s?ПД(?![А-Я])", t) is not None
-    level_ok = is_os if level == "окръжен" else is_rs
-    return True if town_ok and level_ok else None
+    levels = _BELOW.get(appellate.level, ())
+    if not levels:
+        return None, False
+    raw = (text or "").replace("–", "-")
+    t = _norm(raw)
+    named = _level_named(raw.upper())
+    if named and not named & set(levels):
+        return None, False
+    pool = [c for c in COURTS.values() if c.level in levels and (not named or c.level in named)]
+    # 1) the town written in full or as an adjective, anywhere in the country
+    best: tuple[int, CourtSite] | None = None
+    for c in pool:
+        for form in _city_forms(c.city):
+            if re.search(r"(?<![А-Я])" + re.escape(form), t) and (best is None or len(form) > best[0]):
+                best = (len(form), c)
+                break
+    if best:
+        return best[1], True
+    # 2) an abbreviation, within the appellate region
+    region = [c for c in pool if c.region and c.region == (appellate.region or appellate.city)] or pool
+    letters = _LEVEL_WORDS.sub(" ", raw.upper().replace(".", " ").replace("-", " "))
+    abbrs = [w for w in letters.split() if w.isalpha() and len(w) <= 3]
+    if not abbrs and t:
+        return None, False
+    fits = [c for c in region if any(_subsequence(a, _norm(c.city)) for a in abbrs)] if abbrs else region
+    same_town = [c for c in fits if c.city == appellate.city]
+    if len(fits) == 1:
+        return fits[0], False
+    if same_town:
+        return same_town[0], False
+    return None, False
 
 
 def _same_date(want: str, got: str) -> bool:
@@ -126,12 +176,10 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
     path: list[Instance] = []
 
     # first instance, from the reference in the appellate decision, confirmed on the court site
-    lower_key = LOWER_COURT.get(court_key)
     ref = _CASE_REF.search((lower or {}).get("case", "") or "")
     named = (lower or {}).get("court", "") or ""
-    match = lower_court_match(named, lower_key) if lower_key else False
-    if lower_key and ref and match is not False:
-        lc: CourtSite = COURTS[lower_key]
+    lc, exact = resolve_lower_court(named, court)
+    if lc and ref:
         inst = Instance("първа", lc.name, f"{ref[1]}/{ref[2]}")
         try:
             url = acts_url(lc, int(ref[1]), int(ref[2]), "", "решение")
@@ -142,14 +190,14 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
             acts = [{"type": r.act_type, "number": "", "date": r.act_date.strftime("%d.%m.%Y") if r.act_date else "",
                      "result": "", "url": r.file_url or ""} for r in rows]
             if not rows:
-                inst.note = f"Не е намерено в {lc.name} (възможно е друг съд от района)."
+                inst.note = f"Не е намерено в {lc.name}" + ("." if exact else " (възможно е друг съд от района).")
             elif not any(_same_date(want, a["date"]) for a in acts):
                 # the same number and year can belong to another case: nothing is linked
                 inst.note = (f"В {lc.name} има дело {ref[1]}/{ref[2]}, но датата на акта не съвпада с посочената "
                              "във въззивното решение (или липсва) – не е свързано. Проверете ръчно.")
             else:
                 inst.acts = acts
-                if match is None:
+                if not exact:
                     inst.note = (f"Съдът е посочен съкратено („{named or '—'}“); делото е намерено в {lc.name} "
                                  "със същия номер, година и дата на акта.")
         except FetchError as exc:
@@ -157,7 +205,7 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
         path.append(inst)
     elif lower:
         path.append(Instance("първа", lower.get("court", "?"), lower.get("case", "?"),
-                             note="Съдът не се поддържа още за автоматична проверка."))
+                             note="Съдът не е разпознат или не е в списъка за автоматична проверка."))
 
     path.append(Instance("въззивна", court.name, f"{number}/{year}",
                          acts=[{"type": "Решение", "number": "",

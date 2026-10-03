@@ -41,8 +41,14 @@
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
             <div class="detail-text"><span class="detail-label">Въззивен съд</span>
-              <select class="detail-value detail-input" name="court">{% for k, c in courts.items() %}<option value="{{ k }}">{{ c.name }}</option>{% endfor %}</select></div></div>
-          <div class="detail-right"><span class="online-badge online">Пловдив</span></div>
+              <select class="detail-value detail-input" name="court" onchange="var o=this.options[this.selectedIndex];document.getElementById('court-city').textContent=o.dataset.city||'—'">
+                <option value="">— разпознай от документа —</option>
+                {% for lvl, title in [('апелативен', 'Апелативни съдилища'), ('градски', 'Софийски градски съд'), ('окръжен', 'Окръжни съдилища'), ('районен', 'Районни съдилища')] %}
+                {% set group = courts.values()|selectattr('level', 'equalto', lvl)|list %}
+                {% if group %}<optgroup label="{{ title }}">{% for c in group %}<option value="{{ c.key }}" data-city="{{ c.city }}" {{ 'selected' if c.key == 'as-plovdiv' }}>{{ c.name }}</option>{% endfor %}</optgroup>{% endif %}
+                {% endfor %}
+              </select></div></div>
+          <div class="detail-right"><span class="online-badge online" id="court-city">Пловдив</span></div>
         </label>
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>

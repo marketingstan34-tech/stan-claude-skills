@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 
 from legal_ai import tracing
 from legal_ai.ai import AIConfig, AIError, OpenAIProvider
+from legal_ai.sources.courts import CourtSite
 from legal_ai.sources.courts.acts import ActRow
 from legal_ai.web import auth
 from legal_ai.web.jobs import JobRunner
@@ -25,12 +26,33 @@ def _call(ai):
 
 # 1. first instance: the court named in the appellate decision decides, and the act date confirms
 
-@pytest.mark.parametrize("text,expected", [
-    ("Окръжен съд Пловдив", True), ("ПдОС", True), ("Пловдивски окръжен съд, ТО", True),
-    ("Окръжен съд Смолян", False), ("ОС – Пазарджик", False), ("Районен съд Пловдив", False),
-    ("ПдРС, ІV гр.с.", False), ("О.С.-П.", None), ("", None)])
-def test_lower_court_match(text, expected):
-    assert tracing.lower_court_match(text, "os-plovdiv") is expected
+EXTRA = {
+    "os-smolyan": CourtSite("os-smolyan", "Окръжен съд Смолян", "smolyan-os.justice.bg", "1", "окръжен", "Смолян", "Пловдив"),
+    "os-pazardzhik": CourtSite("os-pazardzhik", "Окръжен съд Пазарджик", "pazardzhik-os.justice.bg", "2", "окръжен",
+                               "Пазарджик", "Пловдив"),
+    "os-stara-zagora": CourtSite("os-stara-zagora", "Окръжен съд Стара Загора", "starazagora-os.justice.bg", "3",
+                                 "окръжен", "Стара Загора", "Пловдив"),
+    "os-varna": CourtSite("os-varna", "Окръжен съд Варна", "varna-os.justice.bg", "4", "окръжен", "Варна", "Варна"),
+}
+
+
+@pytest.fixture()
+def courts(monkeypatch):
+    from legal_ai.sources import courts as mod
+    monkeypatch.setattr(mod, "COURTS", {**mod.COURTS, **EXTRA})
+    monkeypatch.setattr(tracing, "COURTS", mod.COURTS)
+    return mod.COURTS
+
+
+@pytest.mark.parametrize("text,key,exact", [
+    ("Окръжен съд Пловдив", "os-plovdiv", True), ("Пловдивски окръжен съд, ТО", "os-plovdiv", True),
+    ("Окръжен съд Смолян", "os-smolyan", True), ("ОС – Пазарджик", "os-pazardzhik", True),
+    ("Старозагорски окръжен съд", "os-stara-zagora", True), ("Окръжен съд – Варна", "os-varna", True),
+    ("СмОС", "os-smolyan", False), ("О.С.-П.", "os-plovdiv", False), ("", "os-plovdiv", False),
+    ("Районен съд Пловдив", None, False), ("ПдРС, ІV гр.с.", None, False)])
+def test_resolve_lower_court(courts, text, key, exact):
+    c, ex = tracing.resolve_lower_court(text, courts["as-plovdiv"])
+    assert (c.key if c else None, ex) == (key, exact)
 
 
 class _Fake:
@@ -50,9 +72,15 @@ def _trace(monkeypatch, lower, act_date=date(2021, 7, 6)):
     return path[0], courts.urls
 
 
-def test_other_district_court_is_not_looked_up(monkeypatch):
+def test_other_district_court_is_looked_up_there(monkeypatch, courts):
     first, urls = _trace(monkeypatch, {"case": "1110/2019", "court": "Окръжен съд Смолян", "date": "06.07.2021"})
-    assert urls == [] and first.court == "Окръжен съд Смолян" and first.acts == [] and first.note
+    assert urls[0].startswith("https://smolyan-os.justice.bg/") and first.court == "Окръжен съд Смолян"
+    assert len(first.acts) == 1 and not first.note
+
+
+def test_unknown_court_is_not_looked_up(monkeypatch):
+    first, urls = _trace(monkeypatch, {"case": "1110/2019", "court": "Районен съд Пловдив", "date": "06.07.2021"})
+    assert urls == [] and first.acts == [] and first.note
 
 
 def test_abbreviated_court_is_linked_only_with_matching_date(monkeypatch):

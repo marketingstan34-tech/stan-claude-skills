@@ -16,14 +16,20 @@ class CourtSite:
     name: str
     host: str
     acts_page: str  # page id of "Съдебни актове", differs per court
+    level: str = ""   # апелативен | окръжен | градски | районен
+    city: str = ""
+    region: str = ""  # town of the appellate court above it
 
 
 # Verified 02.10.2026 (docs/source-discovery.md §2.1).
 COURTS: dict[str, CourtSite] = {
-    "as-plovdiv": CourtSite("as-plovdiv", "Апелативен съд Пловдив", "plovdiv-as.justice.bg", "2465"),
-    "os-plovdiv": CourtSite("os-plovdiv", "Окръжен съд Пловдив", "plovdiv-os.justice.bg", "3935"),
+    "as-plovdiv": CourtSite("as-plovdiv", "Апелативен съд Пловдив", "plovdiv-as.justice.bg", "2465",
+                            "апелативен", "Пловдив", "Пловдив"),
+    "os-plovdiv": CourtSite("os-plovdiv", "Окръжен съд Пловдив", "plovdiv-os.justice.bg", "3935",
+                            "окръжен", "Пловдив", "Пловдив"),
     # from the court's sitemap, 02.10.2026 (used for first-instance lookups)
-    "rs-plovdiv": CourtSite("rs-plovdiv", "Районен съд Пловдив", "plovdiv-rs.justice.bg", "9885"),
+    "rs-plovdiv": CourtSite("rs-plovdiv", "Районен съд Пловдив", "plovdiv-rs.justice.bg", "9885",
+                            "районен", "Пловдив", "Пловдив"),
 }
 
 CASE_TYPES = ("Гражданско", "Търговско")
