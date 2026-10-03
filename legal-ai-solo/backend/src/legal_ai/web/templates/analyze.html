@@ -70,7 +70,7 @@
         </label>
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
-            <div class="detail-text"><span class="detail-label">Въззивното решение – файл (PDF, Word, TXT)</span>
+            <div class="detail-text"><span class="detail-label">Въззивното решение – файл (PDF, Word, TXT) · може и с влачене</span>
               <span class="file-pick"><input class="file-input" type="file" name="document" accept=".pdf,.docx,.html,.htm,.txt"
                 onchange="this.parentNode.querySelector('.file-name').textContent = this.files.length ? this.files[0].name : 'няма избран файл'">
                 <span class="file-btn">Избери файл</span><span class="file-name">няма избран файл</span></span></div></div>
@@ -78,7 +78,7 @@
         </label>
         <label class="detail-item-row">
           <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
-            <div class="detail-text"><span class="detail-label">Други документи по делото (по избор, до 5): първа инстанция, жалби, отговори</span>
+            <div class="detail-text"><span class="detail-label">Други документи по делото (по избор, до 5): първа инстанция, жалби, отговори · може и с влачене</span>
               <span class="file-pick"><input class="file-input" type="file" name="extra" multiple accept=".pdf,.docx,.html,.htm,.txt"
                 onchange="this.parentNode.querySelector('.file-name').textContent = this.files.length ? (this.files.length === 1 ? this.files[0].name : this.files.length + ' файла') : 'няма избрани'">
                 <span class="file-btn">Избери файлове</span><span class="file-name">няма избрани</span></span></div></div>
@@ -134,6 +134,37 @@
   if (!sel || !badge) return;
   function sync() { var o = sel.options[sel.selectedIndex]; badge.textContent = (o && o.dataset.city) || 'от документа'; }
   window.addEventListener('pageshow', sync); sync();
+})();
+</script>
+<script>
+(function () {   /* drag and drop: the whole row of a file field takes the dropped files */
+  function names(input) {
+    var n = input.files.length;
+    return n === 0 ? (input.multiple ? 'няма избрани' : 'няма избран файл') : (n === 1 ? input.files[0].name : n + ' файла');
+  }
+  document.querySelectorAll('.file-pick').forEach(function (pick) {
+    var input = pick.querySelector('input[type=file]'), row = pick.closest('.detail-item-row') || pick, label = pick.querySelector('.file-name');
+    if (!input) return;
+    input.addEventListener('change', function () { label.textContent = names(input); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      row.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); row.classList.add('drop-over'); });
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      row.addEventListener(ev, function (e) { if (!row.contains(e.relatedTarget)) row.classList.remove('drop-over'); });
+    });
+    row.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation(); row.classList.remove('drop-over');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      var dt = new DataTransfer();
+      for (var i = 0; i < files.length && (input.multiple || i < 1); i++) dt.items.add(files[i]);
+      input.files = dt.files;
+      label.textContent = names(input);
+    });
+  });
+  /* a file dropped elsewhere on the page must not open it in the browser */
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
 })();
 </script>
 {% endblock %}

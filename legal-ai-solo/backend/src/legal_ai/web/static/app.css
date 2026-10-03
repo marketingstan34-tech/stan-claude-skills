@@ -289,3 +289,4 @@ a.status-chip.active { box-shadow: 0 0 0 2px #111413 inset; }
 .status-form label { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; color: #52525b; font-weight: 600; margin-bottom: 8px; }
 .days-left-pill.due-warn { background: #fef3c7 !important; color: #92400e !important; }
 .days-left-pill.due-bad { background: #fee2e2 !important; color: #991b1b !important; }
+.detail-item-row.drop-over { outline: 2px dashed #111413; outline-offset: 2px; background: #f0fdf4 !important; }
