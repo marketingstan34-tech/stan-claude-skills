@@ -382,6 +382,8 @@ def create_app() -> FastAPI:
         job = runner.jobs.get(job_id)
         if job is None:
             raise HTTPException(404, "Няма такъв анализ.")
+        if job.status == "done" and job.redirect:
+            return RedirectResponse(job.redirect, status_code=303)
         if job.status == "done" and job.run_dir:
             if job.params.get("mode") == "appeal":
                 return RedirectResponse(f"/runs/{job.run_dir}/appeal", status_code=303)
@@ -662,6 +664,44 @@ def create_app() -> FastAPI:
         if not data["totals"]["n"] and not data["totals"]["panel"]:
             raise HTTPException(404, "Няма такъв съдия в базата.")
         return render(request, "judge_profile.html", {**data, "w": w})
+
+    @app.get("/benchmark", response_class=HTMLResponse)
+    def benchmark_page(request: Request):
+        import json as _json
+
+        from legal_ai.ai.pricing import TYPICAL_REPORT_USD, cost_usd
+        bdir = storage / "benchmark"
+        runs = []
+        for f in sorted(bdir.glob("*.json"), reverse=True)[:5] if bdir.is_dir() else []:
+            try:
+                data = _json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                continue
+            data["cost"] = cost_usd((data.get("usage") or {}).get("by_model") or {})
+            runs.append(data)
+        available = 0
+        try:
+            from legal_ai.cassation import admission
+            with connect(settings.database_url) as conn:
+                available = admission.rulings_count(conn)
+        except psycopg.Error:
+            pass
+        return render(request, "benchmark.html", {"runs": runs, "available": available,
+                                                  "price_one": TYPICAL_REPORT_USD, "busy": runner.busy()})
+
+    @app.post("/benchmark")
+    async def benchmark_start(request: Request):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        try:
+            n = max(2, min(10, int(form.get("n", "3"))))
+        except ValueError:
+            n = 3
+        job = runner.start({"mode": "benchmark", "n": n})
+        if job is None:
+            return RedirectResponse("/benchmark?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
     @app.post("/runs/{run_id}/case")
     async def run_case(request: Request, run_id: str):

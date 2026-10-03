@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 {% block title %}Справката тече · Legal AI Solo{% endblock %}
-{% block page_title %}{% if job.params.mode == 'appeal' %}Чернова на касационна жалба{% elif job.params.file %}{{ job.params.filename }}{% else %}{{ courts[job.params.court].name if job.params.court in courts else 'Справка' }} · дело {{ job.params.case }}/{{ job.params.year }}{% endif %}{% endblock %}
+{% block page_title %}{% if job.params.mode == 'benchmark' %}Проверка на точността{% elif job.params.mode == 'judge' %}„Съдия от ВКС“{% elif job.params.mode == 'filing' %}Чернова с AI{% elif job.params.mode == 'appeal' %}Чернова на касационна жалба{% elif job.params.file %}{{ job.params.filename }}{% else %}{{ courts[job.params.court].name if job.params.court in courts else 'Справка' }} · дело {{ job.params.case }}/{{ job.params.year }}{% endif %}{% endblock %}
 {% block view_class %}scroll-view{% endblock %}
 {% block page_hint %}Справката се изготвя. Страницата се обновява сама, не я затваряйте.{% endblock %}
 {% block content %}

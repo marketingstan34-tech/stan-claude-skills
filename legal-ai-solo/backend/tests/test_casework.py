@@ -601,3 +601,23 @@ def test_judges_pages_without_database(client):
     assert "Базата не е достъпна" in c.get("/judges").text
     assert c.get("/judges/Мария Петрова").status_code == 503
     assert "/judges" in c.get("/start").text
+
+
+def test_benchmark_page_and_start(client, monkeypatch):
+    import legal_ai.web.jobs as jobs
+    from legal_ai.benchmark import question_match, score, summary
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    assert "Проверка на точността" in c.get("/benchmark").text and "/benchmark" in c.get("/help").text
+    started = []
+    monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
+    r = c.post("/benchmark", data={"n": "3"}, headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[0] == {"mode": "benchmark", "n": 3}
+    assert question_match(["Как се погасяват еднородни задължения при частично плащане?"],
+                          ["Как се погасяват няколко еднородни задължения при частично плащане от длъжника?"]) >= 0.5
+    s = score({"analysis": {"questions": [{"text": "Въпрос"}]},
+               "assessments": [{"relevant": True, "stance": "противоречи", "label": "Решение №119/30.07.2018 по дело №1/2017"}]},
+              "Съгласно решение № 119 от 30.07.2018 г. по гр. д. № 1/2017 г.")
+    assert s["practice_found"] == ["119/30.07.2018"] and s["contra"] == 1
+    assert summary([{"outcome": "допуска", "score": {"question_match": 0.6, "cited": ["1/01.01.2020"],
+                                                       "practice_found": []}}])["question_hits"] == 1

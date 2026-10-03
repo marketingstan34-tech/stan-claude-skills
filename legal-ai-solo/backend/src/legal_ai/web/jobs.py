@@ -8,7 +8,7 @@ import os
 import threading
 import traceback
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Callable
@@ -21,6 +21,7 @@ class Job:
     status: str = "queued"       # queued | running | done | failed
     message: str = ""
     run_dir: str | None = None
+    redirect: str | None = None   # where the finished job's page leads (judge, filings, benchmark)
     started: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     cleanup: Callable[[], None] | None = field(default=None, repr=False)
 
@@ -59,6 +60,8 @@ class JobRunner:
             return self._run_judge(job)
         if job.params.get("mode") == "filing":
             return self._run_filing(job)
+        if job.params.get("mode") == "benchmark":
+            return self._run_benchmark(job)
         from legal_ai.ai import OpenAIProvider, load_ai_config
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
@@ -207,6 +210,7 @@ class JobRunner:
                               spec["stance"], past)
             write_atomic(d / f"filing-{kind}.json", json.dumps(result, ensure_ascii=False, indent=1))
             job.run_dir = run_id
+            job.redirect = f"/runs/{run_id}/filing/{kind}"
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user
@@ -229,6 +233,58 @@ class JobRunner:
                          + [h.get("summary", "") for h in a.get("holdings", [])])
         return style, archive_excerpts(past_all, topic)
 
+    def _run_benchmark(self, job: Job) -> None:
+        """Accuracy check on real VKS admission rulings (legal_ai/benchmark.py): one AI report per case."""
+        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.benchmark import pick_cases, score, summary
+        from legal_ai.cassation.pipeline import fetch_appellate, run_analysis
+        from legal_ai.db import connect
+        from legal_ai.http import PoliteClient
+        from legal_ai.sources.courts import ALLOWED_HOSTS
+        from legal_ai.sources.vks import HOST as VKS_HOST
+        job.status = "running"
+        out_dir = self.runs_dir.parent / "benchmark"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        result = {"created_at": datetime.now(timezone.utc).isoformat(), "cases": []}
+        try:
+            interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
+            ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
+            with connect(os.environ["DATABASE_URL"]) as conn:
+                job.message = "Избор на дела от определенията на ВКС…"
+                cases = pick_cases(conn, int(job.params.get("n", 3)))
+                if not cases:
+                    raise ValueError("В базата още няма подходящи определения по чл. 288. Опитайте след ден-два.")
+                ai = OpenAIProvider(load_ai_config())
+                job.cleanup = ai.close
+                with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
+                        PoliteClient([VKS_HOST], interval, ua) as vks:
+                    for i, c in enumerate(cases, 1):
+                        ruling_text = c.pop("ruling_text")
+                        result["cases"].append(c)
+                        job.message = f"Дело {i} от {len(cases)}: {c['court_name']}, дело {c['case']}/{c['year']}…"
+                        try:
+                            _, appellate = fetch_appellate(courts, c["court"], c["case"], c["year"])
+                            cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
+                            run = asdict(run_analysis(ai, vks, appellate, cutoff, conn=conn))
+                            c["appellate"] = appellate.label
+                            c["score"] = score(run, ruling_text)
+                        except Exception as exc:  # noqa: BLE001 - one case must not stop the others
+                            c["error"] = str(exc)[:300]
+                        result["summary"] = summary(result["cases"])
+                        write_atomic(out_dir / f"{stamp}.json", json.dumps(result, ensure_ascii=False, indent=1))
+            result["usage"] = {"input_tokens": ai.usage.input_tokens, "output_tokens": ai.usage.output_tokens,
+                               "by_model": ai.usage.by_model}
+            write_atomic(out_dir / f"{stamp}.json", json.dumps(result, ensure_ascii=False, indent=1))
+            job.status = "done"
+            job.message = "Готово."
+            job.redirect = "/benchmark"
+        except Exception as exc:  # noqa: BLE001 - shown to the local user
+            self._fail(job, exc)
+        finally:
+            if job.cleanup:
+                job.cleanup()
+
     def _run_judge(self, job: Job) -> None:
         """„Съдия от ВКС": one AI call reviews the statement and the appeal (texts given by the page)."""
         from legal_ai.ai import OpenAIProvider, load_ai_config
@@ -248,6 +304,7 @@ class JobRunner:
                             job.params.get("admission", ""))
             write_atomic(d / "judge.json", json.dumps(result, ensure_ascii=False, indent=1))
             job.run_dir = run_id
+            job.redirect = f"/runs/{run_id}/judge"
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user

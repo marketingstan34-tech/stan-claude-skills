@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Проверка на точността · Legal AI Solo{% endblock %}
+{% block page_title %}Проверка на точността{% endblock %}
+{% block page_hint %}Програмата се пуска на реални дела, по които ВКС вече се е произнесъл (определения по чл. 288 от базата): сваля обжалваното въззивно решение, прави справка с AI, без да вижда определението, и сравнява въпросите и практиката с тези на ВКС.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    <div class="card details-card">
+      <h2 class="details-title">Нова проверка</h2>
+      {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
+      <p>В базата има {{ available }} определения по чл. 288. Избират се най-новите с разчетено въззивно дело – половината допуснати, половината отказани.</p>
+      <form method="post" action="/benchmark" onsubmit="return confirm('Да пусне ли проверка на ' + this.n.value + ' дела? Една справка с AI на дело – около ' + (this.n.value * {{ price_one[0] }}).toFixed(1) + '–' + (this.n.value * {{ price_one[1] }}).toFixed(1) + ' $, общо ' + (this.n.value * 3) + '–' + (this.n.value * 4) + ' минути.')">
+        <label class="muted small">Брой дела<select class="kit-input" name="n"><option>2</option><option selected>3</option><option>5</option><option>10</option></select></label>
+        <button class="kit-submit" type="submit" {{ 'disabled' if busy or not available }}>{{ 'Тече друга справка…' if busy else 'Пусни проверката' }}</button>
+      </form>
+      <p class="muted small">Докато тече, други справки не могат да се пускат (един процес към сайтовете на съдилищата).</p>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if not runs %}<div class="card page-card"><p>Още няма проверки.</p></div>{% endif %}
+    {% for r in runs %}
+    <div class="card page-card">
+      <h2>Проверка от {{ r.created_at[:16].replace('T', ' ') }} UTC{% if r.cost is not none %} · ≈ {{ '%.2f'|format(r.cost) }} ${% endif %}</h2>
+      {% set s = r.summary or {} %}
+      {% if s.done %}<p><b>Въпросът на ВКС е намерен</b> в {{ s.question_hits }} от {{ s.admitted }} допуснати дела ·
+        <b>цитираната от ВКС практика е намерена</b> в {{ s.practice_hits }} от {{ s.with_cited }} дела с цитати{% if s.failed %} · {{ s.failed }} не се изпълниха{% endif %}.</p>{% endif %}
+      {% for c in r.cases %}
+      <div class="adm-example">
+        <a class="link" href="{{ c.ruling_url }}" target="_blank" rel="noopener">{{ c.ruling }}</a>
+        <span class="status-chip {{ 'st-3' if c.outcome == 'не допуска' else 'st-2' }}">ВКС: {{ c.outcome }}</span>
+        <span class="muted small">{{ c.court_name }}, дело {{ c.case }}/{{ c.year }}</span>
+        {% if c.error %}<p class="notice bad">{{ c.error }}</p>
+        {% elif c.score %}
+          <p class="small"><b>Съвпадение на въпроса:</b> {{ (c.score.question_match * 100)|round|int }}%{% if c.score.vks_questions %} · ВКС: „{{ c.score.vks_questions[0]|truncate(220) }}“{% endif %}</p>
+          <p class="small muted"><b>Наши въпроси:</b> {% for q in c.score.our_questions %}{{ loop.index }}. {{ q|truncate(140) }} {% endfor %}</p>
+          <p class="small"><b>Практика:</b> ВКС цитира {{ c.score.cited|length }}, ние намерихме {{ c.score.practice_found|length }} от тях · „противоречи“ в справката: {{ c.score.contra }}</p>
+        {% else %}<p class="muted small">тече…</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
