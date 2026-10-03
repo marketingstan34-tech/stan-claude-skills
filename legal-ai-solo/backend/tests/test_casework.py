@@ -244,3 +244,27 @@ def test_form_shows_the_cost(client, monkeypatch):
         __import__("psycopg").OperationalError("no db")))
     page = c.get("/analyze").text
     assert "С AI приблизително: справка 0.70–1.00 $" in page and "10 ¢" not in page
+
+
+def test_empty_number_and_year_from_the_browser(client, monkeypatch):
+    """Browsers send empty fields as "": that must not fail when a document is given."""
+    import legal_ai.web.jobs as jobs
+    c, _ = client
+    started = []
+
+    def fake_run(self, job):
+        started.append(job.params)
+        job.status = "done"
+
+    monkeypatch.setattr(jobs.JobRunner, "_run", fake_run)
+    doc = ("Въззивният съд приема, че искът е неоснователен. " * 10).encode()
+    h = {"origin": "http://127.0.0.1"}
+    r = c.post("/analyze", data={"court": "", "case": "", "year": "", "case_type": "", "until": "", "mode": "ai",
+                                 "text": "Бележки."}, files={"document": ("r.txt", doc, "text/plain")},
+               headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[0]["case"] is None and started[0]["year"] is None
+    r = c.post("/analyze", data={"court": "as-plovdiv", "case": "abc", "year": "2021"}, headers=h)
+    assert r.status_code == 400 and "число" in r.text
+    r = c.post("/analyze", data={"court": "as-plovdiv", "case": "899", "year": "2021", "mode": "noai"},
+               headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[-1]["case"] == 899 and started[-1]["year"] == 2021

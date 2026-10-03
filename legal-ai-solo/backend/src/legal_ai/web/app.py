@@ -282,8 +282,8 @@ def create_app() -> FastAPI:
         return render(request, "corpus.html", dashboard(m))
 
     @app.post("/analyze")
-    def analyze_start(request: Request, court: str = Form(""), case: int | None = Form(None, ge=1, le=999999),
-                      year: int | None = Form(None, ge=2000, le=2100), case_type: str = Form(""),
+    def analyze_start(request: Request, court: str = Form(""), case_text: str = Form("", alias="case", max_length=20),
+                      year_text: str = Form("", alias="year", max_length=20), case_type: str = Form(""),
                       until: str = Form(""), mode: str = Form("noai"),
                       document: UploadFile | None = File(None), text: str = Form("", max_length=400_000),
                       extra: list[UploadFile] | None = File(None)):
@@ -294,6 +294,12 @@ def create_app() -> FastAPI:
             return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), "error": msg,
                                                     **dashboard(None)}, status_code=status)
 
+        # empty number and year are allowed (the document is enough); browsers send them as ""
+        case = int(case_text) if case_text.strip().isdigit() else None
+        year = int(year_text) if year_text.strip().isdigit() else None
+        if (case_text.strip() and not (case and 1 <= case <= 999999)) or \
+                (year_text.strip() and not (year and 2000 <= year <= 2100)):
+            return form_error("Номерът на делото трябва да е число до 999999, а годината – между 2000 и 2100.")
         if (court and court not in COURTS) or case_type not in ("", "Гражданско", "Търговско") \
                 or mode not in ("noai", "ai"):
             return form_error("Невалиден съд, вид дело или режим.")
