@@ -174,3 +174,24 @@ def test_truncated_quarter_list_is_split_by_chamber(tmp_path):
     assert names[:3] == ["2021-10", "2021-11", "2021-Q4-10-11"] and len(names) == 3 + 13
     assert report.truncated == []
     assert "C" * 32 in {a["id"] for a in report.acts}
+
+
+def test_full_quarter_chamber_list_does_not_block_288_rulings(tmp_path):
+    """Determinations (чл. 288) fill even a chamber's quarter list; the month lists cover them,
+    so the quarter is not reported as truncated (the list itself is still marked full)."""
+    full = [f"{i:032X}" for i in range(249)]
+
+    def handler(request):
+        q = parse_qs(urlparse(str(request.url)).query)
+        if request.url.path.endswith("spisak-aktove.jsp"):
+            if q["AktNoOtMesec"] == q["AktNoDoMesec"]:
+                return httpx.Response(200, text=_list_html(full[:100]))
+            return httpx.Response(200, text=_list_html(full))
+        return httpx.Response(200, text='<div id="Content">текст</div>')
+
+    client, _ = _client(handler)
+    report = crawl(client, tmp_path, (2025, 4), (2025, 5), words="288", act_type="16")
+    assert report.truncated == []
+    assert any(e["truncated"] for e in report.lists if "__" in e["name"])
+    report = crawl(client, tmp_path, (2025, 4), (2025, 5))      # decisions: still reported
+    assert report.truncated

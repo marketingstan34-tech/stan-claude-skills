@@ -163,7 +163,9 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
                 part_q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type,
                                    words=words, chamber=chamber)
                 part = f"{name}__{_slug(chamber)}"
-                if fetch_list(part_q, part) >= LIST_TRUNCATION_LIMIT:
+                # the quarter lists only add what the month lists miss; when a chamber's quarter is
+                # still full, the month lists (split down to ten days) already cover it
+                if fetch_list(part_q, part) >= LIST_TRUNCATION_LIMIT and words != "288":
                     report.truncated.append(part)
 
     for source_id, link_text in ids.items():
