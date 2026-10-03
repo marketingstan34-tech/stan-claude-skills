@@ -42,15 +42,30 @@
         {% if first_instance %}<li class="ok">Първоинстанционното решение – {{ first_instance }} <span class="muted">(сваля се от сайта на съда)</span></li>
         {% else %}<li class="miss">Първоинстанционното решение не е в сайта на съда – качете го долу</li>{% endif %}
         {% for n in report_docs %}<li class="ok">{{ n }} <span class="muted">(качен със справката)</span></li>{% endfor %}
-        {% for d in added_docs %}<li class="ok">{{ d.filename }} <span class="muted">({{ d.added }})</span>
-          <form method="post" action="/runs/{{ run_id }}/docs/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }}?')"><button type="submit" class="link-button">махни</button></form></li>{% endfor %}
+
         <li class="{{ 'ok' if style_docs else 'miss' }}">{% if style_docs %}Образци на стила на адвоката: {{ style_docs|length }}{% else %}Няма образци на стила{% endif %} – <a class="link" href="/documents#style">{{ 'управление' if style_docs else 'добавете' }}</a></li>
       </ul>
-      <form method="post" action="/runs/{{ run_id }}/docs" enctype="multipart/form-data" class="docs-upload">
-        <input class="kit-input" type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm" required>
-        <button class="kit-submit light" type="submit">Добави документи по делото</button>
+      {% if added_docs %}
+      <h3 class="section-heading">Папка на делото ({{ added_docs|length }})</h3>
+      <table class="doc-table folder-table">
+        {% for d in added_docs|sort(attribute='date') %}
+        <tr class="{{ '' if d.included is not defined or d.included else 'off' }}">
+          <td><b>{{ d.kind or 'сканиран – ще се разчете' }}</b>{% if d.date %} · {{ d.date.split('-')|reverse|join('.') }}{% endif %}<br>
+            <span class="muted small">{{ d.filename }}</span></td>
+          <td class="doc-links">
+            <form method="post" action="/runs/{{ run_id }}/docs/{{ d.id }}/toggle" style="display:inline"><button type="submit" class="link-button" title="{{ 'Изключи от жалбата' if d.included is not defined or d.included else 'Включи в жалбата' }}">{{ 'включен' if d.included is not defined or d.included else 'изключен' }}</button></form>
+            · <form method="post" action="/runs/{{ run_id }}/docs/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }}?')"><button type="submit" class="link-button">махни</button></form></td>
+        </tr>{% endfor %}
+      </table>
+      <p class="muted small">Пълномощното и договорът за правна защита са изключени автоматично (и страниците им в сканиран PDF) – не се пращат към AI.</p>
+      {% endif %}
+      <form method="post" action="/runs/{{ run_id }}/docs" enctype="multipart/form-data" class="docs-upload" id="folder-form">
+        <label class="kit-submit" style="display:block;text-align:center;cursor:pointer">Качи цялата папка на делото
+          <input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
+        <label class="kit-submit light" style="display:block;text-align:center;cursor:pointer">Избери файлове или ZIP
+          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.zip" hidden onchange="this.form.submit()"></label>
       </form>
-      <p class="muted small">Напр. искова молба, отговор, въззивна жалба, протоколи от заседанията, експертизи, писмени защити. До 8 документа. След като добавите, натиснете „Напиши наново с AI“.</p>
+      <p class="muted small">Всичко по делото наведнъж: искова молба, отговор, протоколи, експертизи, жалби, писмени защити. Програмата сама разпознава документите и ги подрежда по дата; сканираните се разчитат при писането. До 60 документа. След това натиснете „Напиши наново с AI“.</p>
     </div>
   </div>
   <div class="dash-col-right scroll-col">

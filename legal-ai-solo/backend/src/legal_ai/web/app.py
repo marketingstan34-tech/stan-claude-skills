@@ -656,15 +656,40 @@ def create_app() -> FastAPI:
         tail = ("#" + anchor[1]) if len(anchor) > 1 else ""
         if not files:
             return RedirectResponse(f"{anchor[0]}{sep}doc_error={quote('Изберете файл.')}{tail}", status_code=303)
+        from legal_ai.web.casedocs import ZIP_MAX_TOTAL, expand
+        skipped: list[str] = []
         for f in files:
-            body = await f.read(MAX_BYTES + 1)
+            body = await f.read(ZIP_MAX_TOTAL + 1 if f.filename.lower().endswith(".zip") else MAX_BYTES + 1)
             try:
-                read_upload(f.filename, body, ocr=False)
-                files_list.add(f.filename, body)
-            except (UploadError, ValueError) as exc:
-                msg = f"{os.path.basename(f.filename)[:80]}: {exc}"
-                return RedirectResponse(f"{anchor[0]}{sep}doc_error={quote(msg)}{tail}", status_code=303)
+                parts, skip = expand(f.filename, body)
+            except ValueError as exc:
+                skipped.append(f"{os.path.basename(f.filename)[:80]} ({exc})")
+                continue
+            skipped += skip
+            for name, part in parts:
+                try:
+                    text, _, _ = read_upload(name, part, ocr=False)
+                    files_list.add(name, part, text)
+                except (UploadError, ValueError) as exc:
+                    skipped.append(f"{os.path.basename(name)[:80]} ({exc})")
+        if skipped:
+            msg = "Не са добавени: " + "; ".join(skipped[:8]) + \
+                  (f" и още {len(skipped) - 8}" if len(skipped) > 8 else "")
+            return RedirectResponse(f"{anchor[0]}{sep}doc_error={quote(msg)}{tail}", status_code=303)
         return RedirectResponse(back, status_code=303)
+
+    @app.post("/runs/{run_id}/docs/{item_id}/toggle")
+    def run_docs_toggle(request: Request, run_id: str, item_id: str):
+        from legal_ai.web.casedocs import case_docs
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        docs = case_docs(storage, run_id)
+        item = next((x for x in docs.items() if x.get("id") == item_id), None)
+        if item is not None:
+            docs.set_included(item_id, not item.get("included", True))
+        return RedirectResponse(f"/runs/{run_id}/appeal#docs", status_code=303)
 
     @app.post("/runs/{run_id}/docs")
     async def run_docs_add(request: Request, run_id: str):

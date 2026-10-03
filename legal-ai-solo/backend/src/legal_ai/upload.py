@@ -35,6 +35,15 @@ class UploadError(Exception):
     pass
 
 
+_PRIVATE = re.compile(r"^\W{0,3}(?:ДОГОВОР\s+ЗА\s+ПРАВНА\s+ЗАЩИТА|ПЪЛНОМОЩНО)")
+
+
+def private_page(page: str) -> bool:
+    """A page that starts with a power of attorney or a fee agreement: not sent to the AI."""
+    lines = [line.strip() for line in page.splitlines() if line.strip()]
+    return bool(_PRIVATE.match(" ".join(lines[:2])))
+
+
 def ocr_available() -> bool:
     return bool(shutil.which("tesseract") and shutil.which("pdftoppm"))
 
@@ -51,7 +60,7 @@ def ocr_pdf(body: bytes) -> str:
             out = subprocess.run(["tesseract", str(img), "stdout", "-l", "bul+eng", "--psm", "6"],
                                  check=True, capture_output=True, timeout=120)
             pages.append(out.stdout.decode("utf-8", "replace"))
-    return "\n".join(pages)
+    return "\f".join(pages)   # form feed between pages, so attachments can be dropped page by page
 
 
 def extension(filename: str) -> str:
@@ -128,11 +137,14 @@ def read_upload(filename: str, body: bytes, ocr: bool = True) -> tuple[str, str,
         if not ocr:
             return "", "pdf-scan", [OCR_NOTE]
         try:
-            text = _normalize(_OCR_NO.sub("№ ", ocr_pdf(body)))
+            pages = _OCR_NO.sub("№ ", ocr_pdf(body)).split("\f")
+            kept = [pg for pg in pages if not private_page(pg)]
+            text = _normalize("\n".join(kept))
         except (OSError, subprocess.SubprocessError) as exc:
             raise UploadError("Сканираният PDF не може да се разчете. Качете Word файл или PDF с текст.") from exc
         fmt = "pdf-ocr"
-        warnings = [OCR_NOTE]
+        warnings = [OCR_NOTE] + ([f"махнати {len(pages) - len(kept)} стр. (пълномощно / договор за правна защита)"]
+                                 if len(kept) < len(pages) else [])
     if len(text) < 300:
         raise UploadError("В документа почти няма текст (може да е сканиран). Качете PDF с текст или Word файл.")
     if not re.search(r"[А-Яа-я]{3}", text):

@@ -210,7 +210,7 @@ def test_case_documents_and_style_samples(client, monkeypatch):
     assert "protokol.txt" in page and "Няма образци на стила" in page
     from legal_ai.web.casedocs import case_docs, style_samples
     items = case_docs(d.parent.parent, "20260102030405").items()
-    assert case_docs(d.parent.parent, "20260102030405").texts()[0][0] == "protokol.txt"
+    assert "protokol.txt" in case_docs(d.parent.parent, "20260102030405").texts()[0][0]
     c.post(f"/runs/20260102030405/docs/{items[0]['id']}/delete", headers=h)
     assert case_docs(d.parent.parent, "20260102030405").items() == []
     r = c.post("/style", files=[("files", ("obrazec.txt", body, "text/plain"))], headers=h, follow_redirects=False)
@@ -472,3 +472,41 @@ def test_delete_moves_the_report_to_the_trash(client):
     assert c.get("/runs/20260102030405").status_code == 404
     assert "Справката е изтрита" in c.get("/reports?deleted=1").text
     assert c.post("/runs/20260102030405/delete", headers=h).status_code == 404
+
+
+def test_case_folder_zip_classify_and_private_pages(client, monkeypatch):
+    import io
+    import zipfile
+
+    import legal_ai.upload as up
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        z.writestr("delo/iskova.txt", "ИСКОВА МОЛБА\nот Х срещу У, 12.01.2022 г.\n" + "текст на иска " * 40)
+        z.writestr("delo/protokol.txt", "ПРОТОКОЛ\nОткрито съдебно заседание на 20.04.2023 г.\n" + "разпит " * 60)
+        z.writestr("delo/palnomoshtno.txt", "ПЪЛНОМОЩНО\nПодписаният упълномощава " + "текст " * 80)
+        z.writestr("delo/snimka.jpg", b"x")
+        z.writestr("__MACOSX/delo/._iskova.txt", b"x")
+    r = c.post("/runs/20260102030405/docs", files=[("files", ("delo.zip", buf.getvalue(), "application/zip"))],
+               headers=h, follow_redirects=False)
+    assert "snimka.jpg" in r.headers["location"]                       # reported as not added
+    from legal_ai.web.casedocs import case_docs
+    folder = case_docs(d.parent.parent, "20260102030405")
+    kinds = {x["filename"]: (x["kind"], x["included"]) for x in folder.items()}
+    assert kinds == {"iskova.txt": ("искова молба", True), "protokol.txt": ("протокол от заседание", True),
+                     "palnomoshtno.txt": ("пълномощно", False)}
+    labels = [label for label, _ in folder.texts()]
+    assert labels[0].startswith("искова молба – iskova.txt (12.01.2022)") and len(labels) == 2
+    assert "2022: искова молба" in folder.chronology() and "пълномощно" not in folder.chronology()
+    item = next(x for x in folder.items() if x["filename"] == "protokol.txt")
+    c.post(f"/runs/20260102030405/docs/{item['id']}/toggle", headers=h)
+    assert len(folder.texts()) == 1
+    page = c.get("/runs/20260102030405/appeal").text
+    assert "Папка на делото (3)" in page and "изключен" in page
+    # a scanned PDF: the fee agreement / power of attorney pages are dropped
+    monkeypatch.setattr(up, "ocr_available", lambda: True)
+    monkeypatch.setattr(up, "extract_text", lambda body, ct: type("T", (), {"text": "", "fmt": "pdf", "warnings": []})())
+    monkeypatch.setattr(up, "ocr_pdf", lambda body: "ВЪЗЗИВНА ЖАЛБА\n" + "доводи " * 80 + "\fДОГОВОР\nЗА ПРАВНА ЗАЩИТА\nхонорар 9000 лв.")
+    text, _, warnings = up.read_upload("scan.pdf", b"%PDF")
+    assert "хонорар" not in text and any("махнати 1 стр." in w for w in warnings)

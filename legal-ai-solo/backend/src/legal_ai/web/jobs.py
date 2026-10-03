@@ -132,7 +132,10 @@ class JobRunner:
             from legal_ai.web.casedocs import case_docs, style_samples
             storage = self.runs_dir.parent
             job.message = "Четене на документите по делото (сканираните се разчитат – до минута-две)…"
-            context += case_docs(storage, run_id).texts()
+            folder = case_docs(storage, run_id)
+            context += folder.texts()
+            if folder.chronology():
+                context.insert(0, ("Хронология на делото (документите по дата)", folder.chronology()))
             job.message = "Сваляне на първоинстанционното решение от сайта на съда…"
             context = self._first_instance(run) + context
             style = style_samples(storage).texts()
