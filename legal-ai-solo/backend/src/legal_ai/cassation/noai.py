@@ -179,3 +179,56 @@ def _valid_date(dmy: str) -> bool:
 
 def as_dicts(cites: list[Citation]) -> list[dict]:
     return [asdict(c) for c in cites]
+
+
+# The heading of a Bulgarian court decision: "РЕШЕНИЕ № 125 гр. Пловдив, 14.03.2022 г. В ИМЕТО НА НАРОДА
+# АПЕЛАТИВЕН СЪД – ПЛОВДИВ, 2-РИ ТЪРГОВСКИ СЪСТАВ, ... Въззивно търговско дело № 20215001000899 по описа
+# за 2021 година" (forms seen 02.10.2026). Long numbers are the 14-digit ЕИСС form, read as year (4),
+# court code (4), case-kind digit (1) and case number (5) — an assumption from one real example
+# (20215001000899 = 899/2021); the court-site lookup then confirms or rejects the number.
+_HEAD_COURT = re.compile(
+    r"\b(АПЕЛАТИВЕН|ОКРЪЖЕН|РАЙОНЕН)\s+СЪД\s*[–—-]?\s*(?:ГР\.\s*)?([А-ЯЁ][А-Я]+(?:\s+[А-Я][А-Я]+)?)\b"
+    r"|\b(СОФИЙСКИ\s+ГРАДСКИ\s+СЪД|СОФИЙСКИ\s+РАЙОНЕН\s+СЪД|СОФИЙСКИ\s+АПЕЛАТИВЕН\s+СЪД)\b",
+    re.IGNORECASE)
+_HEAD_CASE = re.compile(
+    r"((?:въззивно|възз\.|частно|ч\.|първоинстанционно)?\s*(?:гражданско|търговско|гр\.|т\.|търг\.)\s*"
+    r"(?:частно\s+)?(?:гр\.\s*|т\.\s*)?дело|\b[вч]\.?\s*(?:гр|т|ч)\.?\s*д\.?|\b(?:гр|т)\.\s*д\.?)"
+    r"\s*(?:№|N)\s*(\d{1,14})\s*(?:/\s*(\d{4})|по\s+описа\s+(?:за|на\s+съда\s+за)\s+(\d{4}))",
+    re.IGNORECASE)
+_STOP_CITY = {"СЪСТАВ", "ОТДЕЛЕНИЕ", "КОЛЕГИЯ", "В", "ПРИ", "ГРАЖДАНСКО", "ТЪРГОВСКО", "ГРАЖДАНСКИ", "ТЪРГОВСКИ"}
+
+
+def _city(raw: str) -> str:
+    words = [w for w in raw.upper().split() if w not in _STOP_CITY]
+    if words and words[0].startswith(("I", "V", "X", "І")):
+        return ""
+    return " ".join(w.capitalize() for w in words[:2] if w[:2] not in ("ГР", "2-", "1-"))[:40]
+
+
+def extract_case_header(text: str) -> dict | None:
+    """Court, case kind, number and year from the heading of a decision; None if not readable.
+
+    {"court": "Апелативен съд Пловдив", "level": "апелативен", "city": "Пловдив",
+     "kind": "Въззивно търговско дело", "number": 899, "year": 2021}
+    """
+    head = _flat(text[:2500])
+    court = level = city = ""
+    for m in _HEAD_COURT.finditer(head):
+        if m.group(3):
+            court = " ".join(w.capitalize() if i == 0 else w.lower() for i, w in enumerate(m.group(3).split()))
+            level = "градски" if "ГРАДСКИ" in m.group(3).upper() else m.group(3).split()[1].lower()
+            city = "София"
+            break
+        c = _city(m.group(2))
+        if c:
+            level, city = m.group(1).lower(), c
+            court = f"{level.capitalize()} съд {city}"
+            break
+    case = _HEAD_CASE.search(head)
+    if not court or not case:
+        return None
+    raw_no, year = case.group(2), int(case.group(3) or case.group(4))
+    number = int(raw_no[-5:]) if len(raw_no) == 14 and raw_no.startswith(str(year)) else int(raw_no)
+    kind = " ".join(case.group(1).split())
+    return {"court": court, "level": level, "city": city, "kind": kind[:1].upper() + kind[1:],
+            "number": number, "year": year}

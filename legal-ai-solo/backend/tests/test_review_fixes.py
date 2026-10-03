@@ -240,3 +240,33 @@ def test_form_has_the_text_field(client, monkeypatch):
         __import__("psycopg").OperationalError("no db")))
     r = _local(client, monkeypatch).get("/analyze")
     assert r.status_code == 200 and 'name="text"' in r.text
+
+
+# the court and the case are read from the document itself
+
+HEAD = ("РЕШЕНИЕ № 125 гр. Пловдив, 14.03.2022 г. В ИМЕТО НА НАРОДА АПЕЛАТИВЕН СЪД – ПЛОВДИВ, 2-РИ ТЪРГОВСКИ "
+        "СЪСТАВ, в публично заседание ... Въззивно търговско дело № 20215001000899 по описа за 2021 година ")
+
+
+def test_case_header_from_document():
+    from legal_ai.cassation.noai import extract_case_header
+    h = extract_case_header(HEAD)
+    assert (h["court"], h["number"], h["year"], h["kind"]) == ("Апелативен съд Пловдив", 899, 2021,
+                                                               "Въззивно търговско дело")
+    h = extract_case_header("РЕШЕНИЕ № 5 ОКРЪЖЕН СЪД – СМОЛЯН, гражданска колегия, въззивно гражданско дело № 123/2022 г.")
+    assert (h["court"], h["number"], h["year"]) == ("Окръжен съд Смолян", 123, 2022)
+    h = extract_case_header("СОФИЙСКИ ГРАДСКИ СЪД, ГО, II-В състав, в.гр.д. № 4567 по описа за 2022 г.")
+    assert (h["court"], h["number"], h["year"]) == ("Софийски градски съд", 4567, 2022)
+    assert extract_case_header("Някакъв текст без заглавие на съдебно решение.") is None
+
+
+def test_identify_fills_the_case_only_for_listed_courts():
+    p = {"file": "uploads/x.txt"}
+    JobRunner._identify(p, HEAD)
+    assert (p["court"], p["case"], p["year"]) == ("as-plovdiv", 899, 2021) and p["identified"]["supported"]
+    p = {"file": "uploads/x.txt"}
+    JobRunner._identify(p, "ОКРЪЖЕН СЪД – НЕСЪЩЕСТВУВАЩ ГРАД, въззивно гражданско дело № 1/2022 г.")
+    assert "court" not in p and p["identified"]["supported"] is False
+    p = {"file": "uploads/x.txt", "court": "as-plovdiv", "case": 5, "year": 2020}
+    JobRunner._identify(p, HEAD)
+    assert p["case"] == 5 and "identified" not in p

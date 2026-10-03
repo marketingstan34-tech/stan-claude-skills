@@ -70,6 +70,7 @@ class JobRunner:
                     PoliteClient([VKS_HOST], interval, ua) as vks:
                 job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
                 appellate = self._appellate(courts, p)
+                self._identify(p, appellate.text)
                 cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
                 if p.get("until"):   # practice up to the end of that month
                     y, m = (int(x) for x in p["until"].split("-"))
@@ -111,6 +112,24 @@ class JobRunner:
         return fetch_appellate(courts, p["court"], p["case"], p["year"], p["type"])[1]
 
     @staticmethod
+    def _identify(p: dict, text: str) -> None:
+        """For a document without case data: court, number and year from its heading, so the
+        case path can be traced. Only a court on the verified list is used; the court-site lookup
+        then confirms the case."""
+        if not p.get("file") or (p.get("court") and p.get("case") and p.get("year")):
+            return
+        from legal_ai.cassation.noai import extract_case_header
+        from legal_ai.sources.courts import find_court
+        head = extract_case_header(text)
+        if not head:
+            p["identified"] = {"note": "Съдът и делото не се разчитат от началото на документа."}
+            return
+        site = find_court(head["court"])
+        p["identified"] = {**head, "supported": bool(site)}
+        if site:
+            p.update(court=site.key, case=head["number"], year=head["year"])
+
+    @staticmethod
     def _can_trace(p: dict) -> bool:
         return bool(p.get("court") and p.get("case") and p.get("year"))
 
@@ -139,6 +158,7 @@ class JobRunner:
                     PoliteClient([VKS_HOST], interval, ua) as vks:
                 job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
                 appellate = self._appellate(courts, p)
+                self._identify(p, appellate.text)
                 lower = extract_appealed(appellate.text)
                 path = []
                 if self._can_trace(p):

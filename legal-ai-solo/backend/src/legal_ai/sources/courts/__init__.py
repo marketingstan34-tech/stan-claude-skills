@@ -30,3 +30,12 @@ CASE_TYPES = ("Гражданско", "Търговско")
 ACT_KINDS = {"решение": "5001", "определение": "5002"}
 
 ALLOWED_HOSTS = tuple(c.host for c in COURTS.values()) + (ECASE_HOST,)
+
+
+def find_court(name: str) -> CourtSite | None:
+    """The listed court with this name (e.g. "Окръжен съд Смолян"), ignoring case and spacing."""
+    want = " ".join(name.lower().replace("–", " ").replace("-", " ").split())
+    for c in COURTS.values():
+        if " ".join(c.name.lower().replace("-", " ").split()) == want:
+            return c
+    return None

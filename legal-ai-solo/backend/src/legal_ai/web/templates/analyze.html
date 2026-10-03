@@ -3,7 +3,7 @@
 {% from "parts.html" import report_card, calendar_card, events_card with context %}
 {% block title %}Анализ на дело · Legal AI Solo{% endblock %}
 {% block page_title %}Касационен анализ{% endblock %}
-{% block page_hint %}Попълнете съда, номера и годината на въззивното дело или качете решението като файл. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и колко решения на ВКС има в базата по дни. Щракнете ден, за да видите решенията от него.{% endblock %}
+{% block page_hint %}Най-лесно: качете въззивното решение като файл или поставете текста му – съдът, делото и годината се разпознават сами от документа. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
   <form class="dash-col-left" method="post" action="/analyze" id="case" enctype="multipart/form-data">

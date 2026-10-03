@@ -63,3 +63,13 @@
   {% endfor %}
 </div>
 {%- endmacro %}
+
+{% macro identified_note(idf) -%}
+{% if idf %}
+<div class="page-hint identified-note">{{ icon('info', 14) }}<span>
+  {% if idf.note %}{{ idf.note }} Пътят на делото не е проследен; въведете съда, номера и годината, ако го искате.
+  {% elif idf.supported %}Разпознато от документа: <b>{{ idf.court }}</b>, {{ idf.kind|lower }} № {{ idf.number }}/{{ idf.year }}. Делото е потърсено в сайта на съда.
+  {% else %}Разпознато от документа: <b>{{ idf.court }}</b>, № {{ idf.number }}/{{ idf.year }}. Този съд още не е в списъка за автоматична проверка, затова пътят на делото не е проследен.{% endif %}
+</span></div>
+{% endif %}
+{%- endmacro %}

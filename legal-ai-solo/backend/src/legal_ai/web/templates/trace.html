@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
-{% from "parts_case.html" import case_profile, path_cards with context %}
+{% from "parts_case.html" import case_profile, path_cards, identified_note with context %}
 {% block title %}{{ t.appellate.label }} · Legal AI Solo{% endblock %}
 {% block page_title %}Справка без AI{% endblock %}
 {% block page_hint %}Справка без AI: пътят на делото (щракнете карта, за да отворите делото в сайта на съда), обжалваният акт и решенията на ВКС, които въззивният съд цитира. За правни въпроси и практика „противоречи“ пуснете справка с AI.{% endblock %}
@@ -8,6 +8,7 @@
 <div class="dash-grid-container">
   <div class="dash-col-left">
     {{ case_profile(t.appellate.label, t.appellate.url, 'Без AI', t.created_at[:10].split('-')|reverse|join('.'), '') }}
+    {{ identified_note((t.params or {}).identified) }}
     <div class="card details-card">
       <h2 class="details-title">Обжалваният акт (от текста)</h2>
       <div class="details-list">
