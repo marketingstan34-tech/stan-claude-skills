@@ -4,12 +4,16 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import date
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import UUID
 
+import psycopg
+
 from fastapi import FastAPI, Form, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from markupsafe import Markup, escape
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -19,7 +23,8 @@ from legal_ai.db import connect
 from legal_ai.retrieval.lexical import search
 from legal_ai.retrieval.text import Term, normalize_for_search, parse_query, word_matches
 from legal_ai.sources.courts import COURTS
-from legal_ai.web.jobs import JobRunner, list_runs, list_traces, load_run, load_trace
+from legal_ai.web.jobs import JobRunner, load_run, load_trace
+from legal_ai.web.views import corpus_events, corpus_month, empty_month, list_reports, month_param
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _WORD = re.compile(r"[0-9A-Za-zА-Яа-яѝЍ]+")
@@ -43,7 +48,36 @@ def create_app() -> FastAPI:
     settings = load_settings()
     app = FastAPI(title="Legal AI Solo", docs_url=None, redoc_url=None)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+    app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     _TEMPLATES.env.globals["highlight"] = highlight
+    storage = Path(os.environ.get("PRIVATE_STORAGE_PATH", "data"))
+    runs_dir = storage / "runs"
+    traces_dir = storage / "traces"
+    runner = JobRunner(runs_dir, traces_dir)
+
+    def render(request: Request, name: str, ctx: dict):
+        running = [j for j in runner.jobs.values() if j.status in ("queued", "running")]
+        return _TEMPLATES.TemplateResponse(request, name, {
+            "running_job": running[0] if running else None,
+            "today": date.today().strftime("%d.%m.%Y"), **ctx})
+
+    def corpus_counts(cur) -> dict:
+        cur.execute("""
+            SELECT count(*) AS n, min(act_date) AS first, max(act_date) AS last,
+                   count(*) FILTER (WHERE proceeding_article = '290') AS n290,
+                   count(*) FILTER (WHERE source = 'vks-tr') AS ntr,
+                   count(*) FILTER (WHERE source = 'vks' AND case_type = 'гр.') AS ngr,
+                   count(*) FILTER (WHERE source = 'vks' AND case_type = 'търг.') AS ntarg
+            FROM decisions WHERE current_version_id IS NOT NULL""")
+        corpus = cur.fetchone()
+        # a truncated list that was then split by chamber is covered by its parts
+        cur.execute(r"""
+            SELECT count(*) AS n FROM source_list_runs t
+            WHERE t.truncated AND NOT EXISTS (
+                SELECT 1 FROM source_list_runs s
+                WHERE s.source = t.source AND s.description LIKE t.description || '\_\_%')""")
+        corpus["truncated_lists"] = cur.fetchone()["n"]
+        return corpus
 
     @app.get("/health")
     def health() -> JSONResponse:
@@ -58,19 +92,8 @@ def create_app() -> FastAPI:
             with connect(settings.database_url) as conn:
                 result = search(conn, q, only_290=only_290)
         with connect(settings.database_url) as conn, conn.cursor() as cur:
-            cur.execute("""
-                SELECT count(*) AS n, min(act_date) AS first, max(act_date) AS last,
-                       count(*) FILTER (WHERE proceeding_article = '290') AS n290
-                FROM decisions WHERE current_version_id IS NOT NULL""")
-            corpus = cur.fetchone()
-            # a truncated list that was then split by chamber is covered by its parts
-            cur.execute(r"""
-                SELECT count(*) AS n FROM source_list_runs t
-                WHERE t.truncated AND NOT EXISTS (
-                    SELECT 1 FROM source_list_runs s
-                    WHERE s.source = t.source AND s.description LIKE t.description || '\_\_%')""")
-            corpus["truncated_lists"] = cur.fetchone()["n"]
-        return _TEMPLATES.TemplateResponse(request, "search.html", {
+            corpus = corpus_counts(cur)
+        return render(request, "search.html", {
             "q": q, "only_290": only_290, "result": result, "corpus": corpus,
         })
 
@@ -92,25 +115,44 @@ def create_app() -> FastAPI:
                 FROM passages WHERE decision_version_id = %s ORDER BY paragraph_no""",
                         (d["version_id"],))
             paragraphs = cur.fetchall()
-        return _TEMPLATES.TemplateResponse(request, "decision.html", {
+        return render(request, "decision.html", {
             "d": d, "paragraphs": paragraphs, "target": p, "terms": parse_query(q), "q": q,
         })
-
-    runs_dir = Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs"
-    traces_dir = runs_dir.parent / "traces"
-    runner = JobRunner(runs_dir, traces_dir)
 
     def same_origin(request: Request) -> bool:
         origin = request.headers.get("origin") or request.headers.get("referer") or ""
         return bool(origin) and urlparse(origin).netloc == request.headers.get("host", "")
 
+    def dashboard(m: str | None) -> dict:
+        reports = list_reports(runs_dir, traces_dir)
+        try:
+            with connect(settings.database_url) as conn, conn.cursor() as cur:
+                # default month: the latest month that is well covered (>= 20 decisions)
+                cur.execute("""
+                    SELECT date_trunc('month', act_date)::date AS last FROM decisions
+                    WHERE source = 'vks' AND act_date IS NOT NULL
+                    GROUP BY 1 HAVING count(*) >= 20 ORDER BY 1 DESC LIMIT 1""")
+                row = cur.fetchone()
+                last = row["last"] if row else date.today()
+                month = corpus_month(conn, *month_param(m, last))
+                corpus = corpus_counts(cur)
+        except psycopg.OperationalError:  # the case form must work even when the database is down
+            month = empty_month(*month_param(m, date.today()))
+            corpus = {"n": 0, "n290": 0, "ntr": 0, "ngr": 0, "ntarg": 0, "first": None, "last": None,
+                      "truncated_lists": 0}
+        return {"reports": reports, "month": month, "events": corpus_events(storage), "corpus": corpus}
+
     @app.get("/analyze", response_class=HTMLResponse)
-    def analyze_form(request: Request):
-        return _TEMPLATES.TemplateResponse(request, "analyze.html", {
-            "courts": COURTS, "runs": list_runs(runs_dir), "traces": list_traces(traces_dir),
-            "jobs": sorted(runner.jobs.values(), key=lambda j: j.started, reverse=True),
-            "busy": runner.busy(),
-        })
+    def analyze_form(request: Request, m: str | None = Query(None, max_length=7)):
+        return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), **dashboard(m)})
+
+    @app.get("/reports", response_class=HTMLResponse)
+    def reports_page(request: Request, m: str | None = Query(None, max_length=7)):
+        return render(request, "reports.html", dashboard(m))
+
+    @app.get("/corpus", response_class=HTMLResponse)
+    def corpus_page(request: Request, m: str | None = Query(None, max_length=7)):
+        return render(request, "corpus.html", dashboard(m))
 
     @app.post("/analyze")
     def analyze_start(request: Request, court: str = Form(...), case: int = Form(..., ge=1, le=999999),
@@ -137,7 +179,7 @@ def create_app() -> FastAPI:
         if job.status == "done" and job.run_dir:
             kind = "traces" if job.params.get("mode") == "noai" else "runs"
             return RedirectResponse(f"/{kind}/{job.run_dir}", status_code=303)
-        return _TEMPLATES.TemplateResponse(request, "job.html", {"job": job, "courts": COURTS})
+        return render(request, "job.html", {"job": job, "courts": COURTS})
 
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def run_report(request: Request, run_id: str):
@@ -148,13 +190,13 @@ def create_app() -> FastAPI:
         for a in run["assessments"]:
             if a["relevant"] and a["stance"] != "неотносимо":
                 by_q.setdefault(a["question_id"], []).append(a)
-        return _TEMPLATES.TemplateResponse(request, "report.html", {"run": run, "by_q": by_q})
+        return render(request, "report.html", {"run": run, "by_q": by_q})
 
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str):
         t = load_trace(traces_dir, trace_id)
         if t is None:
             raise HTTPException(404, "Няма такава справка.")
-        return _TEMPLATES.TemplateResponse(request, "trace.html", {"t": t})
+        return render(request, "trace.html", {"t": t})
 
     return app

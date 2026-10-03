@@ -4,105 +4,114 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}Legal AI Solo{% endblock %}</title>
-<style>
-/* Visual style from the owner's UI kit ("dashboard v3", spec §14.2): sage canvas, white rounded
-   cards, a centred pill navigation with a black active item, pill tags, pastel status cards. */
-:root {
-  --canvas: #d8e4dc; --frame: #e2ede5; --surface: #ffffff; --soft: #f4f4f5; --text: #1a1c1e;
-  --muted: #71717a; --border: #e4e4e7; --ink: #111413; --on-ink: #ffffff; --accent: #2f5d50;
-  --mark: #fde68a; --warn-bg: #fef3c7; --warn: #92400e; --target: #fffbeb;
-  --contra-bg: #dcfce7; --contra: #15803d; --support-bg: #fecdd3; --support: #be123c;
-  --unclear-bg: #f4f4f5; --shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #121614; --frame: #181d1a; --surface: #202623; --soft: #2a312d; --text: #e9ece9;
-    --muted: #a1a8a3; --border: #333b36; --ink: #e9ece9; --on-ink: #111413; --accent: #9cc9b8;
-    --mark: #6b5310; --warn-bg: #3a2c12; --warn: #f2c47c; --target: #2f2a16;
-    --contra-bg: #163322; --contra: #86efac; --support-bg: #3b1820; --support: #fda4af;
-    --unclear-bg: #2a312d; --shadow: none;
-  }
-}
-* { box-sizing: border-box; }
-html { background: var(--canvas); }
-body { margin: 0; background: var(--canvas); color: var(--text);
-  font: 15.5px/1.55 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased; padding: clamp(8px, 1.4vw, 18px); }
-a { color: var(--accent); }
-.frame { max-width: 1120px; margin: 0 auto; background: var(--frame); border-radius: 28px;
-  padding: 14px clamp(12px, 2vw, 22px) 26px; box-shadow: 0 16px 40px rgba(0, 0, 0, 0.04); min-height: 92vh; }
-header.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
-  margin-bottom: 8px; }
-.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--text); font-weight: 700; }
-.icon-btn { width: 38px; height: 38px; border-radius: 12px; background: var(--ink); color: var(--on-ink);
-  display: grid; place-items: center; }
-.nav-pill { display: flex; gap: 4px; padding: 4px; background: var(--surface); border-radius: 999px;
-  border: 1px solid rgba(0, 0, 0, 0.03); box-shadow: var(--shadow); }
-.nav-pill a { display: flex; align-items: center; gap: 7px; padding: 7px 16px; border-radius: 999px;
-  font-size: 14px; font-weight: 500; color: var(--muted); text-decoration: none; transition: background .2s, color .2s; }
-.nav-pill a:hover { background: var(--soft); color: var(--text); }
-.nav-pill a.active { background: var(--ink); color: var(--on-ink); font-weight: 600;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15); }
-.status-pill { display: flex; align-items: center; gap: 8px; padding: 7px 14px; border-radius: 999px;
-  background: var(--surface); font-size: 13px; color: var(--muted); box-shadow: var(--shadow); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: #f59e0b; }
-main { padding-top: 6px; }
-h1 { font-size: 26px; letter-spacing: -0.01em; margin: 14px 4px 6px; }
-h2 { font-size: 18px; margin: 18px 4px 8px; } .card h2 { margin: 0 0 10px; }
-h3 { font-size: 16px; margin: 0 0 6px; } h4 { margin: 14px 0 6px; font-size: 14px; color: var(--muted); }
-main > p.muted, main > h1 + p { margin-left: 4px; margin-right: 4px; }
-.muted { color: var(--muted); font-size: 13.5px; }
-.card { background: var(--surface); border: 1px solid rgba(0, 0, 0, 0.03); border-radius: 20px;
-  padding: 18px 20px; margin: 12px 0; box-shadow: var(--shadow); }
-.card .card { box-shadow: none; border: 1px solid var(--border); border-radius: 16px; }
-.notice { background: var(--warn-bg); color: var(--warn); border-radius: 14px; padding: 10px 14px;
-  margin: 12px 0; font-size: 14px; }
-mark { background: var(--mark); color: inherit; padding: 0 2px; border-radius: 3px; }
-.tag { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 10px; border-radius: 999px;
-  background: var(--soft); color: var(--text); margin: 2px 6px 2px 0; }
-blockquote { margin: 10px 0; padding: 10px 14px; border-left: 3px solid var(--ink);
-  background: var(--soft); border-radius: 0 12px 12px 0; }
-input[type=text], input[type=number], select { font: inherit; padding: 10px 14px; border-radius: 12px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); min-height: 44px; }
-input[type=text] { width: 100%; }
-input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
-button { font: inherit; font-weight: 600; padding: 11px 22px; border-radius: 12px; border: 0;
-  background: var(--ink); color: var(--on-ink); cursor: pointer; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12); }
-button:disabled { opacity: .45; cursor: not-allowed; }
-.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-.grow { flex: 1 1 320px; }
-label.field { display: flex; flex-direction: column; gap: 5px; font-size: 13px; font-weight: 600; color: var(--text); }
-fieldset { border: 1px solid var(--border); border-radius: 16px; padding: 10px 16px 14px; margin: 14px 0; }
-fieldset label { display: inline-block; margin: 6px 0; }
-.ok { color: var(--contra); } .bad { color: var(--support); }
-.stance-contra { background: var(--contra-bg); border-color: transparent !important; }
-.stance-support { background: var(--support-bg); border-color: transparent !important; }
-.stance-unclear { background: var(--unclear-bg); border-color: transparent !important; }
-details summary { cursor: pointer; color: var(--muted); font-size: 14px; }
-ol, ul { padding-left: 22px; } li { margin: 6px 0; }
-@media (max-width: 640px) { .status-pill { display: none; } .nav-pill a { padding: 7px 12px; } }
-</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/kit/index.css">
+<link rel="stylesheet" href="/static/kit/dashboard.css">
+<link rel="stylesheet" href="/static/kit/navigationtab1.css">
+<link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
-<div class="frame">
-<header class="top">
-  <a class="brand" href="/analyze"><span class="icon-btn" aria-hidden="true">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
-  </span>Legal AI Solo</a>
-  {% set path = request.url.path if request is defined else '' %}
-  <nav class="nav-pill">
-    <a href="/analyze" class="{{ 'active' if path.startswith(('/analyze', '/jobs', '/runs', '/traces')) }}">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/></svg>
-      Анализ на дело</a>
-    <a href="/" class="{{ 'active' if path == '/' or path.startswith('/decisions') }}">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
-      Търсене в практиката</a>
-  </nav>
-  <span class="status-pill"><span class="dot"></span>локален експеримент · не е правно становище</span>
-</header>
-<main>
-{% block content %}{% endblock %}
-</main>
+{% set path = request.url.path %}
+{% set nav = [
+  ('/analyze', 'Анализ', 'case', path.startswith(('/analyze', '/jobs'))),
+  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/runs', '/traces'))),
+  ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions')),
+  ('/corpus', 'База', 'db', path.startswith('/corpus')),
+] %}
+{% from "icons.html" import icon %}
+<div class="dash-canvas">
+  <div class="dash-container">
+
+    <header class="dash-header">
+      <div class="header-left">
+        <a class="icon-btn header-menu-btn" href="/analyze" title="Начало" aria-label="Начало">
+          <svg width="18" height="15" viewBox="0 0 20 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="1" y1="2" x2="19" y2="2"/><line x1="1" y1="8" x2="14" y2="8"/><line x1="1" y1="14" x2="9" y2="14"/></svg>
+        </a>
+        <a class="icon-btn header-storage-btn {{ 'active' if path.startswith('/corpus') }}" href="/corpus" title="База с практика" aria-label="База">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="4"/><line x1="9" y1="10" x2="15" y2="10"/></svg>
+        </a>
+      </div>
+
+      <nav class="header-nav-pill">
+        {% for href, label, ic, active in nav %}
+        <a class="nav-pill-item {{ 'active' if active }}" href="{{ href }}">{{ icon(ic) }}<span>{{ label }}</span></a>
+        {% endfor %}
+      </nav>
+
+      <div class="header-right-pill">
+        <a class="utility-icon-btn" href="/reports" title="Справки">{{ icon('msg', 16) }}</a>
+        <a class="utility-icon-btn {{ 'with-badge' if running_job }}" href="{{ '/jobs/' ~ running_job.id if running_job else '/analyze' }}"
+           title="{{ 'Тече справка' if running_job else 'Няма текущи справки' }}">{{ icon('bell', 16) }}{% if running_job %}<span class="notification-dot"></span>{% endif %}</a>
+        <a class="utility-icon-btn" href="/" title="Търсене в практиката">{{ icon('search', 16) }}</a>
+        <span class="header-user-avatar app-avatar" title="Legal AI Solo · локално">{{ icon('scale', 16) }}</span>
+      </div>
+    </header>
+
+    <div class="dash-title-row">
+      <div class="title-left">
+        <button class="back-arrow-btn" title="Назад" onclick="history.length > 1 ? history.back() : location.assign('/analyze')">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+        </button>
+        <h1 class="page-title">{% block page_title %}Legal AI Solo{% endblock %}</h1>
+      </div>
+      <div class="title-right">
+        {% block title_right %}
+        <span class="white-pill-btn"><span class="status-pill-dot"></span><span>Локално · не е правно становище</span></span>
+        <span class="white-pill-btn with-icon"><span>{{ today }}</span>{{ icon('cal', 14) }}</span>
+        {% endblock %}
+      </div>
+    </div>
+
+    <div class="dash-body-layout">
+      <aside class="side-dock-nav" aria-label="Меню">
+        {% for href, label, ic, active in nav %}
+        <div class="dock-item-wrapper"><a class="dock-btn {{ 'active' if active }}" href="{{ href }}" title="{{ label }}" aria-label="{{ label }}"><span class="dock-icon-inner">{{ icon(ic, 18) }}</span></a></div>
+        {% endfor %}
+      </aside>
+      <div class="dash-view-content {% block view_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+
+  </div>
 </div>
+{# phone navigation: the kit's "navigation tab 1" bar (shown below 960px) #}
+<div class="nav-tab1-wrapper mobile-tabbar">
+  <nav class="nav-tab1-container" aria-label="Меню">
+    <svg class="nav-tab1-bg-svg" viewBox="0 0 500 70" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M 30 0 L 188 0 C 202 0 209 13 216 24 C 223 35 235 46 250 46 C 265 46 277 35 284 24 C 291 13 298 0 312 0 L 470 0 A 30 30 0 0 1 500 30 L 500 40 A 30 30 0 0 1 470 70 L 30 70 A 30 30 0 0 1 0 40 L 0 30 A 30 30 0 0 1 30 0 Z" fill="#ffffff"/></svg>
+    <div class="nav-tab1-group left">
+      {% for href, label, ic, active in nav[:2] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+    </div>
+    <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нова справка"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
+    <div class="nav-tab1-group right">
+      {% for href, label, ic, active in nav[2:] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+    </div>
+  </nav>
+</div>
+<script>
+/* Dock magnification (the kit uses framer-motion; same curve, plain JS). */
+(function () {
+  var dock = document.querySelector('.side-dock-nav');
+  if (!dock) return;
+  var items = Array.prototype.slice.call(dock.querySelectorAll('.dock-btn'));
+  var xs = [-140, -90, -45, 0, 45, 90, 140], ys = [1, 1.10, 1.32, 1.62, 1.32, 1.10, 1];
+  function scaleAt(d) {
+    if (d <= xs[0] || d >= xs[xs.length - 1]) return 1;
+    for (var i = 1; i < xs.length; i++) if (d <= xs[i]) {
+      var t = (d - xs[i - 1]) / (xs[i] - xs[i - 1]); return ys[i - 1] + t * (ys[i] - ys[i - 1]);
+    }
+    return 1;
+  }
+  dock.addEventListener('mousemove', function (e) {
+    items.forEach(function (b) {
+      var r = b.parentNode.getBoundingClientRect(), s = scaleAt(e.clientY - (r.top + r.height / 2));
+      b.style.transform = 'scale(' + s.toFixed(3) + ')'; b.style.zIndex = Math.round(s * 15);
+    });
+  });
+  dock.addEventListener('mouseleave', function () { items.forEach(function (b) { b.style.transform = ''; }); });
+})();
+</script>
 </body>
 </html>

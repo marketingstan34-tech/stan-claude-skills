@@ -1,0 +1,65 @@
+{# Case header and case-path cards shared by the no-AI and AI report pages (kit markup). #}
+{% from "icons.html" import icon %}
+
+{% macro case_profile(label, url, mode, created, extra_pills) -%}
+{% set m = label.split(', ') %}
+<div class="card profile-card">
+  <div class="profile-header-row">
+    <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('court', 22) }}</div>
+    <div class="profile-name-info"><h2 class="profile-name">{{ m[1] if m|length > 1 else label }}</h2>
+      <p class="profile-role">{{ m[0] }}{% if m|length > 2 %} · {{ m[2:]|join(', ') }}{% endif %}</p></div>
+    <a class="card-options-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link') }}</a>
+  </div>
+  <div class="profile-action-buttons">
+    <a class="action-circle-btn black-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Въззивното решение в сайта на съда">{{ icon('doc') }}</a>
+    <a class="action-circle-btn light-btn" href="#path" title="Пътят на делото">{{ icon('path') }}</a>
+    <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
+    <a class="action-circle-btn light-btn" href="/reports" title="Всички справки">{{ icon('msg') }}</a>
+  </div>
+  <div class="time-slots-section">
+    <span class="slots-label">Справка</span>
+    <div class="slots-row">
+      <span class="time-slot-pill">{{ created }} {{ icon('cal', 13) }}</span>
+      <span class="meetings-badge-pill"><span>{{ mode }}</span>{{ extra_pills }}</span>
+    </div>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro path_cards(path) -%}
+<div class="ongoing-projects-section" id="path">
+  <div class="projects-header-row">
+    <div class="dropdown-wrapper"><span class="ongoing-dropdown-btn">Пътят на делото {{ icon('chev', 14) }}</span></div>
+    <div class="projects-action-icons"><span class="proj-icon-circle-btn" title="Всяка връзка е проверена в сайта на съда; непотвърдените са маркирани.">{{ icon('info', 14) }}</span></div>
+  </div>
+  <div class="project-cards-grid">
+  {% for i in path %}
+    {% set color = ['peach', 'blue', 'pink'][loop.index0 % 3] %}
+    {% set ok = i.acts and not i.note %}
+    {% set last = i.acts[-1] if i.acts else none %}
+    <div class="project-card {{ color }}-card">
+      <div class="proj-card-top"><span class="proj-date-pill">{{ i.level if i.level == 'ВКС' else i.level|capitalize }}{{ '' if i.level == 'ВКС' else ' инстанция' }}</span>
+        {% if i.source_url %}<a class="proj-more-btn" href="{{ i.source_url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link', 13) }}</a>{% endif %}</div>
+      <div class="proj-title-row"><h3 class="proj-title">{{ i.court }}</h3>
+        <span class="proj-info-icon" title="{{ i.note or 'потвърдено в сайта' }}">{{ icon('info', 12) }}</span></div>
+      <div class="proj-stage-row"><span class="proj-stage-text">дело {{ i.case }}</span>
+        <div class="proj-progress-tag"><span class="prog-percent-bubble">{{ i.acts|length }}</span><span class="prog-text">акта</span></div></div>
+      <div class="proj-progress-bar-bg {{ color }}-bar-bg"><div class="proj-progress-fill {{ color }}-fill" style="width: {{ 100 if ok else 25 }}%"></div></div>
+      <div class="proj-card-footer">
+        <div class="avatar-stack">{% for a in i.acts[:3] %}{% if a.url %}<a class="stack-avatar stack-more-avatar {{ color }}-more level-avatar" href="{{ a.url }}" target="_blank" rel="noopener noreferrer" title="{{ a.type }} {{ a.number }} от {{ a.date }}">{{ a.type[:1] }}</a>{% else %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar">{{ a.type[:1] }}</span>{% endif %}{% endfor %}</div>
+        <span class="days-left-pill">{{ (i.result or (last.result if last and last.result else '') or (last.date if last else '') or ('не е потвърдено' if i.note else '—'))|truncate(28, True, '…') }}</span>
+      </div>
+    </div>
+  {% endfor %}
+  </div>
+</div>
+<div class="card page-card">
+  <h2>Актове по инстанции</h2>
+  {% for i in path %}
+  <h4>{{ i.level if i.level == 'ВКС' else i.level|capitalize }}: {{ i.court }}, дело {{ i.case }}</h4>
+  {% for a in i.acts %}<div class="muted">{{ a.type }} {% if a.number %}№ {{ a.number }} {% endif %}от {{ a.date }}{% if a.result %} — {{ a.result }}{% endif %}{% if a.url %} · <a class="link" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">акт</a>{% endif %}</div>{% endfor %}
+  {% if i.result %}<div class="muted"><strong>Резултат:</strong> {{ i.result }}</div>{% endif %}
+  {% if i.note %}<div class="muted bad">⚠️ {{ i.note }}</div>{% endif %}
+  {% endfor %}
+</div>
+{%- endmacro %}

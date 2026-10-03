@@ -30,7 +30,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-legal_ai = ["web/templates/*.html", "web/static/*"]
+legal_ai = ["web/templates/*.html", "web/static/*.css", "web/static/kit/*.css"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

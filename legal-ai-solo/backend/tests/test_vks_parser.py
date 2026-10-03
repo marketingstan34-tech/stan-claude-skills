@@ -146,3 +146,24 @@ def test_proceeding_article_with_po_deloto_phrasing():
     m = _PROCEEDING.search("Производството по делото е по реда на чл. 290 ГПК в редакцията на текста")
     assert m and m.group(1) == "290"
     assert _PROCEEDING.search("Производството е образувано по чл. 290 ГПК").group(1) == "290"
+
+
+def test_list_link_text_rare_forms():
+    from legal_ai.sources.vks.parser import parse_list
+    texts = {
+        "Решение №60 189/14.10.2021 по дело №1299/2021": ("60189", "14.10.2021"),
+        "Решение №60160А/13.12.2021 по дело №174/2021": ("60160А", "13.12.2021"),
+        "Решение №160-A/16.12.2020 по дело №2156/2019": ("160-A", "16.12.2020"),
+        "Решение №214/18/08.01.2019 по дело №3921/2017": ("214", "08.01.2019"),
+        "Решение №265/2018/07.01.2019 по дело №2719/2018": ("265", "07.01.2019"),
+        "Решение №60249/2021 г./20.05.2022 по дело №4040/2020": ("60249", "20.05.2022"),
+        "Решение №/29.09.2020 по дело №2479/2019": (None, "29.09.2020"),
+        "Решение №90/14.04.2022 по дело №2990/2021": ("90", "14.04.2022"),
+    }
+    html = "".join(f"<a href='pregled-akt.jsp?type=ot-spisak&amp;id={i:032X}'>{t}</a>"
+                   for i, t in enumerate(texts))
+    rows = parse_list(html)
+    got = {r.link_text: (r.act_number, r.act_date.strftime("%d.%m.%Y") if r.act_date else None)
+           for r in rows}
+    assert got == texts
+    assert all(r.case_number and r.case_year for r in rows)

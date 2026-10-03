@@ -86,3 +86,12 @@ def test_start_rejects_unknown_mode(client):
     r = client.post("/analyze", data={"court": "as-plovdiv", "case": "1", "year": "2020", "mode": "x"},
                     headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
     assert r.status_code == 400
+
+
+def test_dashboard_pages_render_without_database(client):
+    for url in ("/reports", "/corpus", "/analyze?m=2022-03"):
+        r = client.get(url)
+        assert r.status_code == 200, url
+        assert "/static/kit/dashboard.css" in r.text and "side-dock-nav" in r.text
+    assert "Синтетичен съд, дело 1/2020" in client.get("/reports").text
+    assert client.get("/static/kit/dashboard.css").status_code == 200

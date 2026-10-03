@@ -1,49 +1,59 @@
 {% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% from "parts_case.html" import case_profile, path_cards with context %}
 {% block title %}{{ t.appellate.label }} · Legal AI Solo{% endblock %}
+{% block page_title %}Справка без AI{% endblock %}
 {% block content %}
-<h1>{{ t.appellate.label }}</h1>
-<p class="muted"><a href="{{ t.appellate.url }}">Източник</a> · справка {{ t.created_at[:16].replace('T',' ') }} UTC · без AI</p>
-<div class="notice">Справка без AI: всичко е извлечено от текста и от сайтовете на съдилищата с фиксирани правила.
-Правни въпроси и оценка „противоречи/подкрепя“ няма. За тях пуснете анализ с AI.</div>
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    {{ case_profile(t.appellate.label, t.appellate.url, 'Без AI', t.created_at[:10].split('-')|reverse|join('.'), '') }}
+    <div class="card details-card">
+      <h2 class="details-title">Обжалваният акт (от текста)</h2>
+      <div class="details-list">
+        {% set li = t.lower_instance or {} %}
+        {% for label, value, ic in [('Акт', li.act, 'doc'), ('Дата', li.date, 'cal'), ('Дело', li.case, 'hash'), ('Съд (както е в текста)', li.court, 'court')] %}
+        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value or '—' }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon(ic, 11) }}</span></div></div>
+        {% endfor %}
+        {% if not t.lower_instance %}<div class="notice">Обжалваният акт не се разчита от текста с правилата. Вижте текста вдясно.</div>{% endif %}
+      </div>
+    </div>
+  </div>
 
-<section class="card"><h2>Обжалваният акт (от текста на въззивното решение)</h2>
-{% set li = t.lower_instance %}
-{% if li %}<p>{{ li.act }}, дело {{ li.case }}{% if li.court %}, {{ li.court }}{% endif %}</p>
-{% else %}<p class="bad muted">⚠️ Обжалваният акт не може да се разчете от текста с правилата. Вижте текста по-долу.</p>{% endif %}
-</section>
+  <div class="dash-col-right scroll-col">
+    <div class="notice">Без AI: всичко е извлечено от текста и от сайтовете на съдилищата с фиксирани правила. Правни въпроси и „противоречи/подкрепя“ има само в справката с AI.</div>
+    {{ path_cards(t.path) }}
 
-{% if t.path %}
-<section class="card"><h2>Пътят на делото</h2><ol>
-{% for i in t.path %}
-  <li><strong>{{ i.level }}:</strong> {{ i.court }}, дело {{ i.case }}
-    {% for a in i.acts %}<div class="muted">{{ a.type }} {% if a.number %}№ {{ a.number }} {% endif %}от {{ a.date }}{% if a.result %} — {{ a.result }}{% endif %}{% if a.url %} · <a href="{{ a.url }}">акт</a>{% endif %}</div>{% endfor %}
-    {% if i.result %}<div>Резултат: {{ i.result }}</div>{% endif %}
-    {% if i.note %}<div class="bad muted">⚠️ {{ i.note }}</div>{% endif %}
-    {% if i.source_url %}<div class="muted"><a href="{{ i.source_url }}">източник</a></div>{% endif %}
-  </li>
-{% endfor %}</ol></section>
-{% endif %}
+    <div class="calendar-inbox-row report-row">
+      <div class="card inbox-card">
+        <div class="card-top-header"><div class="header-title-group"><span class="card-section-title">Практика на ВКС, цитирана от съда</span>
+          <span class="section-title-icon">{{ icon('msg', 14) }}</span></div>
+          <span class="view-all-link">{{ t.citations|length }}</span></div>
+        <div class="inbox-messages-list">
+          {% for c in t.citations %}
+          {% set title = c.label or (c.kind ~ (' № ' ~ c.act_number if c.act_number else '') ~ (' от ' ~ c.act_date if c.act_date else '') ~ ('/' ~ c.tr_year if c.tr_year else '') ~ (', дело № ' ~ c.case_number ~ '/' ~ c.case_year if c.case_number else '')) %}
+          <a class="inbox-msg-item {{ 'active-dark' if c.decision_id and loop.first }}" {% if c.decision_id %}href="/decisions/{{ c.decision_id }}"{% endif %} title="{{ c.text }}">
+            <span class="inbox-sender-avatar initials-avatar">{{ 'ТР' if c.kind == 'ТР' else 'ВКС' }}</span>
+            <div class="inbox-msg-content"><div class="inbox-msg-sender">{{ title }}</div>
+              <div class="inbox-msg-snippet">{{ 'в базата' if c.decision_id else 'не е в базата' }} · „{{ c.text }}“</div></div>
+            <span class="inbox-action-btn">{{ icon('right' if c.decision_id else 'info', 13) }}</span>
+          </a>
+          {% else %}<p class="muted">В текста не са намерени позовавания на актове на ВКС.</p>{% endfor %}
+        </div>
+      </div>
+      <form class="card inbox-card" method="get" action="/">
+        <div class="card-top-header"><div class="header-title-group"><span class="card-section-title">Търсене в базата</span>
+          <span class="section-title-icon">{{ icon('search', 14) }}</span></div></div>
+        <p class="muted">Характерни думи за правния проблем, напр. „задатък неизпълнение 93“. Търси в решенията по чл. 290 и тълкувателните решения.</p>
+        <input class="kit-input" type="text" name="q" placeholder="думи за търсене" required>
+        <input type="hidden" name="only_290" value="true">
+        <button class="kit-submit" type="submit">Търси</button>
+      </form>
+    </div>
 
-<section class="card"><h2>Практика на ВКС, цитирана от въззивния съд</h2>
-{% if not t.citations %}<p class="muted">В текста не са намерени позовавания на актове на ВКС.</p>{% endif %}
-<ul>
-{% for c in t.citations %}
-  <li>{% if c.decision_id %}<a href="/decisions/{{ c.decision_id }}">{{ c.label }}</a>
-      {% else %}{{ c.kind }}{% if c.act_number %} № {{ c.act_number }}{% endif %}{% if c.act_date %} от {{ c.act_date }}{% endif %}{% if c.tr_year %}/{{ c.tr_year }}{% endif %}{% if c.case_number %}, дело № {{ c.case_number }}/{{ c.case_year }}{% endif %}
-      <span class="muted">— не е в базата</span>{% endif %}
-    <div class="muted">„{{ c.text }}“</div></li>
-{% endfor %}
-</ul></section>
-
-<section class="card"><h2>Търсене в базата</h2>
-<p class="muted">Напишете характерни думи за правния проблем (напр. „задатък неизпълнение 93“). Търси се в решенията на ВКС
-по чл. 290 и в тълкувателните решения.</p>
-<form method="get" action="/" class="row">
-  <input class="grow" type="text" name="q" placeholder="думи за търсене" required>
-  <input type="hidden" name="only_290" value="true">
-  <button type="submit">Търси</button>
-</form></section>
-
-<details class="card"><summary>Текст на въззивното решение ({{ t.appellate.text_chars }} знака)</summary>
-<div style="white-space: pre-wrap">{{ t.text }}</div></details>
+    <details class="card page-card"><summary class="card-section-title">Текст на въззивното решение ({{ t.appellate.text_chars }} знака)</summary>
+      <div class="legal-text" style="white-space: pre-wrap; margin-top: 10px">{{ t.text }}</div></details>
+  </div>
+</div>
 {% endblock %}

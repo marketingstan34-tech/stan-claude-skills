@@ -1,15 +1,23 @@
 {% extends "base.html" %}
-{% block title %}Анализът тече · Legal AI Solo{% endblock %}
+{% from "icons.html" import icon %}
+{% block title %}Справката тече · Legal AI Solo{% endblock %}
+{% block page_title %}{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}{% endblock %}
+{% block view_class %}scroll-view{% endblock %}
 {% block content %}
-{% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="5">{% endif %}
-<h1>{{ courts[job.params.court].name }} · дело {{ job.params.case }}/{{ job.params.year }}</h1>
-<div class="card">
+{% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="{{ 3 if job.params.mode == 'noai' else 5 }}">{% endif %}
+<div class="card job-card">
+  <div class="profile-header-row">
+    <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('ai' if job.params.mode == 'ai' else 'path', 22) }}</div>
+    <div class="profile-name-info"><h2 class="profile-name">{{ 'Справката не успя' if job.status == 'failed' else ('В опашката' if job.status == 'queued' else 'Работи…') }}</h2>
+      <p class="profile-role">{{ 'С AI' if job.params.mode == 'ai' else 'Без AI' }} · {{ 'обикновено няколко минути' if job.params.mode == 'ai' else 'обикновено под минута' }}</p></div>
+  </div>
   {% if job.status == 'failed' %}
-    <p class="bad"><strong>Анализът не успя.</strong></p><p>{{ job.message }}</p>
-    <p><a href="/analyze">Назад</a></p>
+    <div class="notice">{{ job.message }}</div>
+    <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Назад</a>
   {% else %}
-    <p><strong>{{ 'В опашката' if job.status == 'queued' else 'Работи…' }}</strong> {{ job.message }}</p>
-    <p class="muted">Страницата се обновява сама на всеки 5 секунди. {% if job.params.mode == 'noai' %}Обикновено отнема под минута.{% else %}Обикновено отнема няколко минути.{% endif %}</p>
+    <div class="proj-stage-row"><span class="proj-stage-text">{{ job.message }}</span></div>
+    <div class="proj-progress-bar-bg blue-bar-bg"><div class="proj-progress-fill blue-fill indeterminate"></div></div>
+    <p class="muted">Страницата се обновява сама.</p>
   {% endif %}
 </div>
 {% endblock %}

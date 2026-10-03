@@ -20,8 +20,12 @@ PARSER_VERSION = "vks-5"  # chamber detection changes do not touch text or passa
 _LIST_LINK = re.compile(
     r"""pregled-akt\.jsp\?type=ot-spisak&(?:amp;)?id=([0-9A-F]{32})["'][^>]*>([^<]*)<"""
 )
+# Link text forms seen live (03.10.2026): "Решение №90/14.04.2022 по дело №2990/2021", and rarer
+# "№60 189/14.10.2021", "№60160А/13.12.2021", "№160-A/16.12.2020", "№214/18/08.01.2019",
+# "№265/2018/07.01.2019", "№60249/2021 г./20.05.2022" and "№/29.09.2020" (no number).
 _LINK_TEXT = re.compile(
-    r"^\s*(?P<type>[А-Яа-я]+)\s*№\s*(?P<no>\d+)\s*/\s*(?P<date>\d{2}\.\d{2}\.\d{4})"
+    r"^\s*(?P<type>[А-Яа-я]+)\s*№\s*(?P<no>(?:\d[\d ]*\d|\d)(?:\s*-?\s*[A-Za-zА-Яа-я](?![а-я]))?)?"
+    r"\s*(?:/\s*\d{2,4}\s*(?:г\.?)?\s*)?/\s*(?P<date>\d{2}\.\d{2}\.\d{4})"
     r"\s+по\s+дело\s*№\s*(?P<case_no>\d+)\s*/\s*(?P<case_year>\d{4})\s*$"
 )
 
@@ -60,7 +64,7 @@ def parse_list(html: str) -> list[ListRow]:
                 source_id=source_id,
                 link_text=text,
                 act_type=m["type"].lower(),
-                act_number=m["no"],
+                act_number=m["no"].replace(" ", "") if m["no"] else None,
                 act_date=_parse_bg_date(m["date"]),
                 case_number=m["case_no"],
                 case_year=int(m["case_year"]),
