@@ -128,15 +128,13 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
             name = f"{y}-{m:02d}{suffix}"
             if fetch_list(base, name) < LIST_TRUNCATION_LIMIT:
                 continue
-            if only:
-                report.truncated.append(name)
-                continue
-            for chamber in CHAMBERS:
-                q = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
-                              chamber=chamber)
-                part = f"{name}__{_slug(chamber)}"
-                if fetch_list(q, part) < LIST_TRUNCATION_LIMIT:
-                    continue
+            for chamber in [only] if only else CHAMBERS:
+                part = name if only else f"{name}__{_slug(chamber)}"
+                if not only:
+                    q = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
+                                  chamber=chamber)
+                    if fetch_list(q, part) < LIST_TRUNCATION_LIMIT:
+                        continue
                 # still full (seen for determinations): halves of the month, then ten-day parts
                 last = calendar.monthrange(y, m)[1]
                 for d1, d2 in ((1, 10), (11, 20), (21, last)):
@@ -157,7 +155,8 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
             if fetch_list(q, name) < LIST_TRUNCATION_LIMIT:
                 continue
             if only:
-                report.truncated.append(name)
+                if words != "288":      # see below: for rulings the month lists cover a full quarter
+                    report.truncated.append(name)
                 continue
             for chamber in CHAMBERS:  # a truncated quarter list is split like a month list
                 part_q = ListQuery(y, q_start, y, q_end, act_type=act_type, case_type=case_type,

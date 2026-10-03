@@ -195,3 +195,23 @@ def test_full_quarter_chamber_list_does_not_block_288_rulings(tmp_path):
     assert any(e["truncated"] for e in report.lists if "__" in e["name"])
     report = crawl(client, tmp_path, (2025, 4), (2025, 5))      # decisions: still reported
     assert report.truncated
+
+
+def test_per_chamber_288_lists_split_months_by_days_and_close_full_quarters(tmp_path):
+    from legal_ai.sources.vks.urls import COMMERCIAL_CHAMBERS
+    full = [f"{i:032X}" for i in range(249)]
+
+    def handler(request):
+        q = parse_qs(urlparse(str(request.url)).query)
+        if request.url.path.endswith("spisak-aktove.jsp"):
+            if q["AktNoOtMesec"] == q["AktNoDoMesec"] and "AktNoOtDen" in q:
+                return httpx.Response(200, text=_list_html(full[:80]))
+            return httpx.Response(200, text=_list_html(full))      # month and quarter lists are full
+        return httpx.Response(200, text='<div id="Content">текст</div>')
+
+    client, _ = _client(handler)
+    report = crawl(client, tmp_path, (2025, 4), (2025, 5), words="288", act_type="16",
+                   case_type="търг.", chambers=COMMERCIAL_CHAMBERS[:1])
+    names = [e["name"] for e in report.lists]
+    assert any(n.endswith("__d21-30") for n in names)
+    assert report.truncated == []
