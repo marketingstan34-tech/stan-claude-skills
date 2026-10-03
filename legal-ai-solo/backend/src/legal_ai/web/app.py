@@ -276,7 +276,8 @@ def create_app() -> FastAPI:
     def analyze_start(request: Request, court: str = Form(""), case: int | None = Form(None, ge=1, le=999999),
                       year: int | None = Form(None, ge=2000, le=2100), case_type: str = Form(""),
                       until: str = Form(""), mode: str = Form("noai"),
-                      document: UploadFile | None = File(None), text: str = Form("", max_length=400_000)):
+                      document: UploadFile | None = File(None), text: str = Form("", max_length=400_000),
+                      extra: list[UploadFile] | None = File(None)):
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
 
@@ -328,6 +329,23 @@ def create_app() -> FastAPI:
             params.update(file=f"uploads/{name}", filename=os.path.basename(document.filename)[:120])
         elif not (court and case and year):
             return form_error("Въведете съд, номер и година на делото, качете документ или поставете текст.")
+        extras = [f for f in (extra or []) if f is not None and f.filename]
+        if len(extras) > 5:
+            return form_error("Най-много 5 други документа.")
+        if extras:
+            from legal_ai.upload import MAX_BYTES, UploadError, extension, read_upload
+            uploads = storage / "uploads"
+            uploads.mkdir(parents=True, exist_ok=True)
+            params["extras"] = []
+            for f in extras:
+                body = f.file.read(MAX_BYTES + 1)
+                try:
+                    read_upload(f.filename, body)
+                except UploadError as exc:
+                    return form_error(f"{os.path.basename(f.filename)[:80]}: {exc}")
+                name = f"{uuid4().hex}{extension(f.filename)}"
+                (uploads / name).write_bytes(body)
+                params["extras"].append({"file": f"uploads/{name}", "filename": os.path.basename(f.filename)[:120]})
         job = runner.start(params)
         if job is None:
             return form_error("Вече тече справка. Изчакайте да приключи.", 409)

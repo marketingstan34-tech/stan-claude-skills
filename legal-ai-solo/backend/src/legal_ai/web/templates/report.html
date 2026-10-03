@@ -49,6 +49,8 @@
       Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
 
     <div class="card page-card"><h2>Казусът</h2><p>{{ a.case_summary }}</p></div>
+    {% if run.context_names %}<div class="card page-card"><h2>Други документи по делото</h2>
+      <p>{{ run.context_names|join(', ') }}</p><p class="muted">Ползвани като контекст; цитатите са само от въззивното решение.</p></div>{% endif %}
     {% if run.notes %}<div class="card page-card"><h2>Бележки на адвоката</h2><p class="notes-text">{{ run.notes }}</p>
       <p class="muted">Взети предвид при въпросите; цитатите са само от решението.</p></div>{% endif %}
     {% if run.path %}{{ path_cards(run.path) }}{% endif %}

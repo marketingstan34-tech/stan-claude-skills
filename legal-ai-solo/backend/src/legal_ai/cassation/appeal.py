@@ -34,7 +34,8 @@ def contra_list(run: dict, chosen: list[str] | None) -> dict[str, str]:
     return out
 
 
-def appeal_prompt(run: dict, text: str, chosen: list[str] | None) -> str:
+def appeal_prompt(run: dict, text: str, chosen: list[str] | None,
+                  context_docs: list[tuple[str, str]] | None = None) -> str:
     a = run["analysis"]
     holdings = "\n".join(f"{h['id']}. {h['summary']}" for h in a.get("holdings", []))
     questions = "\n".join(f"{q['id']}. {q['text']}" for q in a["questions"] if not chosen or q["id"] in chosen)
@@ -43,14 +44,16 @@ def appeal_prompt(run: dict, text: str, chosen: list[str] | None) -> str:
     return (f"{P.APPEAL_INSTRUCTIONS}\n\n=== ИЗВОДИ НА ВЪЗЗИВНИЯ СЪД ===\n{holdings}\n\n"
             f"=== ИЗБРАНИ ПРАВНИ ВЪПРОСИ ===\n{questions}\n\n=== РЕШЕНИЯ НА ВКС „ПРОТИВОРЕЧИ“ ===\n{vks}\n\n"
             f"=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{text}"
-            + (f"\n\n{P.NOTES_HEADER}\n{notes}" if notes else ""))
+            + (f"\n\n{P.NOTES_HEADER}\n{notes}" if notes else "")
+            + (P.CONTEXT_NOTE + P.context_block(context_docs) if context_docs else ""))
 
 
-def generate(ai, run: dict, text: str, chosen: list[str] | None) -> dict:
+def generate(ai, run: dict, text: str, chosen: list[str] | None,
+             context_docs: list[tuple[str, str]] | None = None) -> dict:
     """The AI part, checked: verbatim quotes and VKS labels from the report only."""
     from legal_ai.cassation.pipeline import check_quote
     raw = ai.structured(model=ai.config.analysis_model, system=P.SYSTEM_BASE,
-                        user=appeal_prompt(run, text, chosen), schema_name="cassation_appeal",
+                        user=appeal_prompt(run, text, chosen, context_docs), schema_name="cassation_appeal",
                         schema=P.APPEAL_SCHEMA)
     allowed = contra_list(run, chosen)
     grounds = []

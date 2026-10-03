@@ -83,7 +83,8 @@ class JobRunner:
                     from legal_ai.db import connect
                     conn = connect(os.environ["DATABASE_URL"])
                 try:
-                    result = run_analysis(ai, vks, appellate, cutoff, conn=conn, notes=p.get("notes", ""))
+                    result = run_analysis(ai, vks, appellate, cutoff, conn=conn, notes=p.get("notes", ""),
+                                          context_docs=self._extras(p))
                 finally:
                     if conn is not None:
                         conn.close()
@@ -92,7 +93,11 @@ class JobRunner:
                     job.message = "Проследяване на делото по инстанции…"
                     result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
                                                  appellate.act_date, result.analysis.get("lower_instance")))
-            job.run_dir = save_run(result, self.runs_dir).name
+            run_dir = save_run(result, self.runs_dir)
+            if p.get("extras"):   # kept for the appeal draft, next to the report (private storage)
+                write_atomic(run_dir / "context.json", json.dumps(
+                    [{"name": n, "text": t} for n, t in self._extras(p)], ensure_ascii=False))
+            job.run_dir = run_dir.name
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user
@@ -119,7 +124,11 @@ class JobRunner:
             ai = OpenAIProvider(load_ai_config())
             job.cleanup = ai.close
             job.message = "AI пише оплакванията срещу въззивното решение…"
-            appeal = generate(ai, run, text, chosen)
+            try:
+                context = [(c["name"], c["text"]) for c in json.loads((d / "context.json").read_text(encoding="utf-8"))]
+            except (OSError, ValueError, KeyError, TypeError):
+                context = []
+            appeal = generate(ai, run, text, chosen, context)
             write_atomic(d / "appeal.json", json.dumps(appeal, ensure_ascii=False, indent=1))
             job.run_dir = run_id
             job.status = "done"
@@ -129,6 +138,15 @@ class JobRunner:
         finally:
             if job.cleanup:
                 job.cleanup()
+
+    def _extras(self, p: dict) -> list[tuple[str, str]]:
+        """The other case documents uploaded with the decision: (file name, text)."""
+        from legal_ai.upload import read_upload
+        out = []
+        for e in p.get("extras", []):
+            body = (self.runs_dir.parent / e["file"]).read_bytes()
+            out.append((e["filename"], read_upload(e["filename"], body)[0]))
+        return out
 
     def _appellate(self, courts, p: dict):
         """The appellate decision: an uploaded document, or downloaded from the court's site."""
@@ -212,6 +230,7 @@ class JobRunner:
                               "act_date": appellate.act_date, "retrieved_at": appellate.retrieved_at,
                               "warnings": appellate.warnings, "text_chars": len(appellate.text)},
                 "lower_instance": lower, "path": path, "citations": cites_dicts(cites), "notes": p.get("notes", ""),
+                "context_names": [e["filename"] for e in p.get("extras", [])],
             }, ensure_ascii=False, indent=2, default=str))
             job.run_dir = d.name
             job.status = "done"

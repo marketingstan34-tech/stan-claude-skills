@@ -192,3 +192,40 @@ def test_appeal_routes_and_status(client, monkeypatch):
     assert "в работа · 1" in reports
     assert "в.т. 899/2021" in reports or "899/2021" in reports
     assert "899/2021" not in c.get("/reports?status=" + "приключен").text.split("all-reports")[1]
+
+
+def test_other_documents_go_with_the_decision(client, monkeypatch):
+    import legal_ai.web.jobs as jobs
+    c, d = client
+    started = []
+
+    def fake_run(self, job):
+        started.append(job.params)
+        job.status = "done"
+
+    monkeypatch.setattr(jobs.JobRunner, "_run", fake_run)
+    doc = ("Въззивният съд приема, че искът е неоснователен. " * 10).encode()
+    first = ("Първоинстанционният съд уважава иска изцяло. " * 10).encode()
+    r = c.post("/analyze", data={"text": "Бележки.", "mode": "ai"},
+               files=[("document", ("reshenie.txt", doc, "text/plain")),
+                      ("extra", ("parva.txt", first, "text/plain")), ("extra", ("zhalba.txt", first, "text/plain"))],
+               headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
+    assert r.status_code == 303
+    p = started[0]
+    assert [e["filename"] for e in p["extras"]] == ["parva.txt", "zhalba.txt"] and p["notes"] == "Бележки."
+    runner = jobs.JobRunner(d.parent, d.parent.parent / "traces")
+    assert runner._extras(p)[0][1].startswith("Първоинстанционният съд")
+    # documents alone, without the decision, are refused
+    r = c.post("/analyze", data={"mode": "ai"}, files=[("extra", ("parva.txt", first, "text/plain"))],
+               headers={"origin": "http://127.0.0.1"})
+    assert r.status_code == 400
+
+
+def test_context_documents_in_the_prompts():
+    from legal_ai.cassation import prompts as P
+    from legal_ai.cassation.appeal import appeal_prompt
+    block = P.context_block([("parva.txt", "А" * 50_000), ("b.txt", "Б" * 80_000)])
+    assert block.count("ДРУГ ДОКУМЕНТ ПО ДЕЛОТО") == 2 and "съкратено" in block
+    assert len(block) < P.CONTEXT_MAX_TOTAL + 1000
+    prompt = appeal_prompt(RUN, "Решение.", None, [("parva.txt", "Първа инстанция.")])
+    assert "ДРУГ ДОКУМЕНТ ПО ДЕЛОТО: parva.txt" in prompt and "Първа инстанция." in prompt

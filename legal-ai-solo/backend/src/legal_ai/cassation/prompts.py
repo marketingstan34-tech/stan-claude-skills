@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-PROMPT_VERSION = "cass-4"
+PROMPT_VERSION = "cass-5"
 
 SYSTEM_BASE = (
     "Ти си помощник на български адвокат по касационни производства (чл. 280 ГПК). "
@@ -49,6 +49,26 @@ ANALYSIS_INSTRUCTIONS = """Прочети въззивното решение п
 """
 
 NOTES_HEADER = "=== БЕЛЕЖКИ НА АДВОКАТА (контекст; не са част от решението, не цитирай от тях) ==="
+CONTEXT_HEADER = "=== ДРУГ ДОКУМЕНТ ПО ДЕЛОТО: {name} (контекст; не е въззивното решение, не цитирай от него) ==="
+CONTEXT_NOTE = """
+Ако има „ДРУГ ДОКУМЕНТ ПО ДЕЛОТО“ (напр. първоинстанционно решение, жалба, отговор), ползвай го само за
+да разбереш казуса и доводите на страните. Изводите, quote и case_summary се вземат само от въззивното решение.
+"""
+CONTEXT_MAX_EACH = 40_000
+CONTEXT_MAX_TOTAL = 100_000
+
+
+def context_block(docs) -> str:
+    """The other case documents for a prompt, each cut to CONTEXT_MAX_EACH, all to CONTEXT_MAX_TOTAL chars."""
+    out, left = [], CONTEXT_MAX_TOTAL
+    for name, text in docs or ():
+        if left <= 0:
+            break
+        part = text.strip()[:min(CONTEXT_MAX_EACH, left)]
+        cut = len(part) < len(text.strip())
+        left -= len(part)
+        out.append(CONTEXT_HEADER.format(name=name) + "\n" + part + ("\n[... съкратено ...]" if cut else ""))
+    return ("\n\n" + "\n\n".join(out)) if out else ""
 
 ANALYSIS_SCHEMA = {
     "type": "object", "additionalProperties": False,
