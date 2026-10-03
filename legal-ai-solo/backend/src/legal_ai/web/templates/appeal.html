@@ -19,6 +19,7 @@
           <button type="submit" class="link-button">Върни AI версията</button></form></div>{% endif %}
         <a class="kit-submit light" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Изложението по чл. 284, ал. 3, т. 1</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center">Свали приложенията (ZIP)</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/judge" style="display:block;text-align:center">„Съдия от ВКС“ – проверка преди подаване</a>
         <p class="muted small">Написана на {{ appeal.created_at[:10].split('-')|reverse|join('.') }} · {{ appeal.model }} ·
           AI заявки {{ appeal.usage.calls }} · токени {{ appeal.usage.input_tokens }}/{{ appeal.usage.output_tokens }}{% if appeal_cost is not none %} · ≈ {{ '%.2f'|format(appeal_cost) }} ${% endif %}</p>
         <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Нова чернова с AI – една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $?')">

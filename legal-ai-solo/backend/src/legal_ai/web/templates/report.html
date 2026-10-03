@@ -36,6 +36,8 @@
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Чернова на изложение</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/admission" style="display:block;text-align:center">Шанс за допускане</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/judge" style="display:block;text-align:center">„Съдия от ВКС“ – проверка</a>
       </div>
     </div>
     {{ case_form('/runs/' ~ run_id ~ '/case', run) }}

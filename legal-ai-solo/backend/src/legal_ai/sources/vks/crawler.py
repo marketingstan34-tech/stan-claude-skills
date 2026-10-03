@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import calendar
 import json
 import re
 import time
@@ -134,8 +135,15 @@ def crawl(client: VksClient, out_dir: Path, start: tuple[int, int], end: tuple[i
                 q = ListQuery(y, m, y, m, act_type=act_type, case_type=case_type, words=words,
                               chamber=chamber)
                 part = f"{name}__{_slug(chamber)}"
-                if fetch_list(q, part) >= LIST_TRUNCATION_LIMIT:
-                    report.truncated.append(part)
+                if fetch_list(q, part) < LIST_TRUNCATION_LIMIT:
+                    continue
+                # still full (seen for determinations): halves of the month, then ten-day parts
+                last = calendar.monthrange(y, m)[1]
+                for d1, d2 in ((1, 10), (11, 20), (21, last)):
+                    dq = ListQuery(y, m, y, m, day_from=d1, day_to=d2, act_type=act_type,
+                                   case_type=case_type, words=words, chamber=chamber)
+                    if fetch_list(dq, f"{part}__d{d1:02d}-{d2:02d}") >= LIST_TRUNCATION_LIMIT:
+                        report.truncated.append(f"{part}__d{d1:02d}-{d2:02d}")
 
     # Monthly lists were observed to omit decisions that a quarter list returns
     # (docs/source-discovery.md 1.2.1 p.5), so also list by quarter and merge by id.

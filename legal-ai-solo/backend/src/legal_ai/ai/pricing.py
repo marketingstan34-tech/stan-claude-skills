@@ -13,6 +13,8 @@ PRICES_AS_OF = "10.2026"
 TYPICAL_REPORT_USD = (0.7, 1.0)
 # appeal-2 (03.10.2026): a long appeal with the case documents and style samples; estimate, not measured
 TYPICAL_APPEAL_USD = (0.8, 2.0)
+# „Съдия от ВКС": decision + statement + appeal in, a short review out; estimate
+TYPICAL_JUDGE_USD = (0.2, 0.5)
 
 
 def price(model: str) -> tuple[float, float] | None:

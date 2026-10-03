@@ -91,7 +91,7 @@ def cmd_build_corpus(args) -> int:
     from legal_ai.db import connect
     from legal_ai.ingestion.vks_ingest import ingest_raw_dir
     from legal_ai.sources.vks.crawler import VksClient, crawl, quarters_between
-    from legal_ai.sources.vks.urls import COMMERCIAL_CHAMBERS
+    from legal_ai.sources.vks.urls import ACT_TYPES, COMMERCIAL_CHAMBERS
 
     settings = load_settings()
     root = settings.private_storage_path.resolve()
@@ -107,7 +107,7 @@ def cmd_build_corpus(args) -> int:
             for case_type in args.case_types.split(","):
                 while pause.exists():  # lets other jobs use vks.bg alone; checked between quarters
                     time.sleep(20)
-                slug = "gr" if case_type == "гр." else "targ"
+                slug = ("gr" if case_type == "гр." else "targ") + ("-opr" if args.act_type == "определение" else "")
                 # commercial decisions are listed per chamber (AktVidDelo=търг. misses
                 # decisions before 2023; docs/source-discovery.md 1.9)
                 query_type, chambers = ((case_type, None) if case_type == "гр." else
@@ -117,12 +117,15 @@ def cmd_build_corpus(args) -> int:
                 if done_flag.exists():
                     continue
                 t0 = time.time()
-                report = crawl(client, out, (y, m1), (y, m2), act_type="15", case_type=query_type,
-                               chambers=chambers)
+                # determinations: only those mentioning чл. 288 (admission to cassation)
+                report = crawl(client, out, (y, m1), (y, m2), act_type=ACT_TYPES[args.act_type],
+                               case_type=query_type, chambers=chambers,
+                               words="288" if args.act_type == "определение" else "")
                 with connect(settings.database_url) as conn:
-                    stats = ingest_raw_dir(conn, out, root, "direct", f"ВКС, решения, {case_type}")
+                    stats = ingest_raw_dir(conn, out, root, "direct",
+                                           f"ВКС, {args.act_type}, {case_type}")
                 ok = sum(1 for a in report.acts if a.get("ok"))
-                entry = {"quarter": f"{y}-{m1:02d}..{m2:02d}", "case_type": case_type,
+                entry = {"quarter": f"{y}-{m1:02d}..{m2:02d}", "case_type": case_type, "act_type": args.act_type,
                          "acts_ok": ok, "acts": len(report.acts), "ingested": stats.acts_ingested,
                          "truncated": report.truncated, "seconds": round(time.time() - t0)}
                 with open(log, "a", encoding="utf-8") as f:
@@ -326,6 +329,8 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--to", dest="end", required=True, help="ГГГГ-ММ")
     b.add_argument("--case-types", default="гр.,търг.")
     b.add_argument("--newest-first", action="store_true")
+    b.add_argument("--act-type", default="решение", choices=["решение", "определение"],
+                   help="определение = определенията по чл. 288 ГПК (допуска / не допуска)")
     b.set_defaults(func=cmd_build_corpus)
 
     tr = sub.add_parser("fetch-tr", help="Тълкувателни решения на ОСГТК/ОСГК/ОСТК (PDF)")

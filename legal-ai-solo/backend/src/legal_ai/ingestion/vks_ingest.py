@@ -132,8 +132,8 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                 """
                 INSERT INTO decisions (source, source_record_id, court, chamber, act_type, act_number,
                     act_date, case_type, case_number, case_year, proceeding_article,
-                    admission_grounds, canonical_url)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    admission_grounds, canonical_url, admission_result)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (source, source_record_id) DO UPDATE SET
                     chamber = EXCLUDED.chamber,
                     act_type = COALESCE(EXCLUDED.act_type, decisions.act_type),
@@ -143,7 +143,8 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                     case_number = COALESCE(EXCLUDED.case_number, decisions.case_number),
                     case_year = COALESCE(EXCLUDED.case_year, decisions.case_year),
                     proceeding_article = EXCLUDED.proceeding_article,
-                    admission_grounds = EXCLUDED.admission_grounds
+                    admission_grounds = EXCLUDED.admission_grounds,
+                    admission_result = EXCLUDED.admission_result
                 RETURNING id
                 """,
                 (
@@ -157,6 +158,7 @@ def ingest_raw_dir(conn: psycopg.Connection, raw_dir: Path, storage_root: Path,
                     parsed.proceeding_article,
                     Jsonb(parsed.admission_grounds),
                     url,
+                    parsed.admission_result,
                 ),
             )
             decision_id = cur.fetchone()["id"]

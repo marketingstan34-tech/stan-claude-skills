@@ -14,6 +14,8 @@ else
   echo "fetch-tr: done within the last week, skipped"
 fi
 legal-ai build-corpus --from 2022-07 --to "$NOW" --newest-first || echo "build-corpus (recent) failed"
+# admission rulings (чл. 288 ГПК) for the "chance of admission" check, newest first
+legal-ai build-corpus --act-type определение --from 2023-01 --to "$NOW" --newest-first || echo "build-corpus (288) failed"
 legal-ai build-corpus --from "${CORPUS_FROM:-2012-01}" --to 2022-06 --newest-first || echo "build-corpus (older) failed"
 echo "$(date -u +%FT%TZ) corpus: initial build done"
 while true; do
@@ -21,9 +23,10 @@ while true; do
   NOW=$(date -u +%Y-%m)
   # the two latest quarters may have gained decisions since they were marked done
   for q in $(ls "$D"/gr "$D"/targ 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sort -u | tail -n 2); do
-    rm -f "$D/gr/$q/.ingested" "$D/targ/$q/.ingested"
+    rm -f "$D/gr/$q/.ingested" "$D/targ/$q/.ingested" "$D/gr-opr/$q/.ingested" "$D/targ-opr/$q/.ingested"
   done
   legal-ai fetch-tr --from-year 2008 --to-year "$(date -u +%Y)" && touch "$TR_DONE" || echo "weekly fetch-tr failed"
   legal-ai build-corpus --from 2022-07 --to "$NOW" --newest-first || echo "weekly refresh failed"
+  legal-ai build-corpus --act-type определение --from 2023-01 --to "$NOW" --newest-first || echo "weekly 288 refresh failed"
   echo "$(date -u +%FT%TZ) corpus: weekly refresh done"
 done

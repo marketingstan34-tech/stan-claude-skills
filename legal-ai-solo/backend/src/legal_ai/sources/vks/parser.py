@@ -174,6 +174,7 @@ class ParsedAct:
     proceeding_article: str | None
     admission_paragraph_nos: list[int] = field(default_factory=list)
     admission_grounds: list[str] = field(default_factory=list)
+    admission_result: str | None = None   # чл. 288 ГПК: "допуска", "не допуска" or "частично"
     warnings: list[str] = field(default_factory=list)
 
 
@@ -225,6 +226,23 @@ def _detect_chamber(head: str) -> str | None:
     return None
 
 
+_OUTCOME = re.compile(r"^(НЕ\s+)?ДОПУСКА\s+касационно(?:то)?\s+обжалване", re.IGNORECASE)
+
+
+def admission_outcome(paragraphs: list[Paragraph]) -> str | None:
+    """The ruling on admission (чл. 288 ГПК) from the dispositive: "ДОПУСКА / НЕ ДОПУСКА касационно обжалване"."""
+    found = set()
+    for p in paragraphs:
+        if p.section != "dispositive":
+            continue
+        m = _OUTCOME.match(p.text)
+        if m and p.text.split()[0].isupper():
+            found.add("не допуска" if m.group(1) else "допуска")
+    if len(found) == 2:
+        return "частично"
+    return found.pop() if found else None
+
+
 def parse_act(html: str) -> ParsedAct:
     doc = lxml.html.fromstring(html)
     nodes = doc.xpath('//*[@id="Content"]')
@@ -267,6 +285,9 @@ def parse_act(html: str) -> ParsedAct:
 
     m = _PROCEEDING.search(text)
     proceeding = m.group(1) if m else None
+    admission_result = admission_outcome(paragraphs)
+    if admission_result and (heading or "").startswith("ОПРЕДЕЛЕНИЕ"):
+        proceeding = "288"
 
     admission_nos: list[int] = []
     grounds: list[str] = []
@@ -287,5 +308,6 @@ def parse_act(html: str) -> ParsedAct:
         proceeding_article=proceeding,
         admission_paragraph_nos=admission_nos,
         admission_grounds=grounds,
+        admission_result=admission_result,
         warnings=warnings,
     )

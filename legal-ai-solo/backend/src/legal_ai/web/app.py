@@ -526,6 +526,68 @@ def create_app() -> FastAPI:
                                                "run_cost": cost_usd(run["usage"].get("by_model") or {}),
                                                **case_context(runs_dir, run_id, run["appellate"]["label"], run)})
 
+    @app.get("/runs/{run_id}/admission", response_class=HTMLResponse)
+    def run_admission(request: Request, run_id: str):
+        from legal_ai.cassation import admission, casefile
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        chosen = casefile.load_case(runs_dir / run_id).get("questions") or None
+        items, total, error = [], 0, ""
+        try:
+            with connect(settings.database_url) as conn:
+                total = admission.rulings_count(conn)
+                if total:
+                    items = admission.chances(conn, run, chosen)
+        except psycopg.Error:
+            error = "Базата не е достъпна в момента. Опитайте след малко."
+        return render(request, "admission.html", {"run": run, "run_id": run_id, "items": items,
+                                                  "total": total, "error": error, "chosen": chosen})
+
+    @app.get("/runs/{run_id}/judge", response_class=HTMLResponse)
+    def run_judge(request: Request, run_id: str):
+        import json as _json
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        try:
+            result = _json.loads((runs_dir / run_id / "judge.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            result = None
+        from legal_ai.ai.pricing import TYPICAL_JUDGE_USD, cost_usd
+        cost = cost_usd({result["model"]: [result["usage"]["input_tokens"], result["usage"]["output_tokens"]]}) \
+            if result and result.get("usage") else None
+        has_appeal = (runs_dir / run_id / "appeal.json").exists() or (runs_dir / run_id / "edit-appeal.json").exists()
+        return render(request, "judge.html", {"run": run, "run_id": run_id, "result": result, "cost": cost,
+                                              "judge_price": TYPICAL_JUDGE_USD, "has_appeal": has_appeal,
+                                              "busy": runner.busy()})
+
+    @app.post("/runs/{run_id}/judge")
+    def run_judge_start(request: Request, run_id: str):
+        from legal_ai.cassation.draft import to_text
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        _, _, draft = draft_blocks(run_id)
+        _, _, appeal, appeal_b = appeal_blocks(run_id)
+        notes = ""
+        try:
+            from legal_ai.cassation import admission
+            with connect(settings.database_url) as conn:
+                if admission.rulings_count(conn):
+                    notes = "\n".join(
+                        f"{c.question_id}: {c.found} сходни определения, допуснати {c.admitted}, недопуснати {c.refused}"
+                        + (f"; чести мотиви за отказ: {', '.join(r for r, _ in c.reasons)}" if c.reasons else "")
+                        for c in admission.chances(conn, load_run(runs_dir, run_id)) if c.found)
+        except psycopg.Error:
+            notes = ""
+        job = runner.start({"mode": "judge", "run_id": run_id, "statement": to_text(draft),
+                            "appeal": to_text(appeal_b) if appeal_b else "", "admission": notes})
+        if job is None:
+            return RedirectResponse(f"/runs/{run_id}/judge?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
     @app.post("/runs/{run_id}/case")
     async def run_case(request: Request, run_id: str):
         run = load_run(runs_dir, run_id)

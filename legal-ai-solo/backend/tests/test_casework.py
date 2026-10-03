@@ -510,3 +510,47 @@ def test_case_folder_zip_classify_and_private_pages(client, monkeypatch):
     monkeypatch.setattr(up, "ocr_pdf", lambda body: "ВЪЗЗИВНА ЖАЛБА\n" + "доводи " * 80 + "\fДОГОВОР\nЗА ПРАВНА ЗАЩИТА\nхонорар 9000 лв.")
     text, _, warnings = up.read_upload("scan.pdf", b"%PDF")
     assert "хонорар" not in text and any("махнати 1 стр." in w for w in warnings)
+
+
+def test_admission_outcome_and_reasons():
+    from legal_ai.cassation.admission import _REASONS
+    from legal_ai.sources.vks.parser import Paragraph, admission_outcome
+    def disp(*lines):
+        return [Paragraph(i, 0, 0, t, "dispositive") for i, t in enumerate(lines)]
+    assert admission_outcome(disp("О П Р Е Д Е Л И :", "ДОПУСКА касационно обжалване на решение № 704")) == "допуска"
+    assert admission_outcome(disp("НЕ ДОПУСКА касационно обжалване на решение № 1")) == "не допуска"
+    assert admission_outcome(disp("ДОПУСКА касационно обжалване в частта", "НЕ ДОПУСКА касационно обжалване в останалата")) == "частично"
+    assert admission_outcome([Paragraph(0, 0, 0, "ДОПУСКА касационно обжалване", "reasoning")]) is None
+    text = "Поставеният въпрос не е обуславящ за изхода на спора, а е общ и абстрактен."
+    found = [label for label, rx in _REASONS if rx.search(text)]
+    assert found[:2] == ["въпросът не е обуславящ за изхода на делото", "въпросът е общ / абстрактен или неясно формулиран"]
+
+
+def test_admission_page_without_database(client):
+    c, _ = client
+    page = c.get("/runs/20260102030405/admission").text
+    assert "Шанс за допускане" in page and "Базата не е достъпна" in page
+    assert "/runs/20260102030405/admission" in c.get("/runs/20260102030405").text
+
+
+def test_vks_judge_review_and_page(client, monkeypatch):
+    import legal_ai.web.jobs as jobs
+    from legal_ai.cassation.judge import review
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    assert "Какво ще получите" in c.get("/runs/20260102030405/judge").text
+    started = []
+    monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
+    r = c.post("/runs/20260102030405/judge", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[0]["mode"] == "judge" and "ИЗЛОЖЕНИЕ" in started[0]["statement"]
+    answer = {"overall": "средно", "summary": "Въпрос Q1 е обуславящ, Q2 – не.",
+              "questions": [{"question_id": "Q2", "verdict": "вероятно не се допуска",
+                             "reasons": "Въпросът е фактически.", "fix": "Формулирайте го като правен."}],
+              "issues": [{"severity": "важно", "where": "изложение", "problem": "Няма т. 3 обосновка.",
+                          "fix": "Добавете защо нормата е неясна."}]}
+    ai = FakeAI(answer)
+    result = review(ai, RUN, APPELLATE, started[0]["statement"], "")
+    assert "ТР № 1/19.02.2010" in ai.prompts[0] and "(още няма)" in ai.prompts[0]
+    (d / "judge.json").write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
+    page = c.get("/runs/20260102030405/judge").text
+    assert "Обща преценка: средно" in page and "вероятно не се допуска" in page and "Няма т. 3 обосновка." in page

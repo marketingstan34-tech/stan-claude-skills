@@ -81,8 +81,9 @@ def test_truncated_month_is_split_by_chamber_and_reported(tmp_path):
     client, _ = _client(handler)
     report = crawl(client, tmp_path, (2025, 1), (2025, 1), words="делба")
     names = [entry["name"] for entry in report.lists]
-    assert names[0] == "2025-01" and len(names) == 1 + 13
-    assert report.truncated == ["2025-01__2-ро-гр"]
+    assert names[0] == "2025-01" and len(names) == 1 + 13 + 3      # the full chamber is split into 3 day parts
+    assert "2025-01__2-ро-гр__d01-10" in names and "2025-01__2-ро-гр__d21-31" in names
+    assert report.truncated == ["2025-01__2-ро-гр__d01-10", "2025-01__2-ро-гр__d11-20", "2025-01__2-ро-гр__d21-31"]
     assert len(report.acts) == 249 and all(a["ok"] for a in report.acts)
     assert (tmp_path / "manifest.json").exists()
 

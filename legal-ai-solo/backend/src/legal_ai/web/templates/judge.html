@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% from "parts_case.html" import case_profile with context %}
+{% block title %}Съдия от ВКС · Legal AI Solo{% endblock %}
+{% block page_title %}„Съдия от ВКС“ – проверка преди подаване{% endblock %}
+{% block page_hint %}AI чете изложението и жалбата като съдия от ВКС, който решава по чл. 288 ГПК и търси причина да откаже – по стандартите на ТР № 1/2009 на ОСГТК. Получавате слабите места и как да ги поправите. Не е правно становище.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
+    <div class="card details-card">
+      <h2 class="details-title">Проверка</h2>
+      {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
+      <p>Проверява текущото изложение{% if has_appeal %} и жалбата{% else %} (жалба още няма – по-добре първо я напишете){% endif %}, включително вашите редакции. Една заявка към OpenAI, около {{ '%.2f'|format(judge_price[0]) }}–{{ '%.2f'|format(judge_price[1]) }} $.</p>
+      <form method="post" action="/runs/{{ run_id }}/judge" onsubmit="return confirm('Да провери ли „Съдия от ВКС“? Една платена заявка, около {{ '%.2f'|format(judge_price[0]) }}–{{ '%.2f'|format(judge_price[1]) }} $.')">
+        <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else ('Провери наново' if result else 'Провери') }}</button></form>
+      {% if result %}<p class="muted small">Проверено на {{ result.created_at[:10].split('-')|reverse|join('.') }} · {{ result.model }}{% if cost is not none %} · ≈ {{ '%.2f'|format(cost) }} ${% endif %}</p>{% endif %}
+      <a class="kit-submit light" href="/runs/{{ run_id }}/draft/edit" style="display:block;text-align:center">Редактирай изложението</a>
+      <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Към жалбата</a>
+      <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if not result %}
+    <div class="card page-card"><h2>Какво ще получите</h2><ul class="help-steps">
+      <li>обща преценка – силно, средно или слабо изложение;</li>
+      <li>за всеки правен въпрос: дали вероятно се допуска и защо (обуславящ ли е, конкретен ли е, има ли противоречие, обосновано ли е т. 3);</li>
+      <li>как да преформулирате слабите въпроси – с конкретна по-добра формулировка;</li>
+      <li>други слабости в изложението и жалбата, подредени по тежест.</li></ul></div>
+    {% else %}
+    <div class="card page-card judge-summary judge-{{ {'силно': 'good', 'средно': 'mid', 'слабо': 'bad'}[result.overall] }}">
+      <h2>Обща преценка: {{ result.overall }}</h2><p>{{ result.summary }}</p>
+      {% if not result.with_appeal %}<p class="muted small">Проверено само изложението – жалбата още нямаше.</p>{% endif %}</div>
+    {% for q in result.questions %}
+    <div class="card page-card"><h3>{{ q.question_id }} – <span class="judge-verdict v-{{ loop.index0 }} {{ {'вероятно се допуска': 'good', 'под въпрос': 'mid', 'вероятно не се допуска': 'bad'}[q.verdict] }}">{{ q.verdict }}</span></h3>
+      <p><b>Защо:</b> {{ q.reasons }}</p><p><b>Как да се поправи:</b> {{ q.fix }}</p></div>
+    {% endfor %}
+    {% if result.issues %}<div class="card page-card"><h2>Други слабости</h2>
+      {% for i in result.issues %}<div class="judge-issue"><span class="status-chip {{ {'критично': 'st-3', 'важно': 'st-1', 'дребно': 'st-0'}[i.severity] }}">{{ i.severity }} · {{ i.where }}</span>
+        <p>{{ i.problem }}</p><p class="muted"><b>Поправка:</b> {{ i.fix }}</p></div>{% endfor %}</div>{% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

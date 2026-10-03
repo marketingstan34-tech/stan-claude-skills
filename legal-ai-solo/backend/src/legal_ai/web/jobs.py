@@ -55,6 +55,8 @@ class JobRunner:
             return self._run_noai(job)
         if job.params.get("mode") == "appeal":
             return self._run_appeal(job)
+        if job.params.get("mode") == "judge":
+            return self._run_judge(job)
         from legal_ai.ai import OpenAIProvider, load_ai_config
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
@@ -142,6 +144,33 @@ class JobRunner:
             job.message = "AI пише жалбата (обстойна – обикновено 3–8 минути)…"
             appeal = generate(ai, run, text, chosen, context, style)
             write_atomic(d / "appeal.json", json.dumps(appeal, ensure_ascii=False, indent=1))
+            job.run_dir = run_id
+            job.status = "done"
+            job.message = "Готово."
+        except Exception as exc:  # noqa: BLE001 - shown to the local user
+            self._fail(job, exc)
+        finally:
+            if job.cleanup:
+                job.cleanup()
+
+    def _run_judge(self, job: Job) -> None:
+        """„Съдия от ВКС": one AI call reviews the statement and the appeal (texts given by the page)."""
+        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.cassation.judge import review
+        job.status = "running"
+        run_id = job.params["run_id"]
+        try:
+            d = self.runs_dir / run_id
+            run = load_run(self.runs_dir, run_id)
+            if run is None:
+                raise ValueError("Няма такава справка.")
+            text = (d / "appellate.txt").read_text(encoding="utf-8")
+            ai = OpenAIProvider(load_ai_config())
+            job.cleanup = ai.close
+            job.message = "„Съдия от ВКС“ чете изложението и жалбата (обикновено 1–3 минути)…"
+            result = review(ai, run, text, job.params.get("statement", ""), job.params.get("appeal", ""),
+                            job.params.get("admission", ""))
+            write_atomic(d / "judge.json", json.dumps(result, ensure_ascii=False, indent=1))
             job.run_dir = run_id
             job.status = "done"
             job.message = "Готово."
