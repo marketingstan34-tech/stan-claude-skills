@@ -89,7 +89,7 @@
                 <label><input type="radio" name="mode" value="noai" checked><span>Без AI · безплатно</span></label>
                 <label><input type="radio" name="mode" value="ai"><span>С AI · ~10 ¢</span></label>
               </span></div></div>
-          <div class="detail-right"><span class="detail-action-circle" title="Без AI: пътят на делото, обжалваният акт и цитираната практика. С AI: правни въпроси и практика „противоречи/подкрепя“.">{{ icon('ai', 11) }}</span></div>
+          <div class="detail-right"><span class="detail-action-circle help-tip" title="Без AI: пътят на делото, обжалваният акт и цитираната практика. С AI: правни въпроси и практика „противоречи/подкрепя“.">{{ icon('ai', 11) }}</span></div>
         </div>
         <button class="kit-submit" type="submit" {% if busy %}disabled{% endif %}>
           {{ 'Вече тече справка…' if busy else 'Започни справката' }}</button>

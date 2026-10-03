@@ -19,7 +19,7 @@
       </div>
       <div class="time-slots-section"><div class="slots-row">
         {% if d.proceeding_article %}<span class="time-slot-pill">чл. {{ d.proceeding_article }} ГПК</span>{% endif %}
-        <span class="meetings-badge-pill"><span>Абзаци</span><span class="meetings-count-circle">{{ paragraphs|length }}</span></span>
+        <span class="count-chip">Абзаци: {{ paragraphs|length }}</span>
       </div></div>
     </div>
     <div class="card details-card">
@@ -29,9 +29,8 @@
             ('Допуснато по', d.admission_grounds|join(', ') if d.admission_grounds else '—'),
             ('Изтеглено', (d.retrieved_at.strftime('%d.%m.%Y %H:%M UTC') if d.retrieved_at else 'неизвестно') ~ ' · ' ~ d.acquisition),
             ('Версия на текста', d.text_hash[:12] ~ ' · ' ~ d.parser_version)] %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
-          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
-          <div class="detail-right"><span class="detail-action-circle">{{ icon('info', 11) }}</span></div></div>
+        <div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>
         {% endfor %}
       </div>
     </div>

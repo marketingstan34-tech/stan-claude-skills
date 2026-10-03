@@ -349,3 +349,9 @@ def test_notes_reach_the_analysis_prompt():
     with pytest.raises(RuntimeError):
         run_analysis(AI(), None, doc, date(2022, 1, 1), notes="Позиция на клиента.")
     assert P.NOTES_HEADER in seen[0] and seen[0].index("Текст на решението.") < seen[0].index("Позиция на клиента.")
+
+
+def test_help_and_report_filter_pages(client, monkeypatch):
+    c = _local(client, monkeypatch)
+    assert "Нов случай – стъпка по стъпка" in c.get("/help").text
+    assert c.get("/reports?mode=ai").status_code == 200 and c.get("/reports?mode=x").status_code == 200

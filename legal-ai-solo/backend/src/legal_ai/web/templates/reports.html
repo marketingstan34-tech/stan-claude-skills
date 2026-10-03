@@ -15,8 +15,8 @@
         <a class="card-options-btn" href="/analyze" title="Нов случай">{{ icon('plus') }}</a>
       </div>
       <div class="time-slots-section"><div class="slots-row">
-        <span class="time-slot-pill">Без AI: {{ reports|selectattr('kind', 'equalto', 'trace')|list|length }}</span>
-        <span class="meetings-badge-pill"><span>С AI</span><span class="meetings-count-circle">{{ reports|selectattr('kind', 'equalto', 'run')|list|length }}</span></span>
+        <a class="time-slot-pill link-pill {{ 'active' if mode == 'noai' }}" href="{{ '/reports' if mode == 'noai' else '/reports?mode=noai' }}" title="Покажи само тези">Без AI: {{ counts.noai }}</a>
+        <a class="meetings-badge-pill {{ 'active' if mode == 'ai' }}" href="{{ '/reports' if mode == 'ai' else '/reports?mode=ai' }}" title="Покажи само тези"><span>С AI</span><span class="meetings-count-circle">{{ counts.ai }}</span></a>
       </div></div>
       <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Нов случай</a>
     </div>

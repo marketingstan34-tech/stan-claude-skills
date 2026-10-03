@@ -16,19 +16,19 @@
       </div>
       <div class="time-slots-section"><div class="slots-row">
         <span class="time-slot-pill">{{ corpus.first.strftime('%Y') if corpus.n else '—' }} – {{ corpus.last.strftime('%Y') if corpus.n else '—' }}</span>
-        <span class="meetings-badge-pill"><span>Актове</span><span class="meetings-count-circle wide-count">{{ corpus.n }}</span></span>
+        <a class="meetings-badge-pill" href="/?kind=all" title="Всички актове"><span>Актове</span><span class="meetings-count-circle wide-count">{{ corpus.n }}</span></a>
       </div></div>
     </div>
     <div class="card details-card">
       <h2 class="details-title">Какво има</h2>
       <div class="details-list">
-        {% for label, value in [('Граждански дела (ВКС)', corpus.ngr), ('Търговски дела (ВКС)', corpus.ntarg),
-            ('Решения по чл. 290 ГПК', corpus.n290), ('Тълкувателни решения', corpus.ntr)] %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+        {% for kind, label, value in [('gr', 'Граждански дела (ВКС)', corpus.ngr), ('targ', 'Търговски дела (ВКС)', corpus.ntarg),
+            ('290', 'Решения по чл. 290 ГПК', corpus.n290), ('tr', 'Тълкувателни решения', corpus.ntr)] %}
+        <a class="detail-item-row link-row" href="/?kind={{ kind }}" title="Покажи списъка"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
-          <div class="detail-right"><span class="detail-action-circle">{{ icon('db', 11) }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('right', 11) }}</span></div></a>
         {% endfor %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+        <div class="detail-item-row info-row"><div class="detail-left">
           <div class="detail-text"><span class="detail-label">Пълнота на списъците</span><span class="detail-value">Над 249 реда се делят</span></div></div>
           <div class="detail-right">{% if corpus.truncated_lists %}<span class="online-badge offline">{{ corpus.truncated_lists }} отрязани</span>{% else %}<span class="online-badge online">пълни</span>{% endif %}</div></div>
       </div>

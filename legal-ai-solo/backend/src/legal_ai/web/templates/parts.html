@@ -41,7 +41,7 @@
 {% macro calendar_card(month, base_url) -%}
 <div class="card calendar-card">
   <div class="card-top-header">
-    <div class="header-title-group"><span class="card-section-title">Решения на ВКС: {{ month.total }}</span>
+    <div class="header-title-group"><a class="card-section-title link-title" href="/corpus?m={{ month.year }}-{{ '%02d' % month.month }}">Решения на ВКС: {{ month.total }}</a>
       <span class="section-title-icon">{{ icon('cal', 14) }}</span></div>
     <a class="card-options-btn" href="/corpus?m={{ month.year }}-{{ '%02d' % month.month }}" title="Към базата">{{ icon('more', 14) }}</a>
   </div>
@@ -52,8 +52,7 @@
   </div>
   <div class="calendar-grid-matrix">
     {% for d in month.days %}{% set iso = '%04d-%02d-%02d' % (month.year, month.month, d.day) %}{% set tip = d.day ~ '.' ~ ('%02d' % month.month) ~ '.' ~ month.year ~ ': ' ~ d.n ~ ' решения' ~ (', тълкувателно решение' if d.tr else '') %}
-    {%- if d.n or d.tr %}<a class="cal-day-cell cal-{{ d.type }}" href="/?d={{ iso }}" title="{{ tip }} – отвори">{{ d.day }}</a>
-    {%- else %}<div class="cal-day-cell cal-{{ d.type }}" title="{{ tip }}">{{ d.day }}</div>{% endif %}{% endfor %}
+    <a class="cal-day-cell cal-{{ d.type }}" href="/?d={{ iso }}" title="{{ tip }} – отвори">{{ d.day }}</a>{% endfor %}
   </div>
 </div>
 {%- endmacro %}
@@ -63,15 +62,15 @@
   <div class="card-top-header">
     <div class="header-title-group"><span class="card-section-title">Попълване на базата</span>
       <span class="section-title-icon">{{ icon('msg', 14) }}</span></div>
-    <a class="view-all-link" href="/corpus">Виж всички</a>
+    <a class="view-all-link" href="/?kind=all">Виж всички</a>
   </div>
   <div class="inbox-messages-list">
     {% for e in events %}
-    <a class="inbox-msg-item {{ 'active-dark' if loop.first }}" href="/corpus">
+    <a class="inbox-msg-item {{ 'active-dark' if loop.first }}" href="/?kind={{ 'gr' if e.initials == 'ГК' else 'targ' }}" title="Покажи решенията">
       <span class="inbox-sender-avatar initials-avatar">{{ e.initials }}</span>
       <div class="inbox-msg-content"><div class="inbox-msg-sender">{{ e.title }}</div>
         <div class="inbox-msg-snippet">{{ e.text }}</div></div>
-      <span class="inbox-action-btn">{{ icon('down', 13) }}</span>
+      <span class="inbox-action-btn">{{ icon('right', 13) }}</span>
     </a>
     {% else %}
     <p class="muted">Базата още не се попълва.</p>

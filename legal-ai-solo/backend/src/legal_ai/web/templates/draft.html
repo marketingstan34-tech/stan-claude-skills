@@ -7,15 +7,17 @@
 {% block content %}
 <div class="dash-grid-container">
   <div class="dash-col-left">
-    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '') }}
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
     <div class="card details-card">
       <h2 class="details-title">Как да я ползвате</h2>
       <div class="details-list">
         {% for label, value, ic in [('1. Свалете', 'Word файл за редакция', 'down'), ('2. Попълнете', 'всичко в [квадратни скоби]', 'doc'),
             ('3. Проверете', 'всеки въпрос, извод и решение', 'info'), ('4. Махнете', 'жълтите бележки преди подаване', 'hash')] %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+        {% if loop.first %}<a class="detail-item-row link-row" href="/runs/{{ run_id }}/draft.docx"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
-          <div class="detail-right"><span class="detail-action-circle">{{ icon(ic, 11) }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('down', 11) }}</span></div></a>
+        {% else %}<div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft.docx" style="display:block;text-align:center">Свали като Word</a>
         <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>

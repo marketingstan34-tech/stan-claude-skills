@@ -81,7 +81,8 @@ def create_app() -> FastAPI:
     def render(request: Request, name: str, ctx: dict, status_code: int = 200):
         return _TEMPLATES.TemplateResponse(request, name, {
             "running_job": runner.running(),
-            "today": date.today().strftime("%d.%m.%Y"), **ctx}, status_code=status_code)
+            "today": date.today().strftime("%d.%m.%Y"), "today_iso": date.today().isoformat(),
+            **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
         cur.execute("""
@@ -144,16 +145,27 @@ def create_app() -> FastAPI:
             cur.execute("SELECT 1")
         return JSONResponse({"status": "ok"})
 
+    KINDS = {   # lists opened from the corpus page: (title, SQL condition without user values)
+        "gr": ("Граждански дела (ВКС)", "source = 'vks' AND case_type = 'гр.'"),
+        "targ": ("Търговски дела (ВКС)", "source = 'vks' AND case_type = 'търг.'"),
+        "290": ("Решения по чл. 290 ГПК", "proceeding_article = '290'"),
+        "tr": ("Тълкувателни решения", "source = 'vks-tr'"),
+        "all": ("Всички актове в базата", "true"),
+    }
+    PER_PAGE = 50
+
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, q: str = Query("", max_length=500), only_290: bool = False,
-              d: str = Query("", max_length=10)):
+              d: str = Query("", max_length=10), kind: str = Query("", max_length=10),
+              page: int = Query(1, ge=1, le=10_000)):
         result, day, day_list = None, None, []
+        listing = None
         if re.fullmatch(r"\d{4}-\d{2}-\d{2}", d):
             try:
                 day = date.fromisoformat(d)
             except ValueError:
                 day = None
-        if q.strip() and not day:   # a calendar day is its own list; the search box starts a new search
+        if q.strip() and not day and kind not in KINDS:   # a day or a list is its own page
             with connect(settings.database_url) as conn:
                 result = search(conn, q, only_290=only_290)
         with connect(settings.database_url) as conn, conn.cursor() as cur:
@@ -166,8 +178,22 @@ def create_app() -> FastAPI:
                     ORDER BY source DESC, chamber,
                              NULLIF(regexp_replace(act_number, '\\D', '', 'g'), '')::bigint NULLS LAST""", (day,))
                 day_list = cur.fetchall()
+            elif kind in KINDS:   # one kind of decision, newest first
+                title, cond = KINDS[kind]
+                cur.execute(f"SELECT count(*) AS n FROM decisions WHERE current_version_id IS NOT NULL AND {cond}")
+                total = cur.fetchone()["n"]
+                cur.execute(f"""
+                    SELECT id, source, act_type, act_number, act_date, case_type, case_number, case_year,
+                           chamber, proceeding_article FROM decisions
+                    WHERE current_version_id IS NOT NULL AND {cond}
+                    ORDER BY act_date DESC NULLS LAST, id LIMIT %s OFFSET %s""",
+                            (PER_PAGE, (page - 1) * PER_PAGE))
+                day_list = cur.fetchall()
+                listing = {"kind": kind, "title": title, "total": total, "page": page,
+                           "pages": max(1, -(-total // PER_PAGE))}
         return render(request, "search.html", {
             "q": q, "only_290": only_290, "result": result, "corpus": corpus, "day": day, "day_list": day_list,
+            "listing": listing,
         })
 
     @app.get("/decisions/{decision_id}", response_class=HTMLResponse)
@@ -220,8 +246,21 @@ def create_app() -> FastAPI:
         return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), **dashboard(m)})
 
     @app.get("/reports", response_class=HTMLResponse)
-    def reports_page(request: Request, m: str | None = Query(None, max_length=7)):
-        return render(request, "reports.html", dashboard(m))
+    def reports_page(request: Request, m: str | None = Query(None, max_length=7),
+                     mode: str = Query("", max_length=5)):
+        ctx = dashboard(m)
+        all_reports = ctx["reports"]
+        ctx["counts"] = {"noai": sum(r["kind"] == "trace" for r in all_reports),
+                         "ai": sum(r["kind"] == "run" for r in all_reports)}
+        mode = mode if mode in ("ai", "noai") else ""
+        if mode:
+            ctx["reports"] = [r for r in all_reports if r["kind"] == ("run" if mode == "ai" else "trace")]
+        ctx["mode"] = mode
+        return render(request, "reports.html", ctx)
+
+    @app.get("/help", response_class=HTMLResponse)
+    def help_page(request: Request):
+        return render(request, "help.html", {})
 
     @app.get("/corpus", response_class=HTMLResponse)
     def corpus_page(request: Request, m: str | None = Query(None, max_length=7)):

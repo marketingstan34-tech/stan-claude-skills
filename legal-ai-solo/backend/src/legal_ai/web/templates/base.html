@@ -58,8 +58,8 @@
       </div>
       <div class="title-right">
         {% block title_right %}
-        <span class="white-pill-btn"><span class="status-pill-dot"></span><span>Локално · не е правно становище</span></span>
-        <span class="white-pill-btn with-icon"><span>{{ today }}</span>{{ icon('cal', 14) }}</span>
+        <a class="white-pill-btn link-pill" href="/help" title="Как се работи с програмата"><span class="status-pill-dot"></span><span>Как се работи · не е правно становище</span></a>
+        <a class="white-pill-btn with-icon link-pill" href="/?d={{ today_iso }}" title="Решенията на ВКС от днес"><span>{{ today }}</span>{{ icon('cal', 14) }}</a>
         {% endblock %}
       </div>
     </div>

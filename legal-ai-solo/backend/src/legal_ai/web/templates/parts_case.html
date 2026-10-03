@@ -1,7 +1,7 @@
 {# Case header and case-path cards shared by the no-AI and AI report pages (kit markup). #}
 {% from "icons.html" import icon %}
 
-{% macro case_profile(label, url, mode, created, extra_pills) -%}
+{% macro case_profile(label, url, mode, created, extra_pills, path_href='#path') -%}
 {% set m = label.split(', ') %}
 <div class="card profile-card">
   <div class="profile-header-row">
@@ -12,7 +12,7 @@
   </div>
   <div class="profile-action-buttons">
     {% if url %}<a class="action-circle-btn black-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Въззивното решение в сайта на съда">{{ icon('doc') }}</a>{% endif %}
-    <a class="action-circle-btn light-btn" href="#path" title="Пътят на делото">{{ icon('path') }}</a>
+    <a class="action-circle-btn light-btn" href="{{ path_href }}" title="Пътят на делото">{{ icon('path') }}</a>
     <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
     <a class="action-circle-btn light-btn" href="/reports" title="Всички справки">{{ icon('msg') }}</a>
   </div>
@@ -20,7 +20,7 @@
     <span class="slots-label">Справка</span>
     <div class="slots-row">
       <span class="time-slot-pill">{{ created }} {{ icon('cal', 13) }}</span>
-      <span class="meetings-badge-pill"><span>{{ mode }}</span>{{ extra_pills }}</span>
+      <span class="count-chip">{{ mode }}{{ extra_pills }}</span>
     </div>
   </div>
 </div>
@@ -29,8 +29,8 @@
 {% macro path_cards(path) -%}
 <div class="ongoing-projects-section" id="path">
   <div class="projects-header-row">
-    <div class="dropdown-wrapper"><span class="ongoing-dropdown-btn">Пътят на делото {{ icon('chev', 14) }}</span></div>
-    <div class="projects-action-icons"><span class="proj-icon-circle-btn" title="Всяка връзка е проверена в сайта на съда; непотвърдените са маркирани.">{{ icon('info', 14) }}</span></div>
+    <div class="dropdown-wrapper"><h3 class="section-heading">Пътят на делото</h3></div>
+    <div class="projects-action-icons"><span class="proj-icon-circle-btn help-tip" title="Всяка връзка е проверена в сайта на съда; непотвърдените са маркирани.">{{ icon('info', 14) }}</span></div>
   </div>
   <div class="project-cards-grid">
   {% for i in path %}

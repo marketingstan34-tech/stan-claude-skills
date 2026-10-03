@@ -18,7 +18,7 @@
       <div class="time-slots-section">
         <div class="slots-row">
           <label class="mode-switch"><input type="checkbox" name="only_290" value="true" {% if only_290 %}checked{% endif %}><span>Само чл. 290 ГПК</span></label>
-          <span class="meetings-badge-pill"><span>Намерени</span><span class="meetings-count-circle">{{ result.decisions|length if result else 0 }}</span></span>
+          <span class="count-chip">Намерени: {{ result.decisions|length if result else (listing.total if listing else day_list|length) }}</span>
         </div>
       </div>
       <button class="kit-submit" type="submit">Търси</button>
@@ -27,15 +27,15 @@
     <div class="card details-card">
       <h2 class="details-title">Базата</h2>
       <div class="details-list">
-        {% for label, value in [('Актове общо', corpus.n), ('Решения по чл. 290 ГПК', corpus.n290), ('Тълкувателни решения', corpus.ntr),
-            ('Период', (corpus.first.strftime('%d.%m.%Y') ~ ' – ' ~ corpus.last.strftime('%d.%m.%Y')) if corpus.n else '—')] %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+        {% for label, value, href in [('Актове общо', corpus.n, '/?kind=all'), ('Решения по чл. 290 ГПК', corpus.n290, '/?kind=290'),
+            ('Тълкувателни решения', corpus.ntr, '/?kind=tr'),
+            ('Период', (corpus.first.strftime('%d.%m.%Y') ~ ' – ' ~ corpus.last.strftime('%d.%m.%Y')) if corpus.n else '—', '/corpus')] %}
+        <a class="detail-item-row link-row" href="{{ href }}" title="Покажи"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
-          <div class="detail-right"><span class="detail-action-circle">{{ icon('db', 11) }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('right', 11) }}</span></div></a>
         {% endfor %}
-        <div class="detail-item-row"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
-          <div class="detail-text"><span class="detail-label">Подредба</span><span class="detail-value">По брой съвпаднали думи</span></div></div>
-          <div class="detail-right">{% if corpus.truncated_lists %}<span class="online-badge offline">{{ corpus.truncated_lists }} отрязани</span>{% else %}<span class="online-badge online">пълни</span>{% endif %}</div></div>
+        <div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">Подредба на резултатите</span><span class="detail-value">По брой съвпаднали думи</span></div></div></div>
       </div>
     </div>
   </div>
@@ -43,17 +43,30 @@
   <div class="dash-col-right scroll-col">
     {% if corpus.n == 0 %}
       <div class="notice">Базата е празна. Заредете актове с <code>legal-ai build-corpus</code>.</div>
-    {% elif day %}
+    {% elif day or listing %}
+      {% if listing %}
+      <div class="card page-card"><h2>{{ listing.title }}: {{ listing.total }}</h2>
+        <p class="muted">Най-новите най-отгоре. Страница {{ listing.page }} от {{ listing.pages }}. Щракнете акт, за да го прочетете.</p>
+        {% if not day_list %}<p class="muted">Няма актове от този вид в базата.</p>{% endif %}</div>
+      {% else %}
       <div class="card page-card"><h2>Решения от {{ day.strftime('%d.%m.%Y') }} в базата: {{ day_list|length }}</h2>
         {% if not day_list %}<p class="muted">За този ден няма решения в базата.</p>{% endif %}</div>
+      {% endif %}
       {% for d in day_list %}
       <a class="card page-card inbox-msg-item result-head" href="/decisions/{{ d.id }}">
         <span class="inbox-sender-avatar initials-avatar">{{ 'ТР' if d.source == 'vks-tr' else 'ВКС' }}</span>
         <div class="inbox-msg-content"><div class="inbox-msg-sender link">{{ (d.act_type or ('тълкувателно решение' if d.source == 'vks-tr' else 'акт'))|capitalize }} № {{ d.act_number or '?' }} по {{ d.case_type or '' }} дело № {{ d.case_number or '?' }}/{{ d.case_year or '?' }}</div>
-          <div class="inbox-msg-snippet">{{ d.chamber or '' }}{% if d.proceeding_article %} · чл. {{ d.proceeding_article }}{% endif %}</div></div>
+          <div class="inbox-msg-snippet">{% if d.act_date %}{{ d.act_date.strftime('%d.%m.%Y') }} · {% endif %}{{ d.chamber or '' }}{% if d.proceeding_article and d.proceeding_article != 'ТР' %} · чл. {{ d.proceeding_article }}{% endif %}</div></div>
         <span class="inbox-action-btn">{{ icon('right', 13) }}</span>
       </a>
       {% endfor %}
+      {% if listing and listing.pages > 1 %}
+      <div class="pager">
+        {% if listing.page > 1 %}<a class="white-pill-btn link-pill" href="/?kind={{ listing.kind }}&page={{ listing.page - 1 }}">← По-нови</a>{% endif %}
+        <span class="muted">{{ listing.page }} / {{ listing.pages }}</span>
+        {% if listing.page < listing.pages %}<a class="white-pill-btn link-pill" href="/?kind={{ listing.kind }}&page={{ listing.page + 1 }}">По-стари →</a>{% endif %}
+      </div>
+      {% endif %}
     {% elif not result %}
       <div class="card page-card"><h2>Как да търсите</h2>
         <p>Напишете 2–4 характерни думи за правния проблем, напр. „задатък неизпълнение“ или „неподеляем имот 349“.
