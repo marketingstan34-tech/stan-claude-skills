@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Начало · Legal AI Solo{% endblock %}
+{% block page_title %}Начало{% endblock %}
+{% block page_hint %}Всичко текущо на едно място: срокове, какво остава по всеки случай и следващата стъпка. Случаите със статус „подадена жалба“ или „приключен“ не са тук – те са в „Справки“.{% endblock %}
+{% block content %}
+<div class="start-page">
+  {% if running_job %}
+  <a class="card page-card start-running" href="/jobs/{{ running_job.id }}">{{ icon('bell', 16) }}
+    <span><b>Тече справка</b> – {{ running_job.message or 'работи…' }} Щракнете, за да я видите.</span></a>
+  {% endif %}
+
+  <div class="start-stats">
+    <a class="card stat-card" href="/reports?status=нов"><span class="stat-num">{{ counts['нов'] + counts['в работа'] }}</span><span class="stat-label">активни случая</span></a>
+    <a class="card stat-card {{ 'stat-warn' if due_soon }}" href="#deadlines"><span class="stat-num">{{ due_soon|length }}</span><span class="stat-label">срока до 7 дни</span></a>
+    <a class="card stat-card" href="/reports?status=подадена жалба"><span class="stat-num">{{ counts['подадена жалба'] }}</span><span class="stat-label">подадени жалби</span></a>
+    <a class="card stat-card" href="/reports?status=приключен"><span class="stat-num">{{ counts['приключен'] }}</span><span class="stat-label">приключени</span></a>
+    <a class="card stat-card stat-new" href="/analyze"><span class="stat-num">{{ icon('plus', 22) }}</span><span class="stat-label">нов случай</span></a>
+  </div>
+
+  <div class="start-grid">
+    <div class="start-main">
+      <h2 class="start-h" id="deadlines">Текущи случаи и какво остава</h2>
+      {% if not open_cases %}<div class="card page-card"><p>Няма активни случаи. <a class="link" href="/analyze">Започнете нов случай.</a></p></div>{% endif %}
+      {% for c in open_cases %}
+      <div class="card page-card case-row">
+        <div class="case-row-head">
+          <a class="link doc-title" href="{{ c.url }}">{{ c.kind }} {{ c.case or c.label }}</a>
+          <span class="muted small">{{ c.court }} · {{ c.mode }} · {{ c.created }}</span>
+          <span class="status-chip st-{{ 0 if c.status == 'нов' else 1 }}">{{ c.status }}</span>
+          {% if c.due %}<span class="deadline {{ 'bad' if c.days_left < 0 else ('warn' if c.days_left <= 7 else 'ok') }}">
+            {% if c.days_left >= 0 %}срок {{ c.due }} · {{ c.days_left }} дни{% else %}срокът е изтекъл ({{ c.due }}){% endif %}</span>
+          {% else %}<a class="deadline none" href="{{ c.url }}#case-data">без дата на връчване</a>{% endif %}
+        </div>
+        <div class="case-progress"><div class="case-progress-fill" style="width: {{ (100 * c.done / c.steps|length)|round|int }}%"></div></div>
+        <ul class="case-steps">
+          {% for s in c.steps %}<li class="{{ 'done' if s.done else ('next' if c.next and s.label == c.next.label else '') }}">
+            {% if s.done %}✓{% else %}○{% endif %} <a href="{{ s.href }}">{{ s.label }}</a></li>{% endfor %}
+        </ul>
+        {% if c.next %}<a class="kit-submit next-step" href="{{ c.next.href }}">Следваща стъпка: {{ c.next.label }} →</a>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="start-side">
+      <h2 class="start-h">Последни справки</h2>
+      <div class="card page-card">
+        {% for r in recent %}<a class="start-recent" href="{{ r.url }}"><b>{{ r.kind }} {{ r.case or r.label }}</b>
+          <span class="muted small">{{ r.mode }} · {{ r.created }} · {{ r.status }}</span></a>
+        {% else %}<p class="muted">Още няма.</p>{% endfor %}
+        <a class="link small" href="/reports">Всички справки →</a>
+      </div>
+      <h2 class="start-h">Базата</h2>
+      <div class="card page-card">
+        {% if corpus %}<p><b>{{ corpus.n }}</b> акта · <b>{{ corpus.n290 }}</b> по чл. 290 · <b>{{ corpus.ntr }}</b> тълкувателни</p>
+        {% if corpus.last %}<p class="muted small">най-новото решение: {{ corpus.last.strftime('%d.%m.%Y') }}</p>{% endif %}
+        {% else %}<p class="muted">Базата не е достъпна в момента.</p>{% endif %}
+        {% for e in events %}<p class="muted small">{{ e.title }}: {{ e.text }}</p>{% endfor %}
+        <a class="link small" href="/corpus">Към базата →</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

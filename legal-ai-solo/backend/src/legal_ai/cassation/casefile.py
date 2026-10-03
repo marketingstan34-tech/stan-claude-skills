@@ -121,3 +121,29 @@ def decision_number(text: str) -> str:
 def case_kind(label_or_text: str) -> str:
     t = (label_or_text or "").lower()
     return "търговски" if ("търговско" in t or "т.д." in t.replace(" ", "")) else "граждански" if t else ""
+
+
+def steps(rtype: str, rid: str, case: dict, has_appeal: bool, edited: set[str]) -> list[dict]:
+    """What is done and what is left on a case, in working order; each step links to where it is done.
+
+    `rtype`: "run" (AI report) or "trace" (no-AI report); `edited`: {"draft", "appeal"} edited by the lawyer.
+    """
+    base = f"/{'runs' if rtype == 'run' else 'traces'}/{rid}"
+    ai = rtype == "run"
+    out = [
+        {"label": "Справка с AI (въпроси и практика)", "done": ai, "href": "/analyze"},
+        {"label": "Дата на връчване (срок)", "done": bool(case.get("served")), "href": f"{base}#case-data"},
+        {"label": "Праг по чл. 280, ал. 3", "done": case.get("amount") is not None or bool(case.get("property")),
+         "href": f"{base}#case-data"},
+    ]
+    if ai:
+        out += [
+            {"label": "Отметнати въпроси", "done": bool(case.get("questions")), "href": f"{base}#case-data"},
+            {"label": "Страни и адвокат", "done": bool(case.get("client") and case.get("lawyer")),
+             "href": f"{base}#case-data"},
+            {"label": "Изложение прегледано", "done": "draft" in edited, "href": f"{base}/draft/edit"},
+            {"label": "Касационна жалба написана", "done": has_appeal, "href": f"{base}/appeal"},
+            {"label": "Жалба прегледана", "done": "appeal" in edited, "href": f"{base}/appeal/edit"},
+        ]
+    out.append({"label": "Подадена", "done": case.get("status") in ("подадена жалба", "приключен"), "href": base})
+    return out

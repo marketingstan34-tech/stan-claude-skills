@@ -48,7 +48,7 @@ def test_login_flow_and_cookie(make_client, monkeypatch):
     assert r.status_code == 401 and "Грешна парола" in r.text
     r = c.post("/login", data={"password": "синтетична-парола-1", "next": "//evil.example", "remember": "1"},
                headers=origin, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/analyze"
+    assert r.status_code == 303 and r.headers["location"] == "/start"
     cookie = r.headers["set-cookie"]
     assert "HttpOnly" in cookie and "Secure" in cookie and "синтетична" not in cookie
     assert c.get("/reports").status_code == 200

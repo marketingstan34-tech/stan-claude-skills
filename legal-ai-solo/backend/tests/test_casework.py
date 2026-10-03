@@ -333,3 +333,15 @@ def test_report_type_is_not_overwritten_by_the_case_kind(client):
     page = c.get("/reports").text
     assert 'С AI</span><span class="meetings-count-circle">1</span>' in page
     assert "в.т. 899/2021" in page
+
+
+def test_start_page_shows_open_cases_and_next_step(client, monkeypatch):
+    c, d = client
+    monkeypatch.setattr("legal_ai.web.app.connect", lambda url: (_ for _ in ()).throw(
+        __import__("psycopg").OperationalError("no db")))
+    casefile.save_case(d, {"status": "в работа", "served": date.today().isoformat(), "property": True})
+    page = c.get("/start").text
+    assert "Текущи случаи и какво остава" in page and "899/2021" in page
+    assert "Следваща стъпка: Отметнати въпроси" in page and "срок" in page
+    casefile.set_status(d, "приключен")
+    assert "Няма активни случаи" in c.get("/start").text

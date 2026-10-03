@@ -87,6 +87,29 @@ def list_reports(runs_dir: Path, traces_dir: Path) -> list[dict]:
     return out
 
 
+def overview(runs_dir: Path, traces_dir: Path) -> dict:
+    """The start page: open cases with deadlines and what is left, and counts by status."""
+    from legal_ai.cassation.casefile import steps
+    from legal_ai.cassation.edits import load_edit
+    reports = list_reports(runs_dir, traces_dir)
+    open_cases = []
+    for r in reports:
+        if r["status"] not in ("нов", "в работа"):
+            continue
+        d = (runs_dir if r["rtype"] == "run" else traces_dir) / r["id"]
+        case = load_case(d)
+        edited = {doc for doc in ("draft", "appeal") if r["rtype"] == "run" and load_edit(d, doc)}
+        st = steps(r["rtype"], r["id"], case, (d / "appeal.json").exists(), edited)
+        nxt = next((s for s in st if not s["done"]), None)
+        open_cases.append({**r, "steps": st, "done": sum(s["done"] for s in st), "next": nxt})
+    # deadlines first (soonest), then cases without a service date, newest first
+    open_cases.sort(key=lambda c: (c.get("days_left") is None, c.get("days_left") or 0))
+    week = [c for c in open_cases if c.get("days_left") is not None and c["days_left"] <= 7]
+    counts = {s: sum(r["status"] == s for r in reports) for s in ("нов", "в работа", "подадена жалба", "приключен")}
+    return {"open_cases": open_cases, "due_soon": week, "counts": counts, "recent": reports[:5],
+            "total": len(reports)}
+
+
 def month_param(value: str | None, default: date) -> tuple[int, int]:
     if value and re.fullmatch(r"\d{4}-\d{2}", value):
         y, m = (int(x) for x in value.split("-"))

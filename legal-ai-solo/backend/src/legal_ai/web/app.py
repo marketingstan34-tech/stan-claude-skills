@@ -112,15 +112,15 @@ def create_app() -> FastAPI:
         return corpus
 
     def safe_next(value: str) -> str:
-        return value if value.startswith("/") and not value.startswith("//") and "\\" not in value else "/analyze"
+        return value if value.startswith("/") and not value.startswith("//") and "\\" not in value else "/start"
 
     @app.get("/login", response_class=HTMLResponse)
-    def login_form(request: Request, next: str = Query("/analyze", max_length=500)):
+    def login_form(request: Request, next: str = Query("/start", max_length=500)):
         return _TEMPLATES.TemplateResponse(request, "login.html", {
             "configured": bool(auth.password()), "next": safe_next(next), "error": ""})
 
     @app.post("/login")
-    def login(request: Request, password: str = Form("", max_length=500), next: str = Form("/analyze", max_length=500),
+    def login(request: Request, password: str = Form("", max_length=500), next: str = Form("/start", max_length=500),
               remember: str = Form("")):
         # X-Forwarded-For is set by Railway's edge; without that proxy the header is the client's own
         forwarded = request.headers.get("x-forwarded-for", "") if os.environ.get("RAILWAY_ENVIRONMENT") else ""
@@ -272,6 +272,17 @@ def create_app() -> FastAPI:
             ctx["reports"] = [r for r in all_reports if r["rtype"] == ("run" if mode == "ai" else "trace")]
         ctx["mode"] = mode
         return render(request, "reports.html", ctx)
+
+    @app.get("/start", response_class=HTMLResponse)
+    def start_page(request: Request):
+        from legal_ai.web.views import overview
+        try:
+            with connect(settings.database_url) as conn, conn.cursor() as cur:
+                corpus = corpus_counts(cur)
+        except psycopg.OperationalError:
+            corpus = None
+        return render(request, "start.html", {**overview(runs_dir, traces_dir), "corpus": corpus,
+                                              "events": corpus_events(storage)[:3]})
 
     @app.get("/help", response_class=HTMLResponse)
     def help_page(request: Request):
