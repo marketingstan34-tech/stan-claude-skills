@@ -63,7 +63,12 @@ def create_app() -> FastAPI:
                        count(*) FILTER (WHERE proceeding_article = '290') AS n290
                 FROM decisions WHERE current_version_id IS NOT NULL""")
             corpus = cur.fetchone()
-            cur.execute("SELECT count(*) AS n FROM source_list_runs WHERE truncated")
+            # a truncated list that was then split by chamber is covered by its parts
+            cur.execute(r"""
+                SELECT count(*) AS n FROM source_list_runs t
+                WHERE t.truncated AND NOT EXISTS (
+                    SELECT 1 FROM source_list_runs s
+                    WHERE s.source = t.source AND s.description LIKE t.description || '\_\_%')""")
             corpus["truncated_lists"] = cur.fetchone()["n"]
         return _TEMPLATES.TemplateResponse(request, "search.html", {
             "q": q, "only_290": only_290, "result": result, "corpus": corpus,
