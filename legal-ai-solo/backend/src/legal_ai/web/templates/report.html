@@ -70,6 +70,9 @@
       {% for s in run.searches if s.question_id == q.id and s.rows is defined %}
         {% if s.local %}<li class="muted">Собствена база ({{ s.words|join('; ') }}): {{ s.rows }} акта</li>
         {% else %}<li class="muted">{{ s.words|join(' + ') }} ({{ s.case_type }}): {{ s.rows }} резултата{% if s.truncated %} — отрязан списък{% endif %}</li>{% endif %}
+      {% endfor %}
+      {% for s in run.searches if s.question_id == q.id and s.live_skipped %}
+        <li class="muted">{{ s.words|join(' + ') }}: {{ s.skipped }}</li>
       {% endfor %}</ul></details>
     </div>
     {% endfor %}
