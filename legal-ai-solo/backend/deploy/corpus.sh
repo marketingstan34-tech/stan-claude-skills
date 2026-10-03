@@ -5,7 +5,14 @@ D="$PRIVATE_STORAGE_PATH/raw/vks-corpus"
 NOW=$(date -u +%Y-%m)
 YEAR=$(date -u +%Y)
 echo "$(date -u +%FT%TZ) corpus: start"
-legal-ai fetch-tr --from-year 2008 --to-year "$YEAR" || echo "fetch-tr failed, continuing"
+# interpretative decisions: fetched once, then again with the weekly refresh (a restart or a new
+# deploy must not spend ~12 minutes fetching them again)
+TR_DONE="$PRIVATE_STORAGE_PATH/raw/.tr-fetched"
+if [ ! -f "$TR_DONE" ] || [ -n "$(find "$TR_DONE" -mtime +6 2>/dev/null)" ]; then
+  legal-ai fetch-tr --from-year 2008 --to-year "$YEAR" && touch "$TR_DONE" || echo "fetch-tr failed, continuing"
+else
+  echo "fetch-tr: done within the last week, skipped"
+fi
 legal-ai build-corpus --from 2022-07 --to "$NOW" --newest-first || echo "build-corpus (recent) failed"
 legal-ai build-corpus --from "${CORPUS_FROM:-2012-01}" --to 2022-06 --newest-first || echo "build-corpus (older) failed"
 echo "$(date -u +%FT%TZ) corpus: initial build done"
@@ -16,6 +23,7 @@ while true; do
   for q in $(ls "$D"/gr "$D"/targ 2>/dev/null | grep -E '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' | sort -u | tail -n 2); do
     rm -f "$D/gr/$q/.ingested" "$D/targ/$q/.ingested"
   done
+  legal-ai fetch-tr --from-year 2008 --to-year "$(date -u +%Y)" && touch "$TR_DONE" || echo "weekly fetch-tr failed"
   legal-ai build-corpus --from 2022-07 --to "$NOW" --newest-first || echo "weekly refresh failed"
   echo "$(date -u +%FT%TZ) corpus: weekly refresh done"
 done
