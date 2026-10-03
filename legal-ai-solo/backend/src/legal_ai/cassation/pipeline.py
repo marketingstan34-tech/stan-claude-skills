@@ -7,8 +7,9 @@ the full local corpus exists, and the report says so.
 from __future__ import annotations
 
 import json
+import os
 import re
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -28,7 +29,24 @@ MAX_LIST_QUERIES = 30
 PER_QUESTION = 3
 MAX_ACTS = 24
 EXCERPT_CHARS = 5000
-AI_WORKERS = 4  # parallel AI assessments; source requests stay sequential
+AI_WORKERS = 4  # parallel AI assessments unless ai.config.workers says otherwise; source requests stay sequential
+# Local-first (ANALYSIS_LOCAL_FIRST=1): a question whose word sets already give this many
+# art. 290 decisions in the local corpus is not searched on the VKS site.
+LOCAL_FIRST_MIN = PER_QUESTION
+
+
+def _env_flag(var: str, default: bool) -> bool:
+    v = os.environ.get(var, "").strip().lower()
+    if not v:
+        return default
+    return v not in ("0", "false", "no", "off")
+
+
+def pipeline_options() -> dict[str, bool]:
+    """ANALYSIS_LOCAL_FIRST (default off: changes which acts are considered) and
+    ANALYSIS_OVERLAP (default on: same results, AI runs while acts are downloaded)."""
+    return {"local_first": _env_flag("ANALYSIS_LOCAL_FIRST", False),
+            "overlap": _env_flag("ANALYSIS_OVERLAP", True)}
 
 
 @dataclass
@@ -152,13 +170,16 @@ def _words_ok(ws: list[str]) -> list[str]:
 
 
 def search_vks(vks: PoliteClient, search_plan: list[dict], cutoff: date,
-               searches_log: list[dict]) -> dict[str, dict]:
+               searches_log: list[dict], skip_live: dict[str, int] | None = None) -> dict[str, dict]:
     """source_id -> {row, by_question: {qid: [word_set, ...]}}
 
     One query per word set over all case types (criminal acts are dropped later by
-    chamber); the query budget is split evenly between the questions.
+    chamber); the query budget is split evenly between the questions. Questions in
+    `skip_live` (qid -> art. 290 decisions found locally) are not searched on the site;
+    every word set that is not sent is logged with the reason.
     """
     found: dict[str, dict] = {}
+    skip_live = skip_live or {}
     per_question = max(2, MAX_LIST_QUERIES // max(1, len(search_plan)))
     for item in search_plan:
         qid = item["question_id"]
@@ -166,6 +187,13 @@ def search_vks(vks: PoliteClient, search_plan: list[dict], cutoff: date,
         for ws in item["word_sets"]:
             ws = _words_ok(ws)
             if not ws:
+                continue
+            if qid in skip_live:
+                searches_log.append({
+                    "question_id": qid, "words": ws, "live_skipped": True,
+                    "local_decisions": skip_live[qid], "threshold": LOCAL_FIRST_MIN,
+                    "skipped": f"не е търсено в сайта на ВКС: собствената база даде {skip_live[qid]} "
+                               f"решения по чл. 290 (праг {LOCAL_FIRST_MIN})"})
                 continue
             if used >= per_question:
                 searches_log.append({"question_id": qid, "words": ws, "skipped": "лимит на заявките"})
@@ -220,16 +248,39 @@ def pick_candidates(found: dict[str, dict], question_ids: list[str]) -> dict[str
     return picked
 
 
-def merge_local(conn, found: dict[str, dict], search_plan: list[dict], cutoff: date,
-                searches_log: list[dict]) -> None:
-    """Add local-corpus hits (VKS art. 290 and interpretative decisions) to `found`."""
+LocalHits = list[tuple[str, list[list[str]], dict[str, dict]]]  # (qid, word sets, hits) per plan item
+
+
+def search_local(conn, search_plan: list[dict], cutoff: date) -> LocalHits:
+    """Local-corpus candidates for every item of the search plan (read-only)."""
     from legal_ai.cassation.local import local_candidates
 
+    out: LocalHits = []
+    for item in search_plan:
+        sets = [w for w in (_words_ok(ws) for ws in item["word_sets"]) if w]
+        out.append((item["question_id"], sets, local_candidates(conn, sets, cutoff)))
+    return out
+
+
+def local_first_skips(local: LocalHits, threshold: int | None = None) -> dict[str, int]:
+    """qid -> number of distinct art. 290 decisions found locally, for the questions that
+    reach the threshold (interpretative decisions do not count)."""
+    threshold = LOCAL_FIRST_MIN if threshold is None else threshold
+    ids: dict[str, set[str]] = {}
+    for qid, _, hits in local:
+        ids.setdefault(qid, set()).update(
+            d for d, h in hits.items() if h.get("proceeding_article") == "290")
+    return {qid: len(s) for qid, s in ids.items() if len(s) >= threshold}
+
+
+def merge_local(conn, found: dict[str, dict], search_plan: list[dict], cutoff: date,
+                searches_log: list[dict], local: LocalHits | None = None) -> None:
+    """Add local-corpus hits (VKS art. 290 and interpretative decisions) to `found`.
+    `local` is the result of `search_local`, when it has already been run."""
+    if local is None:
+        local = search_local(conn, search_plan, cutoff)
     with conn.cursor() as cur:
-        for item in search_plan:
-            qid = item["question_id"]
-            sets = [w for w in (_words_ok(ws) for ws in item["word_sets"]) if w]
-            hits = local_candidates(conn, sets, cutoff)
+        for qid, sets, hits in local:
             searches_log.append({"question_id": qid, "local": True, "words": [" + ".join(s) for s in sets],
                                  "rows": len(hits)})
             for decision_id, h in hits.items():
@@ -281,8 +332,19 @@ def excerpt(act: ParsedAct, words: list[str]) -> str:
 # ---------- main ----------
 
 def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
-                 cutoff: date, conn=None) -> RunResult:
+                 cutoff: date, conn=None, *, local_first: bool | None = None,
+                 overlap: bool | None = None) -> RunResult:
+    """`local_first` / `overlap` default to ANALYSIS_LOCAL_FIRST / ANALYSIS_OVERLAP.
+
+    The VKS client is used only from this thread (one request at a time, as before); with
+    `overlap` the AI assessments start in worker threads while further acts are still
+    being downloaded. Order of assessments, skipped notes and prompts is the same.
+    """
+    opts = pipeline_options()
+    local_first = opts["local_first"] if local_first is None else local_first
+    overlap = opts["overlap"] if overlap is None else overlap
     cfg = ai.config
+    workers = int(getattr(cfg, "workers", AI_WORKERS) or AI_WORKERS)
     analysis = ai.structured(
         model=cfg.analysis_model, system=P.SYSTEM_BASE,
         user=f"{P.ANALYSIS_INSTRUCTIONS}\n\n=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{appellate.text}",
@@ -290,9 +352,11 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     holding_quotes = {h["id"]: check_quote(appellate.text, h["quote"]) for h in analysis["holdings"]}
 
     searches: list[dict] = []
-    found = search_vks(vks, analysis["search"], cutoff, searches)
+    local = search_local(conn, analysis["search"], cutoff) if conn is not None else None
+    skip_live = local_first_skips(local) if (local_first and local is not None) else {}
+    found = search_vks(vks, analysis["search"], cutoff, searches, skip_live)
     if conn is not None:
-        merge_local(conn, found, analysis["search"], cutoff, searches)
+        merge_local(conn, found, analysis["search"], cutoff, searches, local)
     qids = [q["id"] for q in analysis["questions"]]
     picked = pick_candidates(found, qids)
 
@@ -300,38 +364,6 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     skipped: list[str] = []
     holdings = {h["id"]: h for h in analysis["holdings"]}
     jobs: list[tuple[dict, str, str]] = []   # (question, source_id, prompt)
-    for q in analysis["questions"]:
-        qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
-                         for ws in item["word_sets"] for w in _words_ok(ws)})
-        for sid in picked.get(q["id"], []):
-            if sid not in acts:
-                local_id = found[sid].get("decision_id") or _local_id(conn, sid)
-                if local_id is not None:
-                    from legal_ai.cassation.local import load_act
-                    acts[sid] = load_act(conn, local_id)
-                else:  # sequential, polite fetching
-                    try:
-                        acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
-                    except FetchError as exc:
-                        acts[sid] = None
-                        skipped.append(f"{sid}: {exc}")
-            act = acts[sid]
-            if act is None:
-                continue
-            if act.chamber and "наказател" in act.chamber.lower():
-                skipped.append(f"{found[sid]['label']}: наказателно дело")
-                continue
-            if act.proceeding_article not in ("290", "ТР"):
-                skipped.append(f"{found[sid]['label']}: не е решение по чл. 290 ГПК")
-                continue
-            hold = "\n".join(f"- {holdings[h]['summary']}" for h in q["holding_ids"] if h in holdings)
-            user = (f"{P.ASSESS_INSTRUCTIONS}\n\n(А) ВЪПРОС: {q['text']}\n"
-                    f"Извод на въззивния съд:\n{hold or '-'}\n\n"
-                    f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
-                    f"{excerpt(act, qwords)}")
-            jobs.append((q, sid, user))
-    assess_inputs = [{"question_id": q["id"], "key": sid, "label": found[sid]["label"], "prompt": u}
-                     for q, sid, u in jobs]
 
     def assess(job: tuple[dict, str, str]) -> Assessment | str:
         q, sid, user = job
@@ -361,13 +393,63 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
             explanation=a["explanation"],
             matched_word_sets=found[sid]["by_question"].get(q["id"], []), stage=stage)
 
+    # Acts are read/downloaded here, in this thread only (polite client: one request at a
+    # time). With `overlap` each prepared job goes to the AI workers at once; otherwise all
+    # jobs are submitted after the last download, as before. Results are read in job order.
+    pool = ThreadPoolExecutor(max_workers=workers)
+    futures: list[Future] = []
     assessments: list[Assessment] = []
-    with ThreadPoolExecutor(max_workers=AI_WORKERS) as pool:
-        for res in pool.map(assess, jobs):  # map keeps the question/candidate order
+    try:
+        for q in analysis["questions"]:
+            qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
+                             for ws in item["word_sets"] for w in _words_ok(ws)})
+            for sid in picked.get(q["id"], []):
+                if overlap:
+                    _raise_quota_error(futures)  # no credit left: stop downloading as well
+                if sid not in acts:
+                    local_id = found[sid].get("decision_id") or _local_id(conn, sid)
+                    if local_id is not None:  # already in the database: never downloaded again
+                        from legal_ai.cassation.local import load_act
+                        acts[sid] = load_act(conn, local_id)
+                    else:  # sequential, polite fetching
+                        try:
+                            acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
+                        except FetchError as exc:
+                            acts[sid] = None
+                            skipped.append(f"{sid}: {exc}")
+                act = acts[sid]
+                if act is None:
+                    continue
+                if act.chamber and "наказател" in act.chamber.lower():
+                    skipped.append(f"{found[sid]['label']}: наказателно дело")
+                    continue
+                if act.proceeding_article not in ("290", "ТР"):
+                    skipped.append(f"{found[sid]['label']}: не е решение по чл. 290 ГПК")
+                    continue
+                hold = "\n".join(f"- {holdings[h]['summary']}" for h in q["holding_ids"] if h in holdings)
+                user = (f"{P.ASSESS_INSTRUCTIONS}\n\n(А) ВЪПРОС: {q['text']}\n"
+                        f"Извод на въззивния съд:\n{hold or '-'}\n\n"
+                        f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
+                        f"{excerpt(act, qwords)}")
+                jobs.append((q, sid, user))
+                if overlap:
+                    futures.append(pool.submit(assess, jobs[-1]))
+        if not overlap:
+            futures = [pool.submit(assess, job) for job in jobs]
+        for f in futures:  # job order = question/candidate order, whatever finishes first
+            res = f.result()
             if isinstance(res, str):
                 skipped.append(res)
             else:
                 assessments.append(res)
+    except BaseException:
+        # e.g. no credit left: queued assessments would only fail or be wasted
+        pool.shutdown(wait=True, cancel_futures=True)
+        raise
+    finally:
+        pool.shutdown(wait=True)
+    assess_inputs = [{"question_id": q["id"], "key": sid, "label": found[sid]["label"], "prompt": u}
+                     for q, sid, u in jobs]
 
     return RunResult(
         appellate=appellate, analysis=analysis, holding_quotes=holding_quotes,
@@ -379,6 +461,12 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                 "stance": cfg.stance_model or cfg.analysis_model, "stance_effort": cfg.stance_effort},
         prompt_version=P.PROMPT_VERSION, created_at=datetime.now(timezone.utc).isoformat(),
         cutoff=cutoff.isoformat(), assess_inputs=assess_inputs)
+
+
+def _raise_quota_error(futures: list[Future]) -> None:
+    for f in futures:
+        if f.done() and not f.cancelled() and isinstance(f.exception(), AIQuotaError):
+            raise f.exception()
 
 
 # ---------- report ----------
@@ -411,7 +499,10 @@ def render_markdown(r: RunResult) -> str:
         "източника (✅) или е маркиран (⚠️). "
         + ("Търсено е в сайта на ВКС и в собствената база (решения по чл. 290 и тълкувателни "
            "решения); базата може да не е пълна." if any(s.get("local") for s in r.searches) else
-           "Търсено е само в сайта на ВКС по точни думи (без собствена база и тълкувателни решения)."),
+           "Търсено е само в сайта на ВКС по точни думи (без собствена база и тълкувателни решения).")
+        + (" По въпросите, за които собствената база даде достатъчно решения по чл. 290, сайтът "
+           "на ВКС не е търсен (вижте „Търсения“ при всеки въпрос)."
+           if any(s.get("live_skipped") for s in r.searches) else ""),
         "",
         "## Казусът", "", a["case_summary"], "",
         "## Обжалван пред въззивния съд акт (както е посочен в текста)", "",
@@ -451,10 +542,12 @@ def render_markdown(r: RunResult) -> str:
                 qt = _q(x.quote)
                 if qt:
                     lines += ["  " + qt.replace("\n", "\n  "), ""]
-        sets = [s for s in r.searches if s.get("question_id") == q["id"] and "rows" in s]
+        sets = [s for s in r.searches if s.get("question_id") == q["id"]
+                and ("rows" in s or s.get("live_skipped"))]
         if sets:
             lines += ["<details><summary>Търсения</summary>", ""]
             lines += [(f"- Собствена база ({'; '.join(s['words'])}): {s['rows']} акта" if s.get("local") else
+                       f"- {' + '.join(s['words'])}: {s['skipped']}" if s.get("live_skipped") else
                        f"- {' + '.join(s['words'])} ({s['case_type']}): {s['rows']} резултата"
                        + (" — отрязан списък" if s.get("truncated") else "")) for s in sets]
             lines += ["", "</details>", ""]

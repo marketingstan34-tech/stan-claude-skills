@@ -262,7 +262,7 @@ def cmd_reassess(args) -> int:
     import os
     from concurrent.futures import ThreadPoolExecutor
 
-    from legal_ai.ai import AIConfig, OpenAIProvider
+    from legal_ai.ai import AIConfig, OpenAIProvider, runtime_env
     from legal_ai.cassation import prompts as P
 
     runs = Path(args.runs or Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs")
@@ -270,7 +270,8 @@ def cmd_reassess(args) -> int:
     items = [json.loads(line) for line in (run_dir / "assess_inputs.jsonl").read_text(encoding="utf-8").splitlines()]
     base = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
     before = {(a["question_id"], a["source_id"]): a for a in base["assessments"]}
-    ai = OpenAIProvider(AIConfig(args.model, args.model, max_calls=len(items) + 1, reasoning_effort=args.effort))
+    ai = OpenAIProvider(AIConfig(args.model, args.model, max_calls=len(items) + 1, reasoning_effort=args.effort,
+                                 **runtime_env()))
 
     def one(it):
         try:
@@ -279,7 +280,7 @@ def cmd_reassess(args) -> int:
         except Exception as exc:  # noqa: BLE001
             return it, {"error": str(exc)}
 
-    with ThreadPoolExecutor(max_workers=4) as pool:
+    with ThreadPoolExecutor(max_workers=ai.config.workers) as pool:
         results = list(pool.map(one, items))
     same = 0
     for it, new in results:

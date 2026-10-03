@@ -12,7 +12,7 @@ import os
 import threading
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Iterator
 
 import httpx
 
@@ -28,6 +28,12 @@ class AIQuotaError(AIError):
 
 
 _QUOTA_CODES = {"credit_balance_exhausted", "insufficient_quota", "billing_hard_limit_reached"}
+
+# Background mode: the first status checks come quickly (short answers finish in seconds),
+# then every `poll_seconds`. Only the waiting changes; the answer and the max wait do not.
+POLL_BACKOFF = (0.5, 1.0, 1.5, 2.0)
+DEFAULT_WORKERS = 4
+MAX_WORKERS = 12
 
 
 @dataclass
@@ -56,6 +62,40 @@ class AIConfig:
     assess_effort: str = "low"
     stance_model: str = ""       # stage 2: stance + quote for relevant acts; defaults to analysis_model
     stance_effort: str = "low"
+    background: bool = True      # background mode + polling (survives proxy 502s on long calls)
+    poll_backoff: bool = True    # 0.5, 1, 1.5, 2 s, then every poll_seconds; False = fixed interval
+    workers: int = DEFAULT_WORKERS  # parallel assessments in one analysis run (1..MAX_WORKERS)
+
+
+def _flag(var: str, default: bool) -> bool:
+    v = os.environ.get(var, "").strip().lower()
+    if not v:
+        return default
+    if v in ("1", "true", "yes", "on"):
+        return True
+    if v in ("0", "false", "no", "off"):
+        return False
+    raise AIError(f"{var} трябва да е 1 или 0, а е „{v}“.")
+
+
+def runtime_env() -> dict[str, Any]:
+    """AI_BACKGROUND, AI_POLL_BACKOFF and AI_WORKERS (clamped to 1..MAX_WORKERS)."""
+    raw = os.environ.get("AI_WORKERS", "").strip()
+    try:
+        workers = int(raw) if raw else DEFAULT_WORKERS
+    except ValueError:
+        raise AIError(f"AI_WORKERS трябва да е цяло число от 1 до {MAX_WORKERS}, а е „{raw}“.") from None
+    return {"background": _flag("AI_BACKGROUND", True),
+            "poll_backoff": _flag("AI_POLL_BACKOFF", True),
+            "workers": min(max(workers, 1), MAX_WORKERS)}
+
+
+def poll_delays(steady: float, backoff: bool = True) -> Iterator[float]:
+    """Endless waits between status checks of a background response."""
+    if backoff:
+        yield from POLL_BACKOFF
+    while True:
+        yield steady
 
 
 def load_ai_config() -> AIConfig:
@@ -73,6 +113,7 @@ def load_ai_config() -> AIConfig:
         assess_effort=os.environ.get("AI_ASSESS_EFFORT", "low"),
         stance_model=os.environ.get("AI_STANCE_MODEL", "") or model("AI_ANALYSIS_MODEL"),
         stance_effort=os.environ.get("AI_STANCE_EFFORT", "low"),
+        **runtime_env(),
     )
 
 
@@ -81,6 +122,10 @@ class OpenAIProvider:
 
     The key comes from OPENAI_API_KEY; when it is absent the request is sent without an
     Authorization header (in the cloud dev environment a proxy adds the credential).
+
+    The call cap counts model requests (every attempt inside `structured`). A slot is
+    reserved under a lock before the request is sent, so parallel workers never exceed
+    `max_calls` and never refuse each other while slots are left.
     """
 
     def __init__(self, config: AIConfig, transport: httpx.BaseTransport | None = None,
@@ -90,7 +135,7 @@ class OpenAIProvider:
         self._poll = poll_seconds
         self._max_wait = max_wait
         self._lock = threading.Lock()  # usage and the call cap are shared by worker threads
-        self._reserved = 0
+        self._started = 0  # model requests sent or about to be sent; the cap counts these
         self.usage = Usage()
         headers = {"Content-Type": "application/json"}
         key = os.environ.get("OPENAI_API_KEY", "")
@@ -101,19 +146,19 @@ class OpenAIProvider:
     def close(self) -> None:
         self._http.close()
 
+    @property
+    def calls_started(self) -> int:
+        with self._lock:
+            return self._started
+
+    def _reserve_call(self) -> None:
+        with self._lock:
+            if self._started >= self.config.max_calls:
+                raise AIError(f"Достигнат лимит от {self.config.max_calls} AI заявки за един анализ.")
+            self._started += 1
+
     def structured(self, *, model: str, system: str, user: str, schema_name: str,
                    schema: dict[str, Any], effort: str | None = None) -> dict[str, Any]:
-        with self._lock:
-            if self.usage.calls + self._reserved >= self.config.max_calls:
-                raise AIError(f"Достигнат лимит от {self.config.max_calls} AI заявки за един анализ.")
-            self._reserved += 1
-        try:
-            return self._structured(model, system, user, schema_name, schema, effort)
-        finally:
-            with self._lock:
-                self._reserved -= 1
-
-    def _structured(self, model, system, user, schema_name, schema, effort) -> dict[str, Any]:
         payload = {
             "model": model,
             "input": [{"role": "system", "content": system}, {"role": "user", "content": user}],
@@ -121,10 +166,12 @@ class OpenAIProvider:
             "text": {"format": {"type": "json_schema", "name": schema_name, "strict": True,
                                 "schema": schema}},
         }
-        payload["background"] = True  # long reasoning must not hold one HTTP connection open
+        if self.config.background:
+            payload["background"] = True  # long reasoning must not hold one HTTP connection open
         last = ""
         for _ in range(2):
-            data = self._run_background(payload)
+            self._reserve_call()
+            data = self._run(payload)
             usage = data.get("usage") or {}
             with self._lock:
                 self.usage.add(model, int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0)))
@@ -151,6 +198,10 @@ class OpenAIProvider:
         for attempt in range(4):
             try:
                 resp = self._http.request(method, url, **kw)
+            except httpx.ReadTimeout as exc:
+                if "timeout" in kw:  # a direct (non-background) call that used up the max wait
+                    raise AIError(f"AI заявката не приключи за {self._max_wait:.0f} сек.") from exc
+                last = type(exc).__name__
             except httpx.TransportError as exc:
                 last = type(exc).__name__
             else:
@@ -165,13 +216,19 @@ class OpenAIProvider:
             self._sleep(2 ** attempt * 2)
         raise AIError(f"OpenAI: {last}")
 
-    def _run_background(self, payload: dict[str, Any]) -> dict[str, Any]:
-        data = self._request("POST", OPENAI_URL, json=payload)
+    def _run(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if payload.get("background"):
+            data = self._request("POST", OPENAI_URL, json=payload)
+        else:  # direct request: the answer comes in this response, so wait up to max_wait
+            data = self._request("POST", OPENAI_URL, json=payload,
+                                 timeout=httpx.Timeout(self._max_wait, connect=30.0))
         waited = 0.0
+        delays = poll_delays(self._poll, self.config.poll_backoff)
         while data.get("status") in ("queued", "in_progress"):
             if waited >= self._max_wait:
                 raise AIError(f"AI заявката не приключи за {self._max_wait:.0f} сек.")
-            self._sleep(self._poll)
-            waited += self._poll
+            delay = next(delays)
+            self._sleep(delay)
+            waited += delay
             data = self._request("GET", f"{OPENAI_URL}/{data['id']}")
         return data
