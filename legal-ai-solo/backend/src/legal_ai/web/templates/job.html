@@ -9,7 +9,7 @@
     <p><a href="/analyze">Назад</a></p>
   {% else %}
     <p><strong>{{ 'В опашката' if job.status == 'queued' else 'Работи…' }}</strong> {{ job.message }}</p>
-    <p class="muted">Страницата се обновява сама на всеки 5 секунди. Обикновено отнема 3–10 минути.</p>
+    <p class="muted">Страницата се обновява сама на всеки 5 секунди. {% if job.params.mode == 'noai' %}Обикновено отнема под минута.{% else %}Обикновено отнема няколко минути.{% endif %}</p>
   {% endif %}
 </div>
 {% endblock %}

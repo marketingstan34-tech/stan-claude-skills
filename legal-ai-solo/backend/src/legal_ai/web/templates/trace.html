@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}{{ t.appellate.label }} · Legal AI Solo{% endblock %}
+{% block content %}
+<h1>{{ t.appellate.label }}</h1>
+<p class="muted"><a href="{{ t.appellate.url }}">Източник</a> · справка {{ t.created_at[:16].replace('T',' ') }} UTC · без AI</p>
+<div class="notice">Справка без AI: всичко е извлечено от текста и от сайтовете на съдилищата с фиксирани правила.
+Правни въпроси и оценка „противоречи/подкрепя“ няма. За тях пуснете анализ с AI.</div>
+
+<section class="card"><h2>Обжалваният акт (от текста на въззивното решение)</h2>
+{% set li = t.lower_instance %}
+{% if li %}<p>{{ li.act }}, дело {{ li.case }}{% if li.court %}, {{ li.court }}{% endif %}</p>
+{% else %}<p class="bad muted">⚠️ Обжалваният акт не може да се разчете от текста с правилата. Вижте текста по-долу.</p>{% endif %}
+</section>
+
+{% if t.path %}
+<section class="card"><h2>Пътят на делото</h2><ol>
+{% for i in t.path %}
+  <li><strong>{{ i.level }}:</strong> {{ i.court }}, дело {{ i.case }}
+    {% for a in i.acts %}<div class="muted">{{ a.type }} {% if a.number %}№ {{ a.number }} {% endif %}от {{ a.date }}{% if a.result %} — {{ a.result }}{% endif %}{% if a.url %} · <a href="{{ a.url }}">акт</a>{% endif %}</div>{% endfor %}
+    {% if i.result %}<div>Резултат: {{ i.result }}</div>{% endif %}
+    {% if i.note %}<div class="bad muted">⚠️ {{ i.note }}</div>{% endif %}
+    {% if i.source_url %}<div class="muted"><a href="{{ i.source_url }}">източник</a></div>{% endif %}
+  </li>
+{% endfor %}</ol></section>
+{% endif %}
+
+<section class="card"><h2>Практика на ВКС, цитирана от въззивния съд</h2>
+{% if not t.citations %}<p class="muted">В текста не са намерени позовавания на актове на ВКС.</p>{% endif %}
+<ul>
+{% for c in t.citations %}
+  <li>{% if c.decision_id %}<a href="/decisions/{{ c.decision_id }}">{{ c.label }}</a>
+      {% else %}{{ c.kind }}{% if c.act_number %} № {{ c.act_number }}{% endif %}{% if c.act_date %} от {{ c.act_date }}{% endif %}{% if c.tr_year %}/{{ c.tr_year }}{% endif %}{% if c.case_number %}, дело № {{ c.case_number }}/{{ c.case_year }}{% endif %}
+      <span class="muted">— не е в базата</span>{% endif %}
+    <div class="muted">„{{ c.text }}“</div></li>
+{% endfor %}
+</ul></section>
+
+<section class="card"><h2>Търсене в базата</h2>
+<p class="muted">Напишете характерни думи за правния проблем (напр. „задатък неизпълнение 93“). Търси се в решенията на ВКС
+по чл. 290 и в тълкувателните решения.</p>
+<form method="get" action="/" class="row">
+  <input class="grow" type="text" name="q" placeholder="думи за търсене" required>
+  <input type="hidden" name="only_290" value="true">
+  <button type="submit">Търси</button>
+</form></section>
+
+<details class="card"><summary>Текст на въззивното решение ({{ t.appellate.text_chars }} знака)</summary>
+<div style="white-space: pre-wrap">{{ t.text }}</div></details>
+{% endblock %}

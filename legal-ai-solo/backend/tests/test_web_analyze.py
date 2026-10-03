@@ -59,3 +59,30 @@ def test_start_requires_same_origin(client):
     r = client.post("/analyze", data={"court": "nope", "case": "1", "year": "2020"},
                     headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
     assert r.status_code == 400
+
+
+def test_noai_trace_page_and_listing(client, tmp_path):
+    d = tmp_path / "traces" / "20260102030406"
+    d.mkdir(parents=True)
+    trace = {
+        "created_at": "2026-01-02T03:04:06+00:00", "params": {"court": "as-plovdiv"},
+        "appellate": {"label": "Синтетичен съд, дело 2/2020", "url": "file:///y", "text_chars": 12},
+        "lower_instance": {"act": "Решение № 5/01.02.2019", "date": "01.02.2019", "case": "7/2018", "court": "ОС"},
+        "path": [{"level": "първа", "court": "ОС", "case": "7/2018", "acts": [], "result": "",
+                  "source_url": "", "note": ""}],
+        "citations": [{"kind": "ТР", "text": "ТР № 1/2013 г. на ВКС", "act_number": "1", "act_date": "",
+                       "case_number": "", "case_year": None, "tr_year": 2013, "decision_id": None, "label": ""}],
+    }
+    (d / "trace.json").write_text(json.dumps(trace, ensure_ascii=False), encoding="utf-8")
+    (d / "appellate.txt").write_text("Синтетичен текст", encoding="utf-8")
+    r = client.get("/traces/20260102030406")
+    assert r.status_code == 200
+    assert "Решение № 5/01.02.2019" in r.text and "не е в базата" in r.text and "Синтетичен текст" in r.text
+    assert "Синтетичен съд, дело 2/2020" in client.get("/analyze").text
+    assert client.get("/traces/..%2Fx").status_code == 404
+
+
+def test_start_rejects_unknown_mode(client):
+    r = client.post("/analyze", data={"court": "as-plovdiv", "case": "1", "year": "2020", "mode": "x"},
+                    headers={"origin": "http://127.0.0.1"}, follow_redirects=False)
+    assert r.status_code == 400

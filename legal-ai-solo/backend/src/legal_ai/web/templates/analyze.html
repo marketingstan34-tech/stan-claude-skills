@@ -2,8 +2,9 @@
 {% block title %}Касационен анализ · Legal AI Solo{% endblock %}
 {% block content %}
 <h1>Касационен анализ</h1>
-<p class="muted">Въведете въззивното дело. Програмата сваля решението от сайта на съда, извежда правните
-въпроси по чл. 280 ГПК, търси практика на ВКС и я разделя на „противоречи“ и „подкрепя“. Отнема няколко минути.</p>
+<p class="muted">Въведете въззивното дело. Програмата сваля решението от сайта на съда и проследява делото
+от първа инстанция до ВКС. С AI също извежда правните въпроси по чл. 280 ГПК, търси практика на ВКС и я
+разделя на „противоречи“ и „подкрепя“.</p>
 
 <form method="post" action="/analyze" class="card">
   <div class="row">
@@ -17,7 +18,13 @@
     <label class="field">Година<input type="number" name="year" min="2000" max="2100" required></label>
     <label class="field">Практика до (ГГГГ-ММ, по избор)<input type="text" name="until" pattern="\d{4}-\d{2}" placeholder="напр. 2022-05"></label>
   </div>
-  <p><button type="submit" {% if busy %}disabled{% endif %}>Анализирай</button>
+  <fieldset class="card"><legend class="muted">Режим</legend>
+    <label><input type="radio" name="mode" value="noai" checked> <strong>Без AI</strong> (безплатно, под минута):
+      пътят на делото, обжалваният акт, цитираната от съда практика на ВКС и търсене в базата</label><br>
+    <label><input type="radio" name="mode" value="ai"> <strong>С AI</strong> (OpenAI, около 10 цента и няколко минути):
+      правни въпроси и практика „противоречи/подкрепя“ с проверени цитати</label>
+  </fieldset>
+  <p><button type="submit" {% if busy %}disabled{% endif %}>Започни</button>
   {% if busy %}<span class="muted">Вече тече анализ.</span>{% endif %}</p>
   <p class="muted">Засега: Апелативен и Окръжен съд Пловдив. Без „Практика до“ се търси практика до 2 месеца след въззивното решение.</p>
 </form>
@@ -28,7 +35,14 @@
  — {{ j.status }} {{ j.message }}</div>
 {% endif %}{% endfor %}{% endif %}
 
-<h2>Готови справки</h2>
+<h2>Справки без AI</h2>
+{% if not traces %}<p class="muted">Още няма.</p>{% endif %}
+{% for t in traces %}
+<div class="card"><a href="/traces/{{ t.id }}">{{ t.label }}</a>
+  <div class="muted">{{ t.created_at[:16].replace('T',' ') }} UTC · цитирани актове на ВКС: {{ t.citations }} (в базата: {{ t.in_corpus }})</div></div>
+{% endfor %}
+
+<h2>Справки с AI</h2>
 {% if not runs %}<p class="muted">Още няма.</p>{% endif %}
 {% for r in runs %}
 <div class="card"><a href="/runs/{{ r.id }}">{{ r.label }}</a>

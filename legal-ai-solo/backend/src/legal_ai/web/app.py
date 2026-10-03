@@ -19,7 +19,7 @@ from legal_ai.db import connect
 from legal_ai.retrieval.lexical import search
 from legal_ai.retrieval.text import Term, normalize_for_search, parse_query, word_matches
 from legal_ai.sources.courts import COURTS
-from legal_ai.web.jobs import JobRunner, list_runs, load_run
+from legal_ai.web.jobs import JobRunner, list_runs, list_traces, load_run, load_trace
 
 _TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 _WORD = re.compile(r"[0-9A-Za-zА-Яа-яѝЍ]+")
@@ -92,7 +92,8 @@ def create_app() -> FastAPI:
         })
 
     runs_dir = Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs"
-    runner = JobRunner(runs_dir)
+    traces_dir = runs_dir.parent / "traces"
+    runner = JobRunner(runs_dir, traces_dir)
 
     def same_origin(request: Request) -> bool:
         origin = request.headers.get("origin") or request.headers.get("referer") or ""
@@ -101,7 +102,7 @@ def create_app() -> FastAPI:
     @app.get("/analyze", response_class=HTMLResponse)
     def analyze_form(request: Request):
         return _TEMPLATES.TemplateResponse(request, "analyze.html", {
-            "courts": COURTS, "runs": list_runs(runs_dir),
+            "courts": COURTS, "runs": list_runs(runs_dir), "traces": list_traces(traces_dir),
             "jobs": sorted(runner.jobs.values(), key=lambda j: j.started, reverse=True),
             "busy": runner.busy(),
         })
@@ -109,16 +110,18 @@ def create_app() -> FastAPI:
     @app.post("/analyze")
     def analyze_start(request: Request, court: str = Form(...), case: int = Form(..., ge=1, le=999999),
                       year: int = Form(..., ge=2000, le=2100), case_type: str = Form(""),
-                      until: str = Form("")):
+                      until: str = Form(""), mode: str = Form("noai")):
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
-        if court not in COURTS or case_type not in ("", "Гражданско", "Търговско"):
+        if court not in COURTS or case_type not in ("", "Гражданско", "Търговско") \
+                or mode not in ("noai", "ai"):
             raise HTTPException(400, "Невалиден съд или вид дело.")
         if until and not re.fullmatch(r"\d{4}-\d{2}", until):
             raise HTTPException(400, "Датата трябва да е ГГГГ-ММ.")
         if runner.busy():
             raise HTTPException(409, "Вече тече анализ. Изчакайте да приключи.")
-        job = runner.start({"court": court, "case": case, "year": year, "type": case_type, "until": until})
+        job = runner.start({"court": court, "case": case, "year": year, "type": case_type,
+                            "until": until, "mode": mode})
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
     @app.get("/jobs/{job_id}", response_class=HTMLResponse)
@@ -127,7 +130,8 @@ def create_app() -> FastAPI:
         if job is None:
             raise HTTPException(404, "Няма такъв анализ.")
         if job.status == "done" and job.run_dir:
-            return RedirectResponse(f"/runs/{job.run_dir}", status_code=303)
+            kind = "traces" if job.params.get("mode") == "noai" else "runs"
+            return RedirectResponse(f"/{kind}/{job.run_dir}", status_code=303)
         return _TEMPLATES.TemplateResponse(request, "job.html", {"job": job, "courts": COURTS})
 
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
@@ -140,5 +144,12 @@ def create_app() -> FastAPI:
             if a["relevant"] and a["stance"] != "неотносимо":
                 by_q.setdefault(a["question_id"], []).append(a)
         return _TEMPLATES.TemplateResponse(request, "report.html", {"run": run, "by_q": by_q})
+
+    @app.get("/traces/{trace_id}", response_class=HTMLResponse)
+    def trace_report(request: Request, trace_id: str):
+        t = load_trace(traces_dir, trace_id)
+        if t is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return _TEMPLATES.TemplateResponse(request, "trace.html", {"t": t})
 
     return app
