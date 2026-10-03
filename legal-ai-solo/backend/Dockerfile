@@ -3,6 +3,10 @@ FROM python:3.11.11-slim
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 WORKDIR /app
 
+# OCR for scanned PDFs the lawyer uploads (upload.py): pdftoppm + Tesseract with Bulgarian
+RUN apt-get update && apt-get install -y --no-install-recommends poppler-utils tesseract-ocr tesseract-ocr-bul \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY pyproject.toml alembic.ini ./
 COPY src ./src
 COPY migrations ./migrations

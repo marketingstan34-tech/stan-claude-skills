@@ -1,15 +1,20 @@
 """Text from a document the lawyer uploads (the appellate decision as PDF, Word, HTML or text).
 
 The file is kept only in private storage. Nothing is guessed: if the text cannot be read, the
-user gets a plain message saying which format to use instead.
+user gets a plain message saying which format to use instead. A scanned PDF (no text layer) is
+read with OCR (Tesseract, Bulgarian) when the server has it; the result is marked as OCR.
 """
 
 from __future__ import annotations
 
 import re
+import shutil
+import subprocess
+import tempfile
 import zipfile
 from datetime import date
 from io import BytesIO
+from pathlib import Path
 from xml.etree import ElementTree
 
 from legal_ai.sources.courts.document import DocumentError, _normalize, extract_text
@@ -20,8 +25,33 @@ _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _DATE = re.compile(r"(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{4})")
 
 
+OCR_MAX_PAGES = 60
+OCR_NOTE = "сканиран документ – текстът е разчетен автоматично (OCR); проверете имената, числата и цитатите"
+# "№" is often read as one of these before a number
+_OCR_NO = re.compile(r"(?<![А-Яа-яA-Za-z])(?:Хе|Хо|Ne|No|Мо|Ме|Nе|Nо)\s*(?=\d)")
+
+
 class UploadError(Exception):
     pass
+
+
+def ocr_available() -> bool:
+    return bool(shutil.which("tesseract") and shutil.which("pdftoppm"))
+
+
+def ocr_pdf(body: bytes) -> str:
+    """Text of a scanned PDF, page by page (pdftoppm at 200 dpi, then Tesseract bul+eng)."""
+    with tempfile.TemporaryDirectory() as tmp:
+        src = Path(tmp) / "in.pdf"
+        src.write_bytes(body)
+        subprocess.run(["pdftoppm", "-r", "200", "-gray", "-l", str(OCR_MAX_PAGES), "-png", str(src),
+                        str(Path(tmp) / "p")], check=True, capture_output=True, timeout=300)
+        pages = []
+        for img in sorted(Path(tmp).glob("p-*.png")):
+            out = subprocess.run(["tesseract", str(img), "stdout", "-l", "bul+eng", "--psm", "6"],
+                                 check=True, capture_output=True, timeout=120)
+            pages.append(out.stdout.decode("utf-8", "replace"))
+    return "\n".join(pages)
 
 
 def extension(filename: str) -> str:
@@ -64,8 +94,11 @@ def _txt(body: bytes) -> str:
     raise UploadError("Текстовият файл не е в UTF-8 или Windows-1251.")
 
 
-def read_upload(filename: str, body: bytes) -> tuple[str, str, list[str]]:
-    """(text, format, warnings) for an uploaded document."""
+def read_upload(filename: str, body: bytes, ocr: bool = True) -> tuple[str, str, list[str]]:
+    """(text, format, warnings) for an uploaded document.
+
+    `ocr=False` (the quick check when the form is sent) accepts a scanned PDF without reading it;
+    the background job then reads it with OCR."""
     ext = extension(filename)
     if ext in (".doc", ".rtf", ".odt"):
         raise UploadError("Този формат не се чете. Запазете документа като .docx или PDF и го качете отново.")
@@ -91,10 +124,31 @@ def read_upload(filename: str, body: bytes) -> tuple[str, str, list[str]]:
     except Exception as exc:  # noqa: BLE001 - broken, encrypted or truncated files from users
         raise UploadError("Файлът не може да се прочете (повреден или защитен с парола). "
                           "Запазете го наново като PDF или .docx.") from exc
+    if len(text) < 300 and ext == ".pdf" and ocr_available():
+        if not ocr:
+            return "", "pdf-scan", [OCR_NOTE]
+        try:
+            text = _normalize(_OCR_NO.sub("№ ", ocr_pdf(body)))
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise UploadError("Сканираният PDF не може да се разчете. Качете Word файл или PDF с текст.") from exc
+        fmt = "pdf-ocr"
+        warnings = [OCR_NOTE]
     if len(text) < 300:
         raise UploadError("В документа почти няма текст (може да е сканиран). Качете PDF с текст или Word файл.")
     if not re.search(r"[А-Яа-я]{3}", text):
         warnings.append("няма кирилица в текста")
+    return text, fmt, warnings
+
+
+def read_stored(path: Path, filename: str) -> tuple[str, str, list[str]]:
+    """read_upload for a file already in private storage; OCR text is kept next to it (.ocr.txt)
+    so a scanned document is read only once."""
+    cache = path.with_name(path.name + ".ocr.txt")
+    if cache.is_file():
+        return cache.read_text(encoding="utf-8"), "pdf-ocr", [OCR_NOTE]
+    text, fmt, warnings = read_upload(filename, path.read_bytes())
+    if fmt == "pdf-ocr":
+        cache.write_text(text, encoding="utf-8")
     return text, fmt, warnings
 
 

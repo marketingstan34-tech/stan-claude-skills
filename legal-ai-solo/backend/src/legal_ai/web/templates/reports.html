@@ -27,6 +27,7 @@
     {{ events_card(events) }}
   </div>
   <div class="dash-col-right scroll-col">
+    {% if request.query_params.get('deleted') %}<div class="notice ok">Справката е изтрита.</div>{% endif %}
     {% if not reports %}<div class="card page-card"><p>Още няма справки. <a class="link" href="/analyze">Започнете от „Нов случай“.</a></p></div>{% endif %}
     <div class="project-cards-grid all-reports">
       {% for r in reports %}{{ report_card(r, loop.index0) }}{% endfor %}

@@ -143,30 +143,83 @@ class FakeAI:
 
 
 APPELLATE = "РЕШЕНИЕ № 125 гр. Пловдив. Съдът приема, че банката правилно е отнесла плащането към главницата."
-ANSWER = {"grounds": [
-    {"kind": "материален закон", "holding_ids": ["H1"], "title": "Неправилно отнасяне на плащането",
-     "quote": "банката правилно е отнесла плащането към главницата", "complaint": "Порок.", "argument": "Довод.",
-     "vks_labels": ["Решение №1/01.01.2015 по дело №1/2014", "Решение №999/01.01.2020 по дело №9/2019"]},
-    {"kind": "процесуални правила", "holding_ids": [], "title": "Необсъдени доказателства",
-     "quote": "текст, който го няма в решението", "complaint": "Порок 2.", "argument": "Довод 2.", "vks_labels": []}],
+ANSWER = {
+    "intro": "Считам Решение № 125 за неправилно – в нарушение на материалния закон.",
+    "grounds": [
+        {"kind": "материален закон", "holding_ids": ["H1"],
+         "paragraphs": ["За да постанови решението, въззивният съд е приел, че „банката правилно е отнесла плащането "
+                        "към главницата“.", "Неправилно отнасяне на плащането. Резонно можем да си зададем въпроса защо."],
+         "vks_labels": ["Решение №1/01.01.2015 по дело №1/2014", "Решение №999/01.01.2020 по дело №9/2019"]},
+        {"kind": "процесуални правила", "holding_ids": [],
+         "paragraphs": ["Съдът е приел, че „текст, който го няма никъде в документите по делото и е измислен“."],
+         "vks_labels": []}],
+    "closing": "С оглед гореизложеното, решението следва да бъде отменено.",
     "petitum_scope": "в частта", "petitum_part": "е отхвърлен искът", "petitum_request": "да уважите иска"}
 
 
 def test_appeal_checks_quotes_and_vks_labels():
-    from legal_ai.cassation.appeal import build_appeal, generate
+    from legal_ai.cassation.appeal import UNVERIFIED, build_appeal, generate
     ai = FakeAI(ANSWER)
-    appeal = generate(ai, RUN, APPELLATE, ["Q2"])
+    appeal = generate(ai, RUN, APPELLATE, ["Q2"], context_docs=[("parva.txt", "Първа инстанция.")],
+                      style_docs=[("obrazec.pdf", "Уважаеми съдии, резонно можем да се запитаме.")])
     g1, g2 = appeal["grounds"]
-    assert g1["quote_status"] == "text_verified" and g2["quote_status"] == "not_found"
+    assert UNVERIFIED not in g1["paragraphs"][0] and UNVERIFIED in g2["paragraphs"][0]   # quote not in any document
+    assert appeal["unverified_quotes"] == 1
     assert g1["vks_labels"] == ["Решение №1/01.01.2015 по дело №1/2014"]           # only from the report
     assert g1["dropped_labels"] == ["Решение №999/01.01.2020 по дело №9/2019"]
-    assert "Въпрос две?" in ai.prompts[0] and "Въпрос едно?" not in ai.prompts[0]
+    prompt = ai.prompts[0]
+    assert "Въпрос две?" in prompt and "Въпрос едно?" not in prompt
+    assert "ОБРАЗЕЦ НА СТИЛА НА АДВОКАТА: obrazec.pdf" in prompt and "parva.txt" in prompt
+    assert appeal["style_names"] == ["obrazec.pdf"] and appeal["context_names"] == ["parva.txt"]
     text = to_text(build_appeal(RUN, appeal, {"client": "Х ЕООД", "opponent": "Банка АД", "lawyer": "А. Б."}, "125", 1))
     assert "КАСАЦИОННА ЖАЛБА" in text and "срещу Банка АД" in text and "Решение № 125/14.03.2022" in text
-    assert "в частта, с която е отхвърлен искът" in text and "чл. 281, т. 3 ГПК" in text
-    assert "„банката правилно е отнесла плащането към главницата“" in text
-    assert "не е намерен дословно" in text and "Решение №999" not in text
+    assert "в частта, с която е отхвърлен искът" in text and "Считам Решение № 125 за неправилно" in text
+    assert "I. За да постанови решението" in text and "II. Съдът е приел" in text
+    assert "Решение №999" not in text and "С оглед гореизложеното" in text
+    assert "В този смисъл е и Решение №1/01.01.2015" in text          # listed but not cited in the text
     assert "Копия на цитираните решения на ВКС (1 бр.)" in text
+
+
+def test_appeal_v1_still_renders():
+    from legal_ai.cassation.appeal import build_appeal
+    old = {"grounds": [{"kind": "материален закон", "holding_ids": [], "title": "Стар формат", "quote": "цитат",
+                        "quote_status": "text_verified", "complaint": "Порок.", "argument": "Довод.", "vks_labels": []}],
+           "petitum_scope": "изцяло", "petitum_part": "", "petitum_request": "да уважите иска"}
+    text = to_text(build_appeal(RUN, old, {}, "125"))
+    assert "I. Стар формат (нарушение на материалния закон)" in text and "чл. 281, т. 3 ГПК" in text
+
+
+def test_scanned_pdf_is_accepted_for_later_ocr(monkeypatch):
+    import legal_ai.upload as up
+    monkeypatch.setattr(up, "ocr_available", lambda: True)
+    monkeypatch.setattr(up, "extract_text", lambda body, ct: type("T", (), {"text": "", "fmt": "pdf", "warnings": []})())
+    assert up.read_upload("scan.pdf", b"%PDF-1.4", ocr=False)[1] == "pdf-scan"
+    monkeypatch.setattr(up, "ocr_pdf", lambda body: "Решение Хе 125 " + "текст на решението " * 30)
+    text, fmt, warnings = up.read_upload("scan.pdf", b"%PDF-1.4")
+    assert fmt == "pdf-ocr" and "Решение № 125" in text and warnings == [up.OCR_NOTE]
+
+
+def test_case_documents_and_style_samples(client, monkeypatch):
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    body = ("Протокол от открито съдебно заседание, разпит на свидетел. " * 10).encode()
+    r = c.post("/runs/20260102030405/docs", files=[("files", ("protokol.txt", body, "text/plain"))], headers=h,
+               follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].endswith("/appeal#docs")
+    page = c.get("/runs/20260102030405/appeal").text
+    assert "protokol.txt" in page and "Няма образци на стила" in page
+    from legal_ai.web.casedocs import case_docs, style_samples
+    items = case_docs(d.parent.parent, "20260102030405").items()
+    assert case_docs(d.parent.parent, "20260102030405").texts()[0][0] == "protokol.txt"
+    c.post(f"/runs/20260102030405/docs/{items[0]['id']}/delete", headers=h)
+    assert case_docs(d.parent.parent, "20260102030405").items() == []
+    r = c.post("/style", files=[("files", ("obrazec.txt", body, "text/plain"))], headers=h, follow_redirects=False)
+    assert r.headers["location"] == "/documents#style"
+    assert "obrazec.txt" in c.get("/documents").text and len(style_samples(d.parent.parent).items()) == 1
+    r = c.post("/style", files=[("files", ("x.doc", b"x", "application/msword"))], headers=h, follow_redirects=False)
+    assert "doc_error=" in r.headers["location"]
+    assert c.post("/style", files=[("files", ("a.txt", body, "text/plain"))],
+                  headers={"origin": "http://evil.example"}).status_code == 403
 
 
 def test_appeal_routes_and_status(client, monkeypatch):
@@ -182,7 +235,7 @@ def test_appeal_routes_and_status(client, monkeypatch):
     (d / "appeal.json").write_text(json.dumps(generate(FakeAI(ANSWER), RUN, APPELLATE, ["Q2"]), ensure_ascii=False),
                                    encoding="utf-8")
     page = c.get("/runs/20260102030405/appeal").text
-    assert "КАСАЦИОННА ЖАЛБА" in page and "Неправилно отнасяне на плащането" in page
+    assert "КАСАЦИОННА ЖАЛБА" in page and "Неправилно отнасяне на плащането" in page and "Какво чете AI" in page
     assert c.get("/runs/20260102030405/appeal.docx").status_code == 200
     # status
     assert c.post("/runs/20260102030405/status", data={"status": "в работа"}, headers=h,
@@ -406,3 +459,16 @@ def test_credit_form_and_bar(client):
     r = c.post("/credits", data={"balance": "x", "next": "//evil.example"}, headers=h, follow_redirects=False)
     assert r.headers["location"] == "/start?credits_error=1"
     assert c.post("/credits", data={"balance": "5"}, headers={"origin": "http://evil.example"}).status_code == 403
+
+
+def test_delete_moves_the_report_to_the_trash(client):
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    assert "Изтрий справката" in c.get("/runs/20260102030405").text
+    assert c.post("/runs/20260102030405/delete", headers={"origin": "http://evil.example"}).status_code == 403
+    r = c.post("/runs/20260102030405/delete", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/reports?deleted=1"
+    assert not d.exists() and (d.parent.parent / "trash" / "runs" / "20260102030405" / "run.json").exists()
+    assert c.get("/runs/20260102030405").status_code == 404
+    assert "Справката е изтрита" in c.get("/reports?deleted=1").text
+    assert c.post("/runs/20260102030405/delete", headers=h).status_code == 404

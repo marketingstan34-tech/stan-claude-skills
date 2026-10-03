@@ -1,8 +1,10 @@
 """Draft of the cassation appeal itself (касационна жалба, чл. 281 and чл. 284 ГПК).
 
-One AI call writes the complaints and arguments; everything else is assembled with fixed rules.
-Each challenged passage is checked verbatim against the decision (shown only if found), and only
-VKS decisions that the report itself marked "противоречи" may be cited. Party data, fees and
+One AI call writes the opening, the complaints and the closing in the lawyer's style (from his own
+filings, when given as style samples); the header, request, costs and attachments are fixed rules.
+Every quotation („…“, 40+ characters) is checked verbatim against the decision, the other case
+documents and the verified VKS quotes, and gets a note if not found; the VKS decisions in the list
+field are only those the report marked "противоречи". Party data, fees and
 anything missing stay in [square brackets] for the lawyer.
 """
 
@@ -35,39 +37,95 @@ def contra_list(run: dict, chosen: list[str] | None) -> dict[str, str]:
     return out
 
 
+def contra_quotes(run: dict, chosen: list[str] | None) -> dict[str, str]:
+    """label -> the verified quote of each "противоречи" decision (only quotes found verbatim)."""
+    out: dict[str, str] = {}
+    for x in run.get("assessments", []):
+        q = x.get("quote") if isinstance(x.get("quote"), dict) else {}
+        if (x.get("relevant") and x.get("stance") == "противоречи" and (not chosen or x["question_id"] in chosen)
+                and q.get("status") == "text_verified" and q.get("text")):
+            out.setdefault(x["label"], q["text"])
+    return out
+
+
 def appeal_prompt(run: dict, text: str, chosen: list[str] | None,
-                  context_docs: list[tuple[str, str]] | None = None) -> str:
+                  context_docs: list[tuple[str, str]] | None = None,
+                  style_docs: list[tuple[str, str]] | None = None) -> str:
     a = run["analysis"]
     holdings = "\n".join(f"{h['id']}. {h['summary']}" for h in a.get("holdings", []))
     questions = "\n".join(f"{q['id']}. {q['text']}" for q in a["questions"] if not chosen or q["id"] in chosen)
-    vks = "\n".join(f"- {label}: {rule}" for label, rule in contra_list(run, chosen).items()) or "(няма)"
+    quotes = contra_quotes(run, chosen)
+    vks = "\n".join(f"- {label}: {rule}" + (f"\n  Дословен цитат от решението: „{quotes[label]}“" if label in quotes else "")
+                    for label, rule in contra_list(run, chosen).items()) or "(няма)"
     notes = (run.get("notes") or "").strip()
     return (f"{P.APPEAL_INSTRUCTIONS}\n\n=== ИЗВОДИ НА ВЪЗЗИВНИЯ СЪД ===\n{holdings}\n\n"
             f"=== ИЗБРАНИ ПРАВНИ ВЪПРОСИ ===\n{questions}\n\n=== РЕШЕНИЯ НА ВКС „ПРОТИВОРЕЧИ“ ===\n{vks}\n\n"
             f"=== ВЪЗЗИВНО РЕШЕНИЕ ===\n{text}"
             + (f"\n\n{P.NOTES_HEADER}\n{notes}" if notes else "")
-            + (P.CONTEXT_NOTE + P.context_block(context_docs) if context_docs else ""))
+            + (P.context_block(context_docs, P.APPEAL_CONTEXT_EACH, P.APPEAL_CONTEXT_TOTAL) if context_docs else "")
+            + (P.context_block(style_docs, P.STYLE_EACH, P.STYLE_TOTAL, P.STYLE_HEADER) if style_docs else ""))
+
+
+_INLINE_QUOTE = re.compile(r"„([^“”\n]{40,})[“”]")
+UNVERIFIED = " [цитатът не е намерен дословно в документите – проверете]"
+
+
+def mark_quotes(paragraph: str, sources: list[str]) -> tuple[str, int]:
+    """Adds a note after every quotation („…“, 40+ characters) not found verbatim in any source text."""
+    from legal_ai.cassation.pipeline import check_quote
+    missing = 0
+
+    def note(m: re.Match) -> str:
+        nonlocal missing
+        if any(check_quote(src, m.group(1)).status == "text_verified" for src in sources if src):
+            return m.group(0)
+        missing += 1
+        return m.group(0) + UNVERIFIED
+    return _INLINE_QUOTE.sub(note, paragraph), missing
 
 
 def generate(ai, run: dict, text: str, chosen: list[str] | None,
-             context_docs: list[tuple[str, str]] | None = None) -> dict:
-    """The AI part, checked: verbatim quotes and VKS labels from the report only."""
-    from legal_ai.cassation.pipeline import check_quote
+             context_docs: list[tuple[str, str]] | None = None,
+             style_docs: list[tuple[str, str]] | None = None) -> dict:
+    """The AI part, checked: quotations found verbatim in the documents, VKS labels from the report only."""
     raw = ai.structured(model=ai.config.analysis_model, system=P.SYSTEM_BASE,
-                        user=appeal_prompt(run, text, chosen, context_docs), schema_name="cassation_appeal",
-                        schema=P.APPEAL_SCHEMA)
+                        user=appeal_prompt(run, text, chosen, context_docs, style_docs),
+                        schema_name="cassation_appeal", schema=P.APPEAL_SCHEMA)
     allowed = contra_list(run, chosen)
+    sources = [text, *(t for _, t in context_docs or ()), *contra_quotes(run, chosen).values()]
+    unverified = 0
+
+    def checked(par: str) -> str:
+        nonlocal unverified
+        out, n = mark_quotes(par.strip(), sources)
+        unverified += n
+        return out
     grounds = []
     for g in raw["grounds"]:
-        q = check_quote(text, g["quote"]) if g["quote"].strip() else None
-        grounds.append({**g, "quote_status": q.status if q else "none", "quote": q.text if q else "",
+        grounds.append({"kind": g["kind"], "holding_ids": g["holding_ids"],
+                        "paragraphs": [checked(p) for p in g["paragraphs"] if p.strip()],
                         "vks_labels": [label for label in g["vks_labels"] if label in allowed],
                         "dropped_labels": [label for label in g["vks_labels"] if label not in allowed]})
-    return {"grounds": grounds, "petitum_scope": raw["petitum_scope"], "petitum_part": raw["petitum_part"],
-            "petitum_request": raw["petitum_request"], "version": P.APPEAL_VERSION,
+    return {"intro": checked(raw["intro"]), "grounds": grounds, "closing": checked(raw["closing"]),
+            "petitum_scope": raw["petitum_scope"], "petitum_part": raw["petitum_part"],
+            "petitum_request": raw["petitum_request"], "unverified_quotes": unverified,
+            "context_names": [n for n, _ in context_docs or ()], "style_names": [n for n, _ in style_docs or ()],
+            "version": P.APPEAL_VERSION,
             "model": ai.config.analysis_model, "created_at": datetime.now(timezone.utc).isoformat(),
             "usage": {"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,
                       "output_tokens": ai.usage.output_tokens}}
+
+
+_ACT_REF = re.compile(r"(\d{1,6})\s*/\s*(\d{1,2}\.\d{1,2}\.\d{4})")
+
+
+def _mentioned(label: str, body: str) -> bool:
+    """Whether the decision `label` (e.g. "Решение №323/01.06.2026 по дело №371/2025") is cited in `body`."""
+    m = _ACT_REF.search(label)
+    if not m:
+        return label in body
+    flat = re.sub(r"\s+", "", body)
+    return f"{m.group(1)}/{m.group(2)}" in flat
 
 
 _ALREADY = re.compile(r"^\s*(?:и\s+)?да\s+отмени(?:те)?\s+(?:изцяло\s+|частично\s+)?(?:обжалваното\s+|въззивното\s+)?"
@@ -107,13 +165,28 @@ def build_appeal(run: dict, appeal: dict, case: dict | None = None, act_number: 
                       f"{case.get('lawyer_address') or '[адрес]'},"),
            Block("p", f"срещу {case.get('opponent') or '[насрещна страна, ЕГН/ЕИК, адрес]'},"),
            Block("p", f"против {act}, {scope}."),
-           Block("heading", "УВАЖАЕМИ ВЪРХОВНИ СЪДИИ,"),
-           Block("p", f"В законния срок обжалвам {act}, {scope}. Считам решението за неправилно поради "
-                      + ", ".join(kinds) + " – касационни основания по чл. 281, т. 3 ГПК"
-                      + (", както и за " + " и ".join(k for k in kinds if k in ("недопустимост", "нищожност"))
-                         if any(k in ("недопустимост", "нищожност") for k in kinds) else "") + ".")]
+           Block("heading", "УВАЖАЕМИ ВЪРХОВНИ СЪДИИ,")]
+    if appeal.get("intro"):
+        out.append(Block("p", appeal["intro"].strip()))
+    else:   # appeal-1: a fixed opening
+        out.append(Block("p", f"В законния срок обжалвам {act}, {scope}. Считам решението за неправилно поради "
+                              + ", ".join(kinds) + " – касационни основания по чл. 281, т. 3 ГПК"
+                              + (", както и за " + " и ".join(k for k in kinds if k in ("недопустимост", "нищожност"))
+                                 if any(k in ("недопустимост", "нищожност") for k in kinds) else "") + "."))
+    quotes = contra_quotes(run, None)
     for i, g in enumerate(appeal["grounds"]):
         num = ROMAN[i] if i < len(ROMAN) else str(i + 1)
+        if g.get("paragraphs"):     # appeal-2: the lawyer's style, connected paragraphs
+            paras = g["paragraphs"]
+            out.append(Block("p", f"{num}. {paras[0]}"))
+            out += [Block("p", par) for par in paras[1:]]
+            body = " ".join(paras)
+            for label in g.get("vks_labels", []):
+                if not _mentioned(label, body):
+                    q = quotes.get(label)
+                    out.append(Block("p", f"В този смисъл е и {label} на ВКС"
+                                          + (f", в което е прието, че „{q}“." if q else ".")))
+            continue
         out.append(Block("heading", f"{num}. {g['title'].strip().rstrip('.')} ({KIND_TEXT[g['kind']]})"))
         if g.get("quote") and g.get("quote_status") == "text_verified":
             out.append(Block("p", "Въззивният съд е приел:"))
@@ -124,6 +197,8 @@ def build_appeal(run: dict, appeal: dict, case: dict | None = None, act_number: 
         out.append(Block("p", g["argument"].strip()))
         if g.get("vks_labels"):
             out.append(Block("p", "В този смисъл е практиката на ВКС: " + "; ".join(g["vks_labels"]) + "."))
+    if appeal.get("closing"):
+        out.append(Block("p", appeal["closing"].strip()))
     out.append(Block("p", "Съображенията за допускане на касационното обжалване са изложени в приложеното изложение "
                           "по чл. 284, ал. 3, т. 1 ГПК."))
     out.append(Block("p", f"Моля да допуснете касационно обжалване, да отмените въззивното решение {scope} и "

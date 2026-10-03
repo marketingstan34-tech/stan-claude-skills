@@ -345,7 +345,7 @@ def create_app() -> FastAPI:
             from legal_ai.upload import MAX_BYTES, UploadError, extension, read_upload
             body = document.file.read(MAX_BYTES + 1)
             try:
-                read_upload(document.filename, body)          # fail early with a plain message
+                read_upload(document.filename, body, ocr=False)   # fail early with a plain message
             except UploadError as exc:
                 return form_error(str(exc))
             uploads = storage / "uploads"
@@ -366,7 +366,7 @@ def create_app() -> FastAPI:
             for f in extras:
                 body = f.file.read(MAX_BYTES + 1)
                 try:
-                    read_upload(f.filename, body)
+                    read_upload(f.filename, body, ocr=False)
                 except UploadError as exc:
                     return form_error(f"{os.path.basename(f.filename)[:80]}: {exc}")
                 name = f"{uuid4().hex}{extension(f.filename)}"
@@ -465,6 +465,39 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"{back}{sep}credits_error=1", status_code=303)
         credits.save(storage, balance)
         return RedirectResponse(back, status_code=303)
+
+    def to_trash(base: Path, kind: str, item_id: str) -> None:
+        """A report is moved to storage/trash/<kind>/ (not destroyed), so a mistake can be undone on the server."""
+        import shutil
+        dest = storage / "trash" / kind
+        dest.mkdir(parents=True, exist_ok=True)
+        target = dest / item_id
+        n = 1
+        while target.exists():
+            target = dest / f"{item_id}-{n}"
+            n += 1
+        shutil.move(str(base / item_id), str(target))
+
+    @app.post("/runs/{run_id}/delete")
+    def run_delete(request: Request, run_id: str):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        job = runner.running()
+        if job is not None and job.params.get("run_id") == run_id:
+            raise HTTPException(409, "За тази справка в момента се пише жалба. Изчакайте да свърши.")
+        to_trash(runs_dir, "runs", run_id)
+        return RedirectResponse("/reports?deleted=1", status_code=303)
+
+    @app.post("/traces/{trace_id}/delete")
+    def trace_delete(request: Request, trace_id: str):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_trace(traces_dir, trace_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        to_trash(traces_dir, "traces", trace_id)
+        return RedirectResponse("/reports?deleted=1", status_code=303)
 
     @app.post("/runs/{run_id}/status")
     async def run_status(request: Request, run_id: str):
@@ -594,9 +627,74 @@ def create_app() -> FastAPI:
         from legal_ai.ai.pricing import cost_usd
         appeal_cost = cost_usd({appeal["model"]: [appeal["usage"]["input_tokens"], appeal["usage"]["output_tokens"]]}) \
             if appeal and appeal.get("usage") else None
+        import json as _json
+
+        from legal_ai.web.casedocs import case_docs, style_samples
+        try:
+            report_docs = [c["name"] for c in _json.loads((runs_dir / run_id / "context.json").read_text(encoding="utf-8"))]
+        except (OSError, ValueError, KeyError, TypeError):
+            report_docs = []
+        first = next((f"{i.get('court', '')}, дело {i.get('case', '')}" for i in run.get("path") or []
+                      if i.get("level") == "първа" and any(a.get("type") == "Решение" and a.get("url")
+                                                           for a in i.get("acts", []))), "")
         return render(request, "appeal.html", {"run": run, "run_id": run_id, "appeal": appeal, "blocks": blocks,
-                                               "appeal_cost": appeal_cost,
+                                               "appeal_cost": appeal_cost, "report_docs": report_docs,
+                                               "added_docs": case_docs(storage, run_id).items(),
+                                               "first_instance": first,
+                                               "style_docs": style_samples(storage).items(),
                                                "busy": runner.busy(), **ctx})
+
+    async def add_files(request: Request, files_list, back: str) -> RedirectResponse:
+        """Shared by the case documents and the style samples: quick check, then keep the file."""
+        from legal_ai.upload import MAX_BYTES, UploadError, read_upload
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        files = [f for f in form.getlist("files") if getattr(f, "filename", "")]
+        anchor = back.split("#", 1)
+        sep = "&" if "?" in anchor[0] else "?"
+        tail = ("#" + anchor[1]) if len(anchor) > 1 else ""
+        if not files:
+            return RedirectResponse(f"{anchor[0]}{sep}doc_error={quote('Изберете файл.')}{tail}", status_code=303)
+        for f in files:
+            body = await f.read(MAX_BYTES + 1)
+            try:
+                read_upload(f.filename, body, ocr=False)
+                files_list.add(f.filename, body)
+            except (UploadError, ValueError) as exc:
+                msg = f"{os.path.basename(f.filename)[:80]}: {exc}"
+                return RedirectResponse(f"{anchor[0]}{sep}doc_error={quote(msg)}{tail}", status_code=303)
+        return RedirectResponse(back, status_code=303)
+
+    @app.post("/runs/{run_id}/docs")
+    async def run_docs_add(request: Request, run_id: str):
+        from legal_ai.web.casedocs import case_docs
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return await add_files(request, case_docs(storage, run_id), f"/runs/{run_id}/appeal#docs")
+
+    @app.post("/runs/{run_id}/docs/{item_id}/delete")
+    def run_docs_delete(request: Request, run_id: str, item_id: str):
+        from legal_ai.web.casedocs import case_docs
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        case_docs(storage, run_id).remove(item_id)
+        return RedirectResponse(f"/runs/{run_id}/appeal#docs", status_code=303)
+
+    @app.post("/style")
+    async def style_add(request: Request):
+        from legal_ai.web.casedocs import style_samples
+        return await add_files(request, style_samples(storage), "/documents#style")
+
+    @app.post("/style/{item_id}/delete")
+    def style_delete(request: Request, item_id: str):
+        from legal_ai.web.casedocs import style_samples
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        style_samples(storage).remove(item_id)
+        return RedirectResponse("/documents#style", status_code=303)
 
     @app.post("/runs/{run_id}/appeal")
     def run_appeal_start(request: Request, run_id: str):
@@ -675,7 +773,8 @@ def create_app() -> FastAPI:
             docs.append({**r, "draft_edited": draft_edit["saved_at"][:10] if draft_edit else "",
                          "has_appeal": (d / "appeal.json").exists() or bool(appeal_edit),
                          "appeal_edited": appeal_edit["saved_at"][:10] if appeal_edit else ""})
-        return render(request, "documents.html", {"docs": docs})
+        from legal_ai.web.casedocs import style_samples
+        return render(request, "documents.html", {"docs": docs, "style_docs": style_samples(storage).items()})
 
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str, error: str = Query("", max_length=200)):

@@ -125,12 +125,19 @@ class JobRunner:
             chosen = case.get("questions") or casefile.default_questions(run)
             ai = OpenAIProvider(load_ai_config())
             job.cleanup = ai.close
-            job.message = "AI пише оплакванията срещу въззивното решение…"
             try:
                 context = [(c["name"], c["text"]) for c in json.loads((d / "context.json").read_text(encoding="utf-8"))]
             except (OSError, ValueError, KeyError, TypeError):
                 context = []
-            appeal = generate(ai, run, text, chosen, context)
+            from legal_ai.web.casedocs import case_docs, style_samples
+            storage = self.runs_dir.parent
+            job.message = "Четене на документите по делото (сканираните се разчитат – до минута-две)…"
+            context += case_docs(storage, run_id).texts()
+            job.message = "Сваляне на първоинстанционното решение от сайта на съда…"
+            context = self._first_instance(run) + context
+            style = style_samples(storage).texts()
+            job.message = "AI пише жалбата (обстойна – обикновено 3–8 минути)…"
+            appeal = generate(ai, run, text, chosen, context, style)
             write_atomic(d / "appeal.json", json.dumps(appeal, ensure_ascii=False, indent=1))
             job.run_dir = run_id
             job.status = "done"
@@ -141,22 +148,49 @@ class JobRunner:
             if job.cleanup:
                 job.cleanup()
 
+    @staticmethod
+    def _first_instance(run: dict) -> list[tuple[str, str]]:
+        """The first-instance decision from the court's site, when the case path links to it."""
+        from urllib.parse import urlparse
+
+        from legal_ai.http import PoliteClient
+        from legal_ai.sources.courts import ALLOWED_HOSTS
+        from legal_ai.sources.courts.document import extract_text
+        for inst in run.get("path") or []:
+            if inst.get("level") != "първа":
+                continue
+            for act in inst.get("acts", []):
+                url = act.get("url") or ""
+                if act.get("type") != "Решение" or urlparse(url).hostname not in ALLOWED_HOSTS:
+                    continue
+                try:
+                    interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
+                    ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
+                    with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as c:
+                        f = c.get(url)
+                    text = extract_text(f.body, f.content_type).text
+                except Exception:   # noqa: BLE001 - the appeal is written without it
+                    return []
+                if len(text) < 300:
+                    return []
+                return [(f"Първоинстанционно решение – {inst.get('court', '')}, дело {inst.get('case', '')}, "
+                         f"{act.get('date', '')} (сайт на съда)", text)]
+        return []
+
     def _extras(self, p: dict) -> list[tuple[str, str]]:
         """The other case documents uploaded with the decision: (file name, text)."""
-        from legal_ai.upload import read_upload
+        from legal_ai.upload import read_stored
         out = []
         for e in p.get("extras", []):
-            body = (self.runs_dir.parent / e["file"]).read_bytes()
-            out.append((e["filename"], read_upload(e["filename"], body)[0]))
+            out.append((e["filename"], read_stored(self.runs_dir.parent / e["file"], e["filename"])[0]))
         return out
 
     def _appellate(self, courts, p: dict):
         """The appellate decision: an uploaded document, or downloaded from the court's site."""
         from legal_ai.cassation.pipeline import SourceDoc, fetch_appellate
         if p.get("file"):
-            from legal_ai.upload import first_date, read_upload
-            body = (self.runs_dir.parent / p["file"]).read_bytes()
-            text, fmt, warnings = read_upload(p["filename"], body)
+            from legal_ai.upload import first_date, read_stored
+            text, fmt, warnings = read_stored(self.runs_dir.parent / p["file"], p["filename"])
             label = "Поставен текст" if p.get("pasted") else f"Качен документ: {p['filename']}"
             return SourceDoc(label, "", text, fmt,
                              datetime.now(timezone.utc).isoformat(), first_date(text), warnings)

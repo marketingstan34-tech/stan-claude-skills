@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
-{% from "parts_case.html" import case_profile, path_cards, case_form with context %}
+{% from "parts_case.html" import case_profile, path_cards, case_form, delete_box with context %}
 {% set a = run.analysis %}
 {% block title %}{{ run.appellate.label }} · Legal AI Solo{% endblock %}
 {% block page_title %}Касационен анализ с AI{% endblock %}
@@ -39,6 +39,7 @@
       </div>
     </div>
     {{ case_form('/runs/' ~ run_id ~ '/case', run) }}
+    {{ delete_box('/runs/' ~ run_id ~ '/delete') }}
   </div>
 
   <div class="dash-col-right scroll-col">

@@ -378,3 +378,22 @@ body { overflow: visible !important; }
   padding: 0 !important; border: 0 !important; box-shadow: none !important; background: transparent !important; transform: none !important; }
 .case-form .case-row label:has(select[name=kind]) { grid-column: 1 / -1; }
 @media (max-width: 960px) { .fs-sidebar { top: 0; } }
+
+/* ---------------- documents for the appeal / style samples ---------------- */
+.ai-docs { list-style: none; padding: 0; margin: 4px 0 10px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.ai-docs li { position: relative; padding-left: 22px; line-height: 1.4; color: #374151; }
+.ai-docs li::before { position: absolute; left: 0; top: 0; width: 16px; height: 16px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 10px; font-weight: 800; }
+.ai-docs li.ok::before { content: "✓"; background: #ecfdf5; color: var(--fs-green, #059669); }
+.ai-docs li.miss::before { content: "!"; background: #fff7ed; color: #c2410c; }
+.ai-docs li.miss { color: #9a3412; }
+.docs-upload { display: flex; flex-direction: column; gap: 8px; margin: 6px 0; }
+.docs-upload input[type=file] { padding: 8px 10px !important; font-size: 12.5px; }
+.doc-row .docs-upload { flex-direction: row; flex-wrap: wrap; align-items: center; }
+.doc-row .docs-upload input[type=file] { flex: 1; min-width: 220px; }
+.doc-row .docs-upload .kit-submit { width: auto !important; padding: 9px 18px !important; margin: 0 !important; }
+.delete-box { display: flex; justify-content: center; margin: 2px 0 6px; }
+.delete-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid #fecaca; background: #fff; color: #b91c1c;
+  border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 12.5px; font-weight: 700; cursor: pointer;
+  transition: background-color .15s ease, color .15s ease, border-color .15s ease; }
+.delete-btn:hover { background: #dc2626; border-color: #dc2626; color: #fff; }

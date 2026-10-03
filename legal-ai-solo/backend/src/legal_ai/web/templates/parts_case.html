@@ -135,3 +135,11 @@
   </form>
 </div>
 {%- endmacro %}
+
+{# moving a report to the trash (private storage/trash; can be restored on the server) #}
+{% macro delete_box(action) -%}
+<form method="post" action="{{ action }}" class="delete-box no-print"
+      onsubmit="return confirm('Да се изтрие ли справката? Изчезва от всички списъци, заедно с изложението, жалбата и данните по делото. (Пази се в кошче на сървъра и може да се върне при нужда.)')">
+  <button type="submit" class="delete-btn">{{ icon('trash', 14) }}<span>Изтрий справката</span></button>
+</form>
+{%- endmacro %}

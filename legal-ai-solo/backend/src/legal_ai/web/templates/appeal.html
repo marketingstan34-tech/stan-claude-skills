@@ -3,7 +3,7 @@
 {% from "parts_case.html" import case_profile with context %}
 {% block title %}Чернова на жалба · Legal AI Solo{% endblock %}
 {% block page_title %}Чернова на касационна жалба{% endblock %}
-{% block page_hint %}Касационната жалба по чл. 281 и чл. 284 ГПК: оплакванията и доводите са написани с AI от въззивното решение и справката. Цитатите от решението са проверени дословно, а практиката е само от справката. Свалете като Word, попълнете [квадратните скоби] и проверете всичко.{% endblock %}
+{% block page_hint %}Касационната жалба по чл. 281 и чл. 284 ГПК, написана с AI обстойно и в стила на адвоката – от въззивното решение, документите по делото и справката. Всеки цитат е проверен дословно в документите; непроверените са маркирани. Свалете като Word, попълнете [квадратните скоби] и проверете всичко.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
   <div class="dash-col-left no-print">
@@ -24,8 +24,8 @@
         <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Нова чернова с AI – една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $?')">
           <button class="kit-submit light" type="submit" {{ 'disabled' if busy }}>Напиши наново с AI</button></form>
       {% else %}
-        <p>Още няма чернова. AI ще напише оплакванията и доводите срещу въззивното решение по отметнатите
-          въпроси ({{ chosen|length }}) и практиката „противоречи“ от справката. Една заявка към OpenAI.</p>
+        <p>Още няма чернова. AI ще напише обстойна жалба срещу въззивното решение по отметнатите
+          въпроси ({{ chosen|length }}), документите по делото и практиката „противоречи“ от справката. Една заявка към OpenAI, обикновено 3–8 минути.</p>
         <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Да напише ли AI черновата на жалбата? Една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.')">
           <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else 'Напиши жалбата с AI' }}</button></form>
       {% endif %}
@@ -33,11 +33,30 @@
         <a class="link" href="/runs/{{ run_id }}#case-data">попълнете ги в справката</a> и жалбата ще ги включи.</div>{% endif %}
       <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
     </div>
+    <div class="card details-card" id="docs">
+      <h2 class="details-title">Какво чете AI за жалбата</h2>
+      <p class="muted small">Колкото повече документи по делото, толкова по-подробна и точна е жалбата – AI взима фактите, доказателствата и доводите от тях. Сканирани PDF се разчитат автоматично.</p>
+      {% if request.query_params.get('doc_error') %}<div class="notice bad">{{ request.query_params.get('doc_error') }}</div>{% endif %}
+      <ul class="ai-docs">
+        <li class="ok">Въззивното решение</li>
+        {% if first_instance %}<li class="ok">Първоинстанционното решение – {{ first_instance }} <span class="muted">(сваля се от сайта на съда)</span></li>
+        {% else %}<li class="miss">Първоинстанционното решение не е в сайта на съда – качете го долу</li>{% endif %}
+        {% for n in report_docs %}<li class="ok">{{ n }} <span class="muted">(качен със справката)</span></li>{% endfor %}
+        {% for d in added_docs %}<li class="ok">{{ d.filename }} <span class="muted">({{ d.added }})</span>
+          <form method="post" action="/runs/{{ run_id }}/docs/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }}?')"><button type="submit" class="link-button">махни</button></form></li>{% endfor %}
+        <li class="{{ 'ok' if style_docs else 'miss' }}">{% if style_docs %}Образци на стила на адвоката: {{ style_docs|length }}{% else %}Няма образци на стила{% endif %} – <a class="link" href="/documents#style">{{ 'управление' if style_docs else 'добавете' }}</a></li>
+      </ul>
+      <form method="post" action="/runs/{{ run_id }}/docs" enctype="multipart/form-data" class="docs-upload">
+        <input class="kit-input" type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm" required>
+        <button class="kit-submit light" type="submit">Добави документи по делото</button>
+      </form>
+      <p class="muted small">Напр. искова молба, отговор, въззивна жалба, протоколи от заседанията, експертизи, писмени защити. До 8 документа. След като добавите, натиснете „Напиши наново с AI“.</p>
+    </div>
   </div>
   <div class="dash-col-right scroll-col">
     {% if appeal %}
-    <div class="notice no-print">Чернова с AI – не е правно становище. Цитатите от решението са проверени дословно; решенията на ВКС са
-      само тези „противоречи“ от справката{% set dropped = appeal.grounds|map(attribute='dropped_labels')|sum(start=[]) %}{% if dropped %} (махнати {{ dropped|length }} позовавания извън справката){% endif %}.</div>
+    <div class="notice no-print">Чернова с AI – не е правно становище. Цитатите са проверени дословно в документите{% if appeal.unverified_quotes %} – <b>{{ appeal.unverified_quotes }} не са намерени и са маркирани в текста</b>{% endif %}; решенията на ВКС в списъците са
+      само тези „противоречи“ от справката{% set dropped = appeal.grounds|map(attribute='dropped_labels')|sum(start=[]) %}{% if dropped %} (махнати {{ dropped|length }} позовавания извън справката){% endif %}. Решенията, цитирани от другите документи по делото, и текстовете на закона – проверете.</div>
     <div class="card page-card legal-text draft-text">
       {% for b in blocks %}
         {% if b.kind == 'heading' %}<p><strong>{{ b.text }}</strong></p>
@@ -51,8 +70,10 @@
     <div class="card page-card"><h2>Какво ще съдържа</h2>
       <ul class="help-steps">
         <li>ДО ВКС, чрез въззивния съд, страните, обжалваното решение (номерът е от документа);</li>
-        <li>оплакванията по чл. 281, т. 3 ГПК – всяко с дословен цитат от решението, порока и доводите;</li>
-        <li>позоваване само на решенията на ВКС, оценени в справката като „противоречи“;</li>
+        <li>встъпление – какво точно е решил съдът и защо решението е неправилно;</li>
+        <li>оплакванията по чл. 281, т. 3 ГПК под римски цифри – подробно по всеки извод на съда: мотивите с дословни цитати, доказателствата по делото, нормите и практиката, противоречията и евентуалните доводи;</li>
+        <li>стилът следва образците на адвоката (ако са качени в „Документи“);</li>
+        <li>практика – решенията на ВКС „противоречи“ от справката с проверени цитати и цитираните в документите по делото;</li>
         <li>искането към ВКС, разноските и „Прилагам“ (изложение, решения, такса, пълномощно, преписи).</li>
       </ul></div>
     {% endif %}
