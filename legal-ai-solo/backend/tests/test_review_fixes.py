@@ -355,3 +355,29 @@ def test_help_and_report_filter_pages(client, monkeypatch):
     c = _local(client, monkeypatch)
     assert "Нов случай – стъпка по стъпка" in c.get("/help").text
     assert c.get("/reports?mode=ai").status_code == 200 and c.get("/reports?mode=x").status_code == 200
+
+
+# the verified nationwide court list
+
+def test_every_court_resolves_to_itself():
+    from legal_ai.sources.courts import COURTS
+    assert len(COURTS) >= 146 and {c.level for c in COURTS.values()} == {"апелативен", "градски", "окръжен", "районен"}
+    apps = {c.city: c for c in COURTS.values() if c.level == "апелативен"}
+    for c in COURTS.values():
+        if c.level == "апелативен":
+            continue
+        if c.level in ("окръжен", "градски"):
+            up = apps.get(c.region) or apps["София"]
+        else:
+            up = next((o for o in COURTS.values() if o.level in ("окръжен", "градски") and o.region == c.region),
+                      COURTS["os-ruse"])
+        got, exact = tracing.resolve_lower_court(c.name, up)
+        assert got is not None and got.key == c.key and exact, c.name
+
+
+def test_court_adjectives_and_sofia_abbreviations():
+    from legal_ai.sources.courts import COURTS
+    assert tracing.resolve_lower_court("Врачански окръжен съд", COURTS["as-sofia"])[0].key == "os-vratsa"
+    assert tracing.resolve_lower_court("СГС, ГО, II-В състав", COURTS["as-sofia"])[0].key == "sgs"
+    assert tracing.resolve_lower_court("СРС, 45 състав", COURTS["sgs"])[0].key == "srs"
+    assert tracing.find_named_court("Великотърновски апелативен съд").key == "as-veliko-tarnovo"

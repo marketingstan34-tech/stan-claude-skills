@@ -188,7 +188,8 @@ def as_dicts(cites: list[Citation]) -> list[dict]:
 # (20215001000899 = 899/2021); the court-site lookup then confirms or rejects the number.
 _HEAD_COURT = re.compile(
     r"\b(АПЕЛАТИВЕН|ОКРЪЖЕН|РАЙОНЕН)\s+СЪД\s*[–—-]?\s*(?:ГР\.\s*)?([А-ЯЁ][А-Я]+(?:\s+[А-Я][А-Я]+)?)\b"
-    r"|\b(СОФИЙСКИ\s+ГРАДСКИ\s+СЪД|СОФИЙСКИ\s+РАЙОНЕН\s+СЪД|СОФИЙСКИ\s+АПЕЛАТИВЕН\s+СЪД)\b",
+    r"|\b(СОФИЙСКИ\s+ГРАДСКИ\s+СЪД|СОФИЙСКИ\s+РАЙОНЕН\s+СЪД|СОФИЙСКИ\s+АПЕЛАТИВЕН\s+СЪД)\b"
+    r"|\b([А-Я]+СКИ)\s+(АПЕЛАТИВЕН|ОКРЪЖЕН|РАЙОНЕН)\s+СЪД\b",
     re.IGNORECASE)
 _HEAD_CASE = re.compile(
     r"((?:въззивно|възз\.|частно|ч\.|първоинстанционно)?\s*(?:гражданско|търговско|гр\.|т\.|търг\.)\s*"
@@ -214,6 +215,10 @@ def extract_case_header(text: str) -> dict | None:
     head = _flat(text[:2500])
     court = level = city = ""
     for m in _HEAD_COURT.finditer(head):
+        if m.group(4):   # "Великотърновски апелативен съд": the court is matched by the adjective later
+            level, city = m.group(5).lower(), ""
+            court = f"{m.group(4).capitalize()} {level} съд"
+            break
         if m.group(3):
             court = " ".join(w.capitalize() if i == 0 else w.lower() for i, w in enumerate(m.group(3).split()))
             level = "градски" if "ГРАДСКИ" in m.group(3).upper() else m.group(3).split()[1].lower()

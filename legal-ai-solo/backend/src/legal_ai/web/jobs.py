@@ -124,7 +124,8 @@ class JobRunner:
         if not head:
             p["identified"] = {"note": "Съдът и делото не се разчитат от началото на документа."}
             return
-        site = find_court(head["court"])
+        from legal_ai.tracing import find_named_court
+        site = find_court(head["court"]) or find_named_court(head["court"])
         p["identified"] = {**head, "supported": bool(site)}
         if site:
             p.update(court=site.key, case=head["number"], year=head["year"])

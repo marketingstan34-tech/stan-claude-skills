@@ -30,12 +30,18 @@ def _norm(text: str) -> str:
     return " ".join((text or "").upper().replace("–", " ").replace("-", " ").replace("Ё", "Е").split())
 
 
+# Adjectives that the stem rule below does not produce ("Врачански окръжен съд").
+_ADJECTIVES = {"ВРАЦА": "ВРАЧАН"}
+# Sofia courts are usually written by their abbreviation.
+_KNOWN_ABBR = {"СГС": "sgs", "СРС": "srs", "СОС": "os-sofia", "САС": "as-sofia"}
+
+
 def _city_forms(city: str) -> list[str]:
     """How a town appears in a court reference: "Стара Загора", "Старозагорски", "Пазарджишки"."""
     c = _norm(city)
     words = c.split()
     stem = c[:-2] if len(c) >= 7 else c[:-1] if len(c) >= 5 else c
-    forms = {c, stem}
+    forms = {c, stem} | ({_ADJECTIVES[c]} if c in _ADJECTIVES else set())
     if len(words) == 2:
         first = words[0][:-1] + "О" if words[0][-1] in "АО" else words[0]
         last = words[1][:-2] if len(words[1]) >= 6 else words[1][:-1]
@@ -66,6 +72,28 @@ def _subsequence(abbr: str, city: str) -> bool:
     return i == len(abbr)
 
 
+def find_named_court(text: str) -> CourtSite | None:
+    """The court a text names with its town in full or as an adjective ("Великотърновски
+    апелативен съд", "Окръжен съд – Смолян"), at the level the text names; None if unclear."""
+    raw = (text or "").replace("–", "-")
+    t = _norm(raw)
+    for abbr, key in _KNOWN_ABBR.items():
+        if re.search(r"(?<![А-Я])" + abbr + r"(?![А-Я])", raw.upper()) and key in COURTS:
+            return COURTS[key]
+    named = _level_named(raw.upper()) | ({"апелативен"} if "АПЕЛАТИВ" in t else set())
+    if len(named) != 1:
+        return None
+    best: tuple[int, CourtSite] | None = None
+    for c in COURTS.values():
+        if c.level not in named:
+            continue
+        for form in _city_forms(c.city):
+            if re.search(r"(?<![А-Я])" + re.escape(form), t) and (best is None or len(form) > best[0]):
+                best = (len(form), c)
+                break
+    return best[1] if best else None
+
+
 def resolve_lower_court(text: str, appellate: CourtSite) -> tuple[CourtSite | None, bool]:
     """The first-instance court named in the appellate decision: (court, written in full).
 
@@ -83,6 +111,10 @@ def resolve_lower_court(text: str, appellate: CourtSite) -> tuple[CourtSite | No
     named = _level_named(raw.upper())
     if named and not named & set(levels):
         return None, False
+    for abbr, key in _KNOWN_ABBR.items():
+        c = COURTS.get(key)
+        if c and c.level in levels and re.search(r"(?<![А-Я])" + abbr + r"(?![А-Я])", raw.upper()):
+            return c, True
     pool = [c for c in COURTS.values() if c.level in levels and (not named or c.level in named)]
     # 1) the town written in full or as an adjective, anywhere in the country
     best: tuple[int, CourtSite] | None = None
