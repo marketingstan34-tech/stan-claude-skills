@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Справката тече · Legal AI Solo{% endblock %}
+{% block page_title %}{% if job.params.mode == 'benchmark' %}Проверка на точността{% elif job.params.mode == 'judge' %}„Съдия от ВКС“{% elif job.params.mode == 'filing' %}Чернова с AI{% elif job.params.mode == 'appeal' %}Чернова на касационна жалба{% elif job.params.file %}{{ job.params.filename }}{% else %}{{ courts[job.params.court].name if job.params.court in courts else 'Справка' }} · дело {{ job.params.case }}/{{ job.params.year }}{% endif %}{% endblock %}
+{% block view_class %}scroll-view{% endblock %}
+{% block page_hint %}Справката се изготвя. Страницата се обновява сама, не я затваряйте.{% endblock %}
+{% block content %}
+{% if job.status in ('queued', 'running') %}<meta http-equiv="refresh" content="{{ 3 if job.params.mode == 'noai' else 5 }}">{% endif %}
+<div class="card job-card">
+  <div class="profile-header-row">
+    <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('ai' if job.params.mode == 'ai' else 'path', 22) }}</div>
+    <div class="profile-name-info"><h2 class="profile-name">{{ 'Справката не успя' if job.status == 'failed' else ('В опашката' if job.status == 'queued' else 'Работи…') }}</h2>
+      <p class="profile-role">{{ 'С AI' if job.params.mode == 'ai' else 'Без AI' }} · {{ 'обикновено няколко минути' if job.params.mode == 'ai' else 'обикновено под минута' }}</p></div>
+  </div>
+  {% if job.status == 'failed' %}
+    <div class="notice">{{ job.message }}</div>
+    <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Назад</a>
+  {% else %}
+    <div class="proj-stage-row"><span class="proj-stage-text">{{ job.message }}</span></div>
+    <div class="proj-progress-bar-bg blue-bar-bg"><div class="proj-progress-fill blue-fill indeterminate"></div></div>
+    <p class="muted">Страницата се обновява сама.</p>
+  {% endif %}
+</div>
+{% endblock %}

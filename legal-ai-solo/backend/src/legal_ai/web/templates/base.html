@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Legal AI Solo{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/kit/index.css">
+<link rel="stylesheet" href="/static/kit/dashboard.css">
+<link rel="stylesheet" href="/static/kit/navigationtab1.css">
+<link rel="stylesheet" href="/static/app.css">
+<link rel="stylesheet" href="/static/finset.css">
+</head>
+<body>
+{% set path = request.url.path %}
+{% set nav = [
+  ('/start', 'Начало', 'grid', path.startswith('/start'), 'Начало: текущите случаи, срокове и какво остава'),
+  ('/analyze', 'Нов случай', 'case', path.startswith(('/analyze', '/jobs')), 'Нов случай: качете въззивното решение или въведете номера на делото'),
+  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/traces')) or (path.startswith('/runs') and not path.endswith(('/draft', '/appeal', '/edit'))), 'Всички направени справки'),
+  ('/documents', 'Документи', 'msg', path.startswith('/documents') or path.endswith(('/draft', '/appeal', '/edit')), 'Всички изложения и касационни жалби – отваряне, редакция, Word'),
+  ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
+  ('/judges', 'Съдии', 'court', path.startswith('/judges'), 'Проучване по съдия: докладчици във ВКС и как допускат'),
+  ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
+] %}
+{% from "icons.html" import icon %}
+{% from "parts_credits.html" import credits_box %}
+<div class="fs-app">
+  <div class="fs-window">
+    <aside class="fs-sidebar" aria-label="Меню">
+      <a class="fs-brand" href="/start" title="Начало">
+        <span class="fs-logo">{{ icon('scale', 18) }}</span>
+        <span class="fs-brand-text">Legal AI<small>касация · ВКС</small></span>
+      </a>
+      <nav class="fs-nav">
+        {% for href, label, ic, active, desc in nav %}
+        <a class="fs-nav-item {{ 'active' if active }}" href="{{ href }}" title="{{ desc }}">{{ icon(ic, 18) }}<span>{{ label }}</span></a>
+        {% endfor %}
+      </nav>
+      <div class="fs-sidebar-bottom">
+        {% if running_job %}<a class="fs-running" href="/jobs/{{ running_job.id }}" title="Тече справка – щракнете, за да я видите"><span class="fs-pulse"></span>Тече справка…</a>{% endif %}
+        {{ credits_box(credits, request) }}
+        <a class="fs-nav-item {{ 'active' if path.startswith('/help') }}" href="/help" title="Как се работи с програмата">{{ icon('help', 18) }}<span>Как се работи</span></a>
+        <a class="fs-nav-item" href="/logout" title="Изход от програмата" onclick="return confirm('Изход от програмата?')">{{ icon('logout', 18) }}<span>Изход</span></a>
+        <p class="fs-disclaimer">Помощен инструмент · не е правно становище</p>
+      </div>
+    </aside>
+
+    <main class="fs-main">
+      <header class="fs-top">
+        <div class="fs-title-block">
+          <button class="fs-back" title="Назад" onclick="history.length > 1 ? history.back() : location.assign('/start')">{{ icon('left', 16) }}</button>
+          <div>
+            <h1 class="page-title fs-title">{% block page_title %}Legal AI Solo{% endblock %}</h1>
+            <p class="fs-subtitle">{{ today }}</p>
+          </div>
+        </div>
+        <div class="fs-top-right">
+          <a class="fs-circle-btn" href="/" title="Търсене в практиката">{{ icon('search', 16) }}</a>
+          <a class="fs-circle-btn fs-notif" href="{{ '/jobs/' ~ running_job.id if running_job else '/start' }}"
+             title="{{ 'Тече справка' if running_job else 'Няма текущи справки' }}">{{ icon('bell', 16) }}{% if running_job %}<span class="fs-badge">1</span>{% endif %}</a>
+          <button type="button" class="fs-circle-btn print-btn" onclick="window.print()" title="Принтирай тази страница (или запази като PDF)">{{ icon('print', 16) }}</button>
+          <a class="fs-user-pill" href="/start" title="Начало">
+            <span class="fs-user-avatar">{{ icon('scale', 15) }}</span>
+            <span class="fs-user-details"><b>Кантора</b><small>Legal AI Solo</small></span>
+          </a>
+        </div>
+      </header>
+
+      {% set hint %}{% block page_hint %}{% endblock %}{% endset %}
+      {% if hint|trim %}<div class="page-hint fs-hint">{{ icon('info', 14) }}<span>{{ hint }}</span></div>{% endif %}
+
+      <div class="dash-view-content fs-content {% block view_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+      </div>
+    </main>
+  </div>
+</div>
+{# phone navigation: the kit's "navigation tab 1" bar (shown below 960px) #}
+<div class="nav-tab1-wrapper mobile-tabbar">
+  <nav class="nav-tab1-container" aria-label="Меню">
+    <svg class="nav-tab1-bg-svg" viewBox="0 0 500 70" fill="none" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg"><path d="M 30 0 L 188 0 C 202 0 209 13 216 24 C 223 35 235 46 250 46 C 265 46 277 35 284 24 C 291 13 298 0 312 0 L 470 0 A 30 30 0 0 1 500 30 L 500 40 A 30 30 0 0 1 470 70 L 30 70 A 30 30 0 0 1 0 40 L 0 30 A 30 30 0 0 1 30 0 Z" fill="#ffffff"/></svg>
+    <div class="nav-tab1-group left">
+      {% for href, label, ic, active, desc in [nav[0], nav[2]] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+    </div>
+    <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нов случай"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
+    <div class="nav-tab1-group right">
+      {% for href, label, ic, active, desc in [nav[3], nav[4]] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+    </div>
+  </nav>
+</div>
+<script>
+/* FinSet motion: cards rise in one after another; numbers count up. Only looks, no behaviour. */
+(function () {
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var root = document.querySelector('.fs-content');
+  if (root && !reduce) {
+    var cards = root.querySelectorAll('.card, .page-card, .project-card, .stat-card, .notice');
+    var n = 0;
+    Array.prototype.forEach.call(cards, function (c) {
+      if (c.parentElement && c.parentElement.closest('.card, .page-card, .project-card')) return;   /* nested: moves with its parent */
+      c.classList.add('fs-anim'); c.style.setProperty('--i', Math.min(n++, 14));
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll('[data-count]'), function (el) {
+    var to = parseInt(el.getAttribute('data-count'), 10) || 0;
+    if (reduce || to === 0) { el.textContent = to; return; }
+    var t0 = null, dur = 900;
+    function step(t) { if (!t0) t0 = t; var k = Math.min(1, (t - t0) / dur); el.textContent = Math.round(to * (1 - Math.pow(1 - k, 3)));
+      if (k < 1) requestAnimationFrame(step); }
+    el.textContent = '0'; requestAnimationFrame(step);
+  });
+})();
+</script>
+<script>
+window.addEventListener('beforeprint', function () {
+  document.querySelectorAll('details:not([data-print="closed"])').forEach(function (d) { d.open = true; });
+});
+</script>
+</body>
+</html>

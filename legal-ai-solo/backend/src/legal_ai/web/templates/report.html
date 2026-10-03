@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% from "parts_case.html" import case_profile, path_cards, case_form, delete_box with context %}
+{% set a = run.analysis %}
+{% block title %}{{ run.appellate.label }} · Legal AI Solo{% endblock %}
+{% block page_title %}Касационен анализ с AI{% endblock %}
+{% macro quote(q) -%}
+  {% if q and q.text %}
+  <blockquote>„{{ q.text }}“
+    {% if q.status == 'text_verified' %}<div class="ok muted">✅ цитатът е проверен дословно в текста</div>
+    {% else %}<div class="bad muted">⚠️ цитатът не е намерен дословно — не го използвайте без проверка</div>{% endif %}
+  </blockquote>
+  {% endif %}
+{%- endmacro %}
+{% block page_hint %}Справка с AI: казусът, пътят на делото, изводите на въззивния съд, правните въпроси и решенията на ВКС по всеки въпрос (зелено – противоречи, розово – подкрепя). Бутоните вдясно правят изложение, жалба, шанс за допускане и проверка „Съдия от ВКС“.{% endblock %}
+{% block content %}
+{% set contra = run.assessments|selectattr('relevant')|selectattr('stance', 'equalto', 'противоречи')|list|length %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '') }}
+    <div class="card details-card">
+      <h2 class="details-title">Обобщение</h2>
+      <div class="details-list">
+        {% set li = a.lower_instance %}
+        {% set links = {'Обжалван акт (по текста)': '#path', 'Правни въпроси': '#questions', 'Решения „противоречи“': '#questions'} %}
+        {% for label, value, ic in [('Обжалван акт (по текста)', [li.act, li.case, li.court]|select|join(' · ') or '—', 'doc'),
+            ('Правни въпроси', a.questions|length, 'hash'), ('Решения „противоречи“', contra, 'court'),
+            ('Практика на ВКС до', run.cutoff, 'cal'),
+            ('Модели', run.models.analysis ~ (' · ' ~ run.models.assess if run.models.assess else ''), 'ai'),
+            ('AI заявки · токени · цена', run.usage.calls ~ ' · ' ~ run.usage.input_tokens ~ '/' ~ run.usage.output_tokens ~ (' · ≈ ' ~ ('%.2f'|format(run_cost)) ~ ' $' if run_cost is not none else ''), 'info')] %}
+        {% if links.get(label) %}<a class="detail-item-row link-row" href="{{ links[label] }}" title="Към раздела"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('right', 11) }}</span></div></a>
+        {% else %}<div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
+        {% endfor %}
+        <a class="kit-submit" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Чернова на изложение</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/admission" style="display:block;text-align:center">Шанс за допускане</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/judge" style="display:block;text-align:center">„Съдия от ВКС“ – проверка</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/filing/otgovor" style="display:block;text-align:center">Други документи: отговор, въззивна, частна</a>
+      </div>
+    </div>
+    {{ case_form('/runs/' ~ run_id ~ '/case', run) }}
+    {{ delete_box('/runs/' ~ run_id ~ '/delete') }}
+  </div>
+
+  <div class="dash-col-right scroll-col">
+    {% set local = run.searches|selectattr('local','defined')|list %}
+    <div class="notice">Помощен анализ, не правно становище.
+      {% if local %}Търсено е в сайта на ВКС и в собствената база (решения по чл. 290 и тълкувателни решения); базата може да не е пълна.
+      {% else %}Търсено е само в сайта на ВКС по точни думи и може да е пропусната практика.{% endif %}
+      Всеки цитат е проверен дословно (✅) или е маркиран (⚠️).</div>
+
+    <div class="card page-card"><h2>Казусът</h2><p>{{ a.case_summary }}</p></div>
+    {% if run.context_names %}<div class="card page-card"><h2>Други документи по делото</h2>
+      <p>{{ run.context_names|join(', ') }}</p><p class="muted">Ползвани като контекст; цитатите са само от въззивното решение.</p></div>{% endif %}
+    {% if run.notes %}<div class="card page-card"><h2>Бележки на адвоката</h2><p class="notes-text">{{ run.notes }}</p>
+      <p class="muted">Взети предвид при въпросите; цитатите са само от решението.</p></div>{% endif %}
+    {% if run.path %}{{ path_cards(run.path) }}{% endif %}
+
+    <div class="card page-card"><h2>Изводи на въззивния съд</h2>
+      {% for h in a.holdings %}<p><strong>{{ h.id }}.</strong> {{ h.summary }}</p>{{ quote(run.holding_quotes[h.id]) }}{% endfor %}
+    </div>
+
+    <div id="questions"></div>
+    {% for q in a.questions %}
+    <div class="card page-card">
+      <h3>{{ q.id }}. {{ q.text }}</h3>
+      <p><span class="tag">{{ q.kind }}</span><span class="tag">чл. 280, ал. 1, {{ q.ground }} ГПК (предложение)</span></p>
+      <p class="muted">{{ q.why_decisive }}</p>
+      {% set found = by_q.get(q.id, []) %}
+      {% if not found %}<p class="muted">Не е намерена относима практика с това търсене.</p>{% endif %}
+      {% for stance, title, cls in [('противоречи','Противоречи на въззивния съд','stance-contra'),('неясно','Относимо, посоката не е ясна','stance-unclear'),('подкрепя','Подкрепя въззивния съд — внимание','stance-support')] %}
+        {% set group = found|selectattr('stance','equalto',stance)|list %}
+        {% if group %}<h4>{{ title }}</h4>{% endif %}
+        {% for x in group %}
+          <div class="stance-card {{ cls }}">
+            <a class="link" href="{{ x.url }}" target="_blank" rel="noopener noreferrer">{{ x.label }}</a> <span class="muted">· {{ x.chamber or '?' }}</span>
+            <p>{{ x.vks_rule }}</p><p class="muted">{{ x.explanation }}</p>
+            {{ quote(x.quote) }}
+          </div>
+        {% endfor %}
+      {% endfor %}
+      <details><summary class="muted">Търсения</summary><ul>
+      {% for s in run.searches if s.question_id == q.id and s.rows is defined %}
+        {% if s.local %}<li class="muted">Собствена база ({{ s.words|join('; ') }}): {{ s.rows }} акта</li>
+        {% else %}<li class="muted">{{ s.words|join(' + ') }} ({{ s.case_type }}): {{ s.rows }} резултата{% if s.truncated %} — отрязан списък{% endif %}</li>{% endif %}
+      {% endfor %}
+      {% for s in run.searches if s.question_id == q.id and s.live_skipped %}
+        <li class="muted">{{ s.words|join(' + ') }}: {{ s.skipped }}</li>
+      {% endfor %}</ul></details>
+    </div>
+    {% endfor %}
+    {% if run.skipped %}<details class="card page-card"><summary class="muted">Пропуснати актове</summary><ul>{% for s in run.skipped %}<li class="muted">{{ s }}</li>{% endfor %}</ul></details>{% endif %}
+  </div>
+</div>
+{% endblock %}

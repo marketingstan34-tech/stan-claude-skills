@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Документи · Legal AI Solo{% endblock %}
+{% block page_title %}Документи{% endblock %}
+{% block page_hint %}Всички изложения и касационни жалби по справките с AI. Отворете, редактирайте или свалете като Word. Редактираната версия се пази отделно и автоматичната може да се върне.{% endblock %}
+{% block content %}
+<div class="help-page">
+  {% if not docs %}<div class="card page-card"><p>Още няма документи. Те се появяват след справка „С AI“. <a class="link" href="/analyze">Нов случай</a></p></div>{% endif %}
+  {% for r in docs %}
+  <div class="card page-card doc-row">
+    <div class="doc-head">
+      <a class="link doc-title" href="{{ r.url }}">{{ r.label }}</a>
+      <span class="status-chip st-{{ ['нов', 'в работа', 'подадена жалба', 'приключен'].index(r.status) if r.status in ['нов', 'в работа', 'подадена жалба', 'приключен'] else 0 }}">{{ r.status }}</span>
+      {% if r.due and r.status in ('нов', 'в работа') %}<span class="count-chip">срок {{ r.due }} · {{ r.days_left }} дни</span>{% endif %}
+      <span class="muted small">справка от {{ r.created }}</span>
+    </div>
+    <table class="doc-table">
+      <tr><td><b>Изложение</b> по чл. 284, ал. 3, т. 1 {% if r.draft_edited %}<span class="count-chip">редактирано {{ r.draft_edited }}</span>{% endif %}</td>
+        <td class="doc-links"><a class="link" href="/runs/{{ r.id }}/draft">Отвори</a> · <a class="link" href="/runs/{{ r.id }}/draft/edit">Редактирай</a> · <a class="link" href="/runs/{{ r.id }}/draft.docx">Word</a></td></tr>
+      <tr><td><b>Касационна жалба</b> {% if r.appeal_edited %}<span class="count-chip">редактирана {{ r.appeal_edited }}</span>{% endif %}</td>
+        <td class="doc-links">{% if r.has_appeal %}<a class="link" href="/runs/{{ r.id }}/appeal">Отвори</a> · <a class="link" href="/runs/{{ r.id }}/appeal/edit">Редактирай</a> · <a class="link" href="/runs/{{ r.id }}/appeal.docx">Word</a>
+          {% else %}<a class="link" href="/runs/{{ r.id }}/appeal">Напиши с AI</a>{% endif %}</td></tr>
+      <tr><td><b>Приложения</b> – цитираните решения на ВКС</td>
+        <td class="doc-links"><a class="link" href="/runs/{{ r.id }}/attachments.zip">ZIP</a></td></tr>
+    </table>
+  </div>
+  {% endfor %}
+  <div class="card page-card doc-row" id="style">
+    <div class="doc-head"><span class="doc-title">Образци на стила на адвоката</span>
+      <span class="count-chip">{{ style_docs|length }} от 3</span></div>
+    <p class="muted small">Качете 1–3 ваши жалби или изложения (по всяко дело). AI пише касационната жалба в същия стил – структура, изрази, подробност. Фактите от тях не се ползват. Сканирани PDF се разчитат автоматично. Пазят се само в частната папка на сървъра.</p>
+    {% if request.query_params.get('doc_error') %}<div class="notice bad">{{ request.query_params.get('doc_error') }}</div>{% endif %}
+    {% if style_docs %}<table class="doc-table">
+      {% for d in style_docs %}<tr><td><b>{{ d.filename }}</b> <span class="muted small">добавен {{ d.added }}</span></td>
+        <td class="doc-links"><form method="post" action="/style/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли образецът {{ d.filename }}?')"><button type="submit" class="link-button">Махни</button></form></td></tr>{% endfor %}
+    </table>{% endif %}
+    {% if style_docs|length < 3 %}
+    <form method="post" action="/style" enctype="multipart/form-data" class="docs-upload">
+      <input class="kit-input" type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm" required>
+      <button class="kit-submit" type="submit">Добави образец</button>
+    </form>{% endif %}
+  </div>
+  <div class="card page-card doc-row" id="archive">
+    <div class="doc-head"><span class="doc-title">Архив на адвоката</span>
+      <span class="count-chip">{{ archive_docs|length }} документа</span></div>
+    <p class="muted small">Всички ваши стари жалби, изложения и отговори – по всяко дело (до 150; може цяла папка или ZIP). При всяка нова жалба програмата намира в тях доводите и практиката, които пасват на въпросите по делото, и AI ги ползва – без фактите от другите дела. Ако няма образци на стила, първите два документа от архива служат за стил. Пазят се само в частната папка на сървъра.</p>
+    {% if archive_docs %}<details><summary class="link" style="cursor:pointer">Покажи документите</summary><table class="doc-table">
+      {% for d in archive_docs %}<tr><td><b>{{ d.kind or 'сканиран – ще се разчете' }}</b> · {{ d.filename }}</td>
+        <td class="doc-links"><form method="post" action="/archive/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }} от архива?')"><button type="submit" class="link-button">Махни</button></form></td></tr>{% endfor %}
+    </table></details>{% endif %}
+    <form method="post" action="/archive" enctype="multipart/form-data" class="docs-upload">
+      <label class="kit-submit" style="cursor:pointer">Качи папка<input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
+      <label class="kit-submit light" style="cursor:pointer">Файлове или ZIP<input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.zip" hidden onchange="this.form.submit()"></label>
+    </form>
+  </div>
+</div>
+{% endblock %}

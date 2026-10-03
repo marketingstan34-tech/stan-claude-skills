@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ name }} · Legal AI Solo{% endblock %}
+{% block page_title %}{{ name }}{% endblock %}
+{% block page_hint %}Съдия във ВКС – по актовете в собствената база. Търсете с думи в актовете, по които е докладчик (напр. „давност владение“), за да видите как е решавал сходни въпроси.{% endblock %}
+{% block content %}
+<div class="start-stats judge-stats">
+  <div class="card stat-card"><span class="stat-label">Докладчик</span><span class="stat-num">{{ totals.n }}</span><span class="stat-sub">акта · {{ totals.chamber or '—' }}</span></div>
+  <div class="card stat-card"><span class="stat-label">В състав</span><span class="stat-num">{{ totals.panel }}</span><span class="stat-sub">акта като член или председател</span></div>
+  <div class="card stat-card"><span class="stat-label">По чл. 290</span><span class="stat-num">{{ totals.n290 }}</span><span class="stat-sub">решения по същество</span></div>
+  <div class="card stat-card"><span class="stat-label">Допуска</span><span class="stat-num">{{ (totals.share ~ '%') if totals.share is not none else '—' }}</span><span class="stat-sub">{{ totals.admitted + totals.partly }} от {{ totals.admitted + totals.partly + totals.refused }} определения по чл. 288</span></div>
+</div>
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    <div class="card details-card">
+      <h2 class="details-title">Допускане по години</h2>
+      {% if years %}{% for y in years %}{% set total = y.admitted + y.refused %}
+        <div class="judge-year"><span>{{ y.year }}</span><div class="adm-bar"><i class="yes" style="width: {{ (100 * y.admitted / total)|round|int if total else 0 }}%"></i><i class="no" style="width: {{ (100 * y.refused / total)|round|int if total else 0 }}%"></i></div><span class="muted small">{{ y.admitted }}/{{ total }}</span></div>
+      {% endfor %}{% else %}<p class="muted">Още няма определения по чл. 288 с този докладчик в базата.</p>{% endif %}
+      <a class="link" href="/judges" style="text-align:center;font-size:12px">← всички съдии</a>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    <div class="card page-card">
+      <form method="get" class="judge-search"><input class="kit-input" name="w" value="{{ w }}" placeholder="думи в актовете, напр. давност владение" aria-label="Думи"><button class="kit-submit" type="submit">Търси</button></form>
+      <h3 class="section-heading">{% if terms %}Актове с „{{ terms|join(' ') }}“{% else %}Последни актове като докладчик{% endif %} ({{ acts|length }})</h3>
+      {% for a in acts %}<div class="adm-example"><a class="link" href="{{ a.canonical_url }}" target="_blank" rel="noopener">{{ (a.act_type or 'акт')|capitalize }} №{{ a.act_number or '?' }}/{{ a.act_date.strftime('%d.%m.%Y') if a.act_date else '?' }} по {{ a.case_type or '' }} дело №{{ a.case_number or '?' }}/{{ a.case_year or '?' }}</a>
+        {% if a.admission_result %}<span class="status-chip {{ 'st-3' if a.admission_result == 'не допуска' else 'st-2' }}">{{ a.admission_result }}</span>{% elif a.proceeding_article == '290' %}<span class="status-chip st-1">чл. 290</span>{% endif %}
+        <span class="muted small">{{ a.chamber or '' }}</span></div>
+      {% else %}<p class="muted">Няма актове{% if terms %} с тези думи{% endif %}.</p>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

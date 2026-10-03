@@ -1,0 +1,1357 @@
+/* Copied unchanged from the owner's UI kit: 'loginpagev8/src/App.css' (spec §14.2). */
+/* Full Screen Split Layout */
+.login-screen-layout {
+  display: flex;
+  width: 100vw;
+  min-height: 100vh;
+  background-color: var(--bg-page);
+  overflow-x: hidden;
+}
+
+/* =========================================================
+   LEFT PANE: Interactive Robot Showcase
+   ========================================================= */
+.robot-left-pane {
+  flex: 1.25;
+  background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 50%, #E2E8F0 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 40px;
+}
+
+/* Subtle decorative ambient pattern */
+.robot-ambient-grid {
+  position: absolute;
+  inset: 0;
+  background-image: radial-gradient(rgba(37, 99, 235, 0.08) 1.2px, transparent 1.2px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+  -webkit-mask-image: radial-gradient(circle at center, black 40%, transparent 80%);
+}
+
+.left-pane-backdrop {
+  position: absolute;
+  width: 520px;
+  height: 520px;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.16) 0%, rgba(46, 232, 194, 0.09) 50%, transparent 70%);
+  filter: blur(45px);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.robot-showcase-container {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 630px;
+}
+
+/* Robot Stage Container */
+.robot-stage {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  width: 100%;
+}
+
+/* Speech / Reaction Bubble */
+.robot-bubble {
+  position: absolute;
+  top: -60px;
+  background: #0F172A;
+  color: #FFFFFF;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-full);
+  box-shadow: var(--shadow-md);
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(8px) scale(0.95);
+  transition: all var(--transition-spring);
+  z-index: 10;
+  white-space: nowrap;
+}
+
+.robot-bubble::after {
+  content: '';
+  position: absolute;
+  bottom: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px 6px 0;
+  border-style: solid;
+  border-color: #0F172A transparent transparent;
+}
+
+.robot-bubble.visible {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+/* SVG Sizing */
+.robot-svg {
+  width: 100%;
+  max-width: 650px;
+  height: auto;
+  overflow: visible;
+  filter: drop-shadow(0 14px 28px rgba(15, 23, 42, 0.08));
+}
+
+/* =========================================================
+   ANIMATIONS: Robot Neck Left-Right Looking Around
+   ========================================================= */
+
+/* Robot Head/Body Natural Neck Rotation */
+.robot-head-body.idle-look-around {
+  transform-origin: 108px 240px;
+  animation: robotLookAround 4.0s cubic-bezier(0.42, 0, 0.58, 1) infinite;
+}
+
+/* Focus towards the Login Form on the Right */
+.robot-head-body.focus-right {
+  transform-origin: 108px 240px;
+  transform: rotate(8deg) translateX(4px) translateY(-1px);
+  transition: transform 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Interacting with Pink Companion on the Right (Gentle in-place neck glance) */
+.robot-head-body.interact-tilt-pink {
+  transform-origin: 108px 240px;
+  transform: rotate(4deg);
+  transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+}
+
+/* Looking around keyframes: Smooth, natural glances left, center, and right */
+@keyframes robotLookAround {
+  0%, 100% {
+    transform: rotate(0deg) translateX(0);
+  }
+  20%, 35% {
+    /* Glancing left attentively */
+    transform: rotate(-7deg) translateX(-3.5px) translateY(-0.5px);
+  }
+  50% {
+    /* Smooth center glance */
+    transform: rotate(0deg) translateX(0);
+  }
+  68%, 82% {
+    /* Glancing right curiously towards companions & form */
+    transform: rotate(7deg) translateX(3.5px) translateY(-1px);
+  }
+  92% {
+    /* Returning smoothly to center */
+    transform: rotate(0deg) translateX(0);
+  }
+}
+
+/* =========================================================
+   PINK COMPANION: Music-Listening Grooving Effect
+   ========================================================= */
+
+/* Head & Body Grooving to the Music Beat - Silky Smooth Vibe */
+.pink-body-head {
+  transform-origin: 275px 242px;
+  animation: pinkMusicVibe 1.8s ease-in-out infinite;
+}
+
+@keyframes pinkMusicVibe {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    /* Gentle buoyant head nod with sweet tilt */
+    transform: translateY(-4.5px) rotate(2deg);
+  }
+  50% {
+    /* Smooth center bass beat */
+    transform: translateY(1.5px) rotate(0deg);
+  }
+  75% {
+    /* Gentle nod with opposite tilt */
+    transform: translateY(-4px) rotate(-2deg);
+  }
+}
+
+/* Headphone Earcups Pulse to Bass */
+.pink-earcup {
+  transform-origin: center;
+  animation: earcupBass 0.675s ease-in-out infinite alternate;
+}
+
+@keyframes earcupBass {
+  from {
+    filter: drop-shadow(0 0 1px #4FE0C1);
+  }
+  to {
+    filter: drop-shadow(0 0 6px #4FE0C1);
+  }
+}
+
+/* Sound Wave Ripples from Headphones */
+.music-wave {
+  animation: soundWavePulse 1.35s ease-out infinite;
+}
+
+.earcup-group-left .music-wave {
+  transform-origin: 198px 145px;
+}
+
+.earcup-group-right .music-wave {
+  transform-origin: 350px 145px;
+}
+
+.music-wave.wave-1 {
+  animation-delay: 0s;
+}
+
+.music-wave.wave-2 {
+  animation-delay: 0.38s;
+}
+
+@keyframes soundWavePulse {
+  0% {
+    opacity: 0.85;
+    transform: scale(0.92);
+  }
+  50% {
+    opacity: 0.45;
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.35);
+  }
+}
+
+/* Floating Musical Notes (♪, ♫) */
+.music-note {
+  animation: floatMusicNote 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.music-note.note-1 {
+  animation-delay: 0s;
+}
+
+.music-note.note-2 {
+  animation-delay: 0.8s;
+}
+
+.music-note.note-3 {
+  animation-delay: 1.6s;
+}
+
+@keyframes floatMusicNote {
+  0% {
+    opacity: 0;
+    transform: translateY(0) rotate(0deg) scale(0.7);
+  }
+  25% {
+    opacity: 1;
+    transform: translateY(-10px) rotate(-12deg) scale(1);
+  }
+  65% {
+    opacity: 0.85;
+    transform: translateY(-26px) rotate(14deg) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-44px) rotate(-8deg) scale(0.8);
+  }
+}
+
+
+.star-sway-body {
+  transform-origin: 388px 145px;
+  animation: starSmoothSway 3.6s ease-in-out infinite;
+}
+
+@keyframes starSmoothSway {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0) scale(1);
+  }
+  25% {
+    /* Smooth gentle sway to the left */
+    transform: rotate(-3.5deg) translateY(-5px) scale(1.015);
+  }
+  50% {
+    /* Smooth center float */
+    transform: rotate(0deg) translateY(-1px) scale(1);
+  }
+  75% {
+    /* Smooth gentle sway to the right */
+    transform: rotate(3.5deg) translateY(-5px) scale(1.015);
+  }
+}
+
+/* Star Golden Shimmer Pulse */
+.star-shimmer-overlay {
+  animation: starShimmer 2.4s ease-in-out infinite alternate;
+}
+
+@keyframes starShimmer {
+  0% {
+    opacity: 0.05;
+  }
+  50% {
+    opacity: 0.2;
+  }
+  100% {
+    opacity: 0.05;
+  }
+}
+
+/* Star Arms Waving */
+.star-left-arm {
+  transform-origin: 358px 138px;
+  animation: starArmWaveLeft 2.8s ease-in-out infinite;
+}
+
+.star-right-arm {
+  transform-origin: 420px 138px;
+  animation: starArmWaveRight 2.8s ease-in-out infinite;
+}
+
+@keyframes starArmWaveLeft {
+  0%, 100% { transform: rotate(0deg); }
+  30% { transform: rotate(-6deg) translateY(-3px); }
+  60% { transform: rotate(3deg) translateY(1px); }
+}
+
+@keyframes starArmWaveRight {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(8deg) translateY(-4px); }
+  55% { transform: rotate(-4deg) translateY(2px); }
+  80% { transform: rotate(3deg) translateY(-1px); }
+}
+
+/* Clinging Pet Kitten Wiggle - More Lively */
+.clinging-pet {
+  transform-origin: 316px 105px;
+  animation: petWiggleLively 1.8s ease-in-out infinite;
+}
+
+@keyframes petWiggleLively {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  20% {
+    transform: rotate(-6deg) translateY(-2px);
+  }
+  40% {
+    transform: rotate(3deg) translateY(1px);
+  }
+  60% {
+    transform: rotate(-4deg) translateY(-1.5px);
+  }
+  80% {
+    transform: rotate(2deg) translateY(0.5px);
+  }
+}
+
+/* Realistic Organic Sunflower Mouth Open & Close (Natural Speech / Singing) */
+.star-mouth-realistic {
+  transform-origin: 388px 126px;
+  animation: starMouthTalkNatural 2.6s cubic-bezier(0.38, 0, 0.24, 1) infinite;
+}
+
+.star-mouth-inner {
+  animation: starMouthInnerFade 2.6s cubic-bezier(0.38, 0, 0.24, 1) infinite;
+}
+
+@keyframes starMouthTalkNatural {
+  0%, 100% {
+    /* Natural sweet closed smile */
+    transform: scale(0.96, 0.16);
+  }
+  14% {
+    /* Gentle closed smile pause */
+    transform: scale(0.96, 0.16);
+  }
+  26% {
+    /* Lower jaw smoothly drops open (talking/singing) */
+    transform: scale(1.0, 0.75);
+  }
+  38% {
+    /* Wide joyful open mouth */
+    transform: scale(1.06, 1.15);
+  }
+  50% {
+    /* Smooth syllable dip (partially closes) */
+    transform: scale(1.0, 0.55);
+  }
+  62% {
+    /* Opens wide again on singing beat */
+    transform: scale(1.05, 1.08);
+  }
+  74% {
+    /* Smooth gentle closing movement */
+    transform: scale(0.98, 0.45);
+  }
+  86% {
+    /* Reaches sweet closed smile */
+    transform: scale(0.96, 0.18);
+  }
+  92% {
+    /* Rest in closed smile */
+    transform: scale(0.96, 0.16);
+  }
+}
+
+@keyframes starMouthInnerFade {
+  0%, 14%, 88%, 100% {
+    opacity: 0;
+  }
+  24%, 76% {
+    opacity: 1;
+  }
+}
+
+/* Star Stilt Legs Subtle Bounce */
+.star-stilt-left {
+  transform-origin: 376px 295px;
+  animation: stiltBounceLeft 3.2s ease-in-out infinite;
+}
+
+.star-stilt-right {
+  transform-origin: 399px 295px;
+  animation: stiltBounceRight 3.2s ease-in-out infinite;
+}
+
+@keyframes stiltBounceLeft {
+  0%, 100% { transform: scaleY(1); }
+  28% { transform: scaleY(0.95); }
+  62% { transform: scaleY(1.02); }
+  84% { transform: scaleY(0.97); }
+}
+
+@keyframes stiltBounceRight {
+  0%, 100% { transform: scaleY(1); }
+  22% { transform: scaleY(1.02); }
+  55% { transform: scaleY(0.96); }
+  78% { transform: scaleY(1.01); }
+}
+
+/* =========================================================
+   TEAL CUBE CHARACTER ANIMATIONS
+   ========================================================= */
+
+/* Teal Cube: Jelly Wobble Bounce - Smooth & Organic */
+.teal-cube-body {
+  transform-origin: 388px 280px;
+  animation: cubeJellyBounce 2.8s ease-in-out infinite;
+}
+
+@keyframes cubeJellyBounce {
+  0%, 100% {
+    transform: scale(1, 1) translateY(0) rotate(0deg);
+  }
+  25% {
+    /* Smooth elastic stretch upwards */
+    transform: scale(0.96, 1.04) translateY(-5px) rotate(1deg);
+  }
+  50% {
+    /* Gentle center rest */
+    transform: scale(1, 1) translateY(0) rotate(0deg);
+  }
+  75% {
+    /* Soft compression downwards */
+    transform: scale(1.04, 0.96) translateY(2px) rotate(-1deg);
+  }
+}
+
+/* Cube Arms Cheerful Swing */
+.cube-left-arm {
+  transform-origin: 338px 274px;
+  animation: cubeArmSwingLeft 2.6s ease-in-out infinite;
+}
+
+.cube-right-arm {
+  transform-origin: 438px 274px;
+  animation: cubeArmSwingRight 2.6s ease-in-out infinite;
+}
+
+@keyframes cubeArmSwingLeft {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-12deg) translateX(-3px); }
+  50% { transform: rotate(5deg) translateX(1px); }
+  75% { transform: rotate(-8deg) translateX(-2px); }
+}
+
+@keyframes cubeArmSwingRight {
+  0%, 100% { transform: rotate(0deg); }
+  20% { transform: rotate(10deg) translateX(2px); }
+  45% { transform: rotate(-6deg) translateX(-1px); }
+  70% { transform: rotate(14deg) translateX(3px); }
+  90% { transform: rotate(-3deg) translateX(-1px); }
+}
+
+/* Cube Happy Eye Wiggle */
+.cube-eyes-group {
+  transform-origin: 388px 256px;
+  animation: cubeEyeWiggle 3s ease-in-out infinite;
+}
+
+@keyframes cubeEyeWiggle {
+  0%, 100% { transform: translateY(0) scaleY(1); }
+  15% { transform: translateY(-1px) scaleY(1.1); }
+  30% { transform: translateY(0) scaleY(0.85); }
+  45% { transform: translateY(-0.5px) scaleY(1.05); }
+  60% { transform: translateY(0) scaleY(1); }
+}
+
+/* Cube Mouth Happy Chomps */
+.cube-mouth-group {
+  transform-origin: 388px 275px;
+  animation: cubeMouthCheer 2.2s ease-in-out infinite;
+}
+
+@keyframes cubeMouthCheer {
+  0%, 100% { transform: scale(1) translateY(0); }
+  30% { transform: scale(1.15, 1.2) translateY(-1px); }
+  60% { transform: scale(0.95, 0.9) translateY(0.5px); }
+}
+
+/* Cube Feet Tap Dance */
+.cube-left-foot {
+  transform-origin: 363px 320px;
+  animation: cubeFootTapLeft 1.4s ease-in-out infinite;
+}
+
+.cube-right-foot {
+  transform-origin: 415px 320px;
+  animation: cubeFootTapRight 1.4s ease-in-out infinite 0.7s;
+}
+
+@keyframes cubeFootTapLeft {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-8deg) translateY(-3px); }
+}
+
+@keyframes cubeFootTapRight {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(8deg) translateY(-3px); }
+}
+
+/* Floating Hearts/Stars around Cube */
+.cube-float-particle {
+  animation: cubeParticleFloat 3.6s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.cube-float-particle.particle-1 { animation-delay: 0s; }
+.cube-float-particle.particle-2 { animation-delay: 1.2s; }
+.cube-float-particle.particle-3 { animation-delay: 2.4s; }
+
+@keyframes cubeParticleFloat {
+  0% { opacity: 0; transform: translateY(0) scale(0.5); }
+  20% { opacity: 1; transform: translateY(-8px) scale(1); }
+  60% { opacity: 0.7; transform: translateY(-22px) scale(1.1) rotate(15deg); }
+  100% { opacity: 0; transform: translateY(-38px) scale(0.6) rotate(-10deg); }
+}
+
+/* =========================================================
+   ORANGE FIGURE-8 CHARACTER ANIMATIONS
+   ========================================================= */
+
+.orange-body-sway {
+  transform-origin: 468px 320px;
+  animation: orangeBodyBreathe 2.4s ease-in-out infinite;
+}
+
+@keyframes orangeBodyBreathe {
+  0%, 100% {
+    transform: rotate(0deg) scale(1, 1);
+  }
+  40%, 55% {
+    /* Stretches up softly while head is airborne */
+    transform: rotate(1deg) scale(0.99, 1.01);
+  }
+  76% {
+    /* Absorbs head landing impact smoothly */
+    transform: rotate(-0.5deg) scale(1.02, 0.98);
+  }
+}
+
+/* Orange Top Head - Silky Smooth Bouncy Ball Animation */
+.orange-head-bob {
+  transform-origin: 468px 182px;
+  animation: orangeHeadSmoothBounce 2.4s ease-in-out infinite;
+}
+
+@keyframes orangeHeadSmoothBounce {
+  0%, 100% {
+    /* Rest softly on bottom sphere */
+    transform: translateY(0) scale(1, 1) rotate(0deg);
+  }
+  16% {
+    /* Gentle anticipation: soft squash down before leaping */
+    transform: translateY(2px) scale(1.04, 0.95) rotate(-1deg);
+  }
+  40% {
+    /* Smooth buoyant rise into the air */
+    transform: translateY(-14px) scale(0.97, 1.04) rotate(-2.5deg);
+  }
+  52% {
+    /* Gentle floating apex hover */
+    transform: translateY(-15px) scale(1, 1.01) rotate(-2deg);
+  }
+  72% {
+    /* Smooth cushioned landing on the body */
+    transform: translateY(1.5px) scale(1.04, 0.96) rotate(0.5deg);
+  }
+  84% {
+    /* Soft micro-rebound */
+    transform: translateY(-2.5px) scale(0.99, 1.01) rotate(0deg);
+  }
+  92% {
+    /* Rest in place */
+    transform: translateY(0) scale(1, 1) rotate(0deg);
+  }
+}
+
+.orange-left-arm {
+  transform-origin: 436px 218px;
+  animation: orangeArmWave 2.8s ease-in-out infinite alternate;
+}
+
+@keyframes orangeArmWave {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(-6deg) translateY(-1.5px); }
+}
+
+/* Orange Bottom Cyclops Face Mouth: Silky Smooth Realistic Open & Close */
+.orange-mouth-realistic {
+  transform-origin: 468px 231px;
+  animation: orangeMouthTalkNatural 2.4s cubic-bezier(0.38, 0, 0.24, 1) infinite;
+}
+
+.orange-mouth-inner {
+  animation: orangeMouthInnerFade 2.4s cubic-bezier(0.38, 0, 0.24, 1) infinite;
+}
+
+@keyframes orangeMouthTalkNatural {
+  0%, 100% {
+    /* Natural sweet closed smile resting */
+    transform: scale(0.96, 0.16);
+  }
+  14% {
+    /* Soft smile anticipation */
+    transform: scale(0.96, 0.18);
+  }
+  26% {
+    /* Mouth smoothly drops open in cheerful expression */
+    transform: scale(1.0, 0.75);
+  }
+  38% {
+    /* Joyful wide open mouth when head bounces high */
+    transform: scale(1.06, 1.15);
+  }
+  50% {
+    /* Syllable dip (partially closes) */
+    transform: scale(1.0, 0.55);
+  }
+  62% {
+    /* Opens wide again on cheerful beat */
+    transform: scale(1.05, 1.08);
+  }
+  74% {
+    /* Smooth gentle closing movement */
+    transform: scale(0.98, 0.45);
+  }
+  86% {
+    /* Reaches sweet closed smile */
+    transform: scale(0.96, 0.18);
+  }
+  92% {
+    /* Rest in closed smile */
+    transform: scale(0.96, 0.16);
+  }
+}
+
+@keyframes orangeMouthInnerFade {
+  0%, 14%, 88%, 100% {
+    opacity: 0;
+  }
+  24%, 76% {
+    opacity: 1;
+  }
+}
+
+/* Orange Bottom Cyclops Eye Natural Blink */
+.orange-eye-blink {
+  transform-origin: 468px 215.5px;
+  animation: orangeCyclopsBlink 4.8s infinite;
+}
+
+@keyframes orangeCyclopsBlink {
+  0%, 46%, 50%, 100% {
+    transform: scaleY(1);
+  }
+  48% {
+    transform: scaleY(0.12);
+  }
+}
+
+/* Orange Top Mouth Animated (Subtle Happy Expression) */
+.orange-top-mouth-animated {
+  transform-origin: 449.5px 156px;
+  animation: orangeTopMouthTalk 2.4s ease-in-out infinite;
+}
+
+@keyframes orangeTopMouthTalk {
+  0%, 100% {
+    transform: scale(1, 0.95);
+  }
+  38%, 62% {
+    transform: scale(1.08, 1.12);
+  }
+  50% {
+    transform: scale(1, 0.9);
+  }
+}
+
+/* =========================================================
+   PURPLE TRIANGLE CHARACTER ANIMATIONS
+   ========================================================= */
+
+.purple-body-sway {
+  transform-origin: 567px 320px;
+  animation: purpleGroove 2.6s ease-in-out infinite;
+}
+
+@keyframes purpleGroove {
+  0%, 100% {
+    transform: rotate(0deg) translateY(0);
+  }
+  30% {
+    transform: rotate(-2deg) translateY(-2.5px);
+  }
+  70% {
+    transform: rotate(2deg) translateY(-2.5px);
+  }
+}
+
+/* Spinning Hula Hoop Animation - Smooth & Mesmerizing */
+.hula-hoop-spin {
+  animation: hulaSpin 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes hulaSpin {
+  0% {
+    stroke-dashoffset: 0;
+    transform: rotate(-2.5deg);
+    transform-origin: 567px 254px;
+  }
+  100% {
+    stroke-dashoffset: 36;
+    transform: rotate(2.5deg);
+    transform-origin: 567px 254px;
+  }
+}
+
+.purple-blush {
+  animation: purpleBlushGlow 2s ease-in-out infinite alternate;
+}
+
+@keyframes purpleBlushGlow {
+  0% { opacity: 0.7; }
+  100% { opacity: 1; filter: drop-shadow(0 0 3.5px rgba(255, 102, 196, 0.7)); }
+}
+
+/* Star Floating Sparkle Particles */
+.star-sparkle-particle {
+  animation: starSparkleFloat 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.star-sparkle-particle.sp-1 { animation-delay: 0s; }
+.star-sparkle-particle.sp-2 { animation-delay: 0.9s; }
+.star-sparkle-particle.sp-3 { animation-delay: 1.8s; }
+
+@keyframes starSparkleFloat {
+  0% { opacity: 0; transform: translateY(0) scale(0.4) rotate(0deg); }
+  25% { opacity: 1; transform: translateY(-10px) scale(1.1) rotate(45deg); }
+  50% { opacity: 0.8; transform: translateY(-20px) scale(0.9) rotate(90deg); }
+  75% { opacity: 0.4; transform: translateY(-30px) scale(0.7) rotate(135deg); }
+  100% { opacity: 0; transform: translateY(-40px) scale(0.3) rotate(180deg); }
+}
+
+/* Star Shadow Pulse */
+.star-shadow {
+  animation: starShadowPulse 3.2s ease-in-out infinite;
+}
+
+@keyframes starShadowPulse {
+  0%, 100% { rx: 58; ry: 9; opacity: 0.12; }
+  28% { rx: 50; ry: 7; opacity: 0.08; }
+  62% { rx: 55; ry: 8; opacity: 0.1; }
+  84% { rx: 48; ry: 6.5; opacity: 0.07; }
+}
+
+/* Blinking Animation */
+.blinking {
+  transform: scaleY(0.08);
+  transition: transform 0.08s ease-in-out;
+}
+
+/* Interactive Push Buttons in Chest */
+.interactive-btn {
+  cursor: pointer;
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+
+.interactive-btn:hover {
+  filter: brightness(1.25) drop-shadow(0 0 4px #2EE8C2);
+}
+
+/* Click Sparkles */
+.sparkle-particle {
+  animation: sparkleFly 0.8s ease-out forwards;
+}
+
+@keyframes sparkleFly {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: translateY(-30px) scale(0.2); }
+}
+
+/* =========================================================
+   SQUAD INTER-CHARACTER INTERACTIONS (WHEN TYPING CREDENTIALS)
+   Position of robots remains completely fixed on stage!
+   Interaction happens purely via gaze, expressions & chatter.
+   ========================================================= */
+
+/* 1. BLUE ROBOT: Antenna pulse when typing */
+.blue-robot-wrapper.squad-interact-robot-typing #robot-antenna-glow {
+  animation: antennaChatterPulse 0.4s ease-in-out infinite alternate;
+}
+
+@keyframes antennaChatterPulse {
+  from { filter: drop-shadow(0 0 3px #2EE8C2); opacity: 0.8; }
+  to { filter: drop-shadow(0 0 11px #2EE8C2); opacity: 1; }
+}
+
+/* 2. PINK COMPANION: Happy giggling head bob in place */
+.pink-character-group.squad-interact-pink-typing .pink-body-head {
+  animation: pinkGiggleVibe 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes pinkGiggleVibe {
+  0% { transform: translateY(0) rotate(-1.5deg); }
+  100% { transform: translateY(-4px) rotate(2deg); }
+}
+
+/* 3. TEAL CUBE: Excited happy bounce in place */
+.teal-cube-group.squad-interact-cube-typing .teal-cube-body {
+  animation: cubeExcitedBounce 0.45s ease-in-out infinite alternate;
+}
+
+@keyframes cubeExcitedBounce {
+  0% { transform: translateY(0) rotate(-1.5deg); }
+  100% { transform: translateY(-5px) rotate(1.5deg); }
+}
+
+/* 4. GOLDEN STAR: Rapid cheerful talking mouth in place */
+.golden-star-group.squad-interact-star-typing .star-mouth-realistic {
+  animation: starMouthTalkRapid 1.3s cubic-bezier(0.38, 0, 0.24, 1) infinite;
+}
+
+@keyframes starMouthTalkRapid {
+  0%, 100% { transform: scale(0.96, 0.2); }
+  30% { transform: scale(1.06, 1.18); }
+  60% { transform: scale(1.0, 0.5); }
+  85% { transform: scale(1.05, 1.05); }
+}
+
+/* 5. ORANGE FIGURE-8: Top head bounces playfully in place */
+.orange-group.squad-interact-orange-typing .orange-head-bob {
+  animation: orangeHeadChatterBounce 1.3s ease-in-out infinite;
+}
+
+@keyframes orangeHeadChatterBounce {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  40% { transform: translateY(-16px) rotate(-4deg); }
+  70% { transform: translateY(2px) rotate(1deg); }
+}
+
+/* 6. PURPLE TRIANGLE: Fast groove sway in place */
+.purple-group.squad-interact-purple-typing .purple-body-sway {
+  animation: purpleGrooveFast 1.4s ease-in-out infinite;
+}
+
+@keyframes purpleGrooveFast {
+  0%, 100% { transform: rotate(0deg) translateY(0); }
+  50% { transform: rotate(-2.5deg) translateY(-3px); }
+}
+
+/* =========================================================
+   RIGHT PANE: Clean White Minimalist Form
+   ========================================================= */
+.login-right-pane {
+  flex: 1;
+  min-width: 320px;
+  max-width: 580px;
+  background-color: var(--bg-card);
+  border-left: 1px solid var(--border-subtle);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 36px;
+  position: relative;
+  z-index: 2;
+  box-shadow: -4px 0 24px -12px rgba(15, 23, 42, 0.04);
+}
+
+.form-content-wrapper {
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Brand Header */
+.brand-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 32px;
+}
+
+.brand-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-logo-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-name {
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  color: var(--text-primary);
+}
+
+.auth-mode-switch {
+  display: flex;
+  background-color: var(--bg-subtle);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+}
+
+.switch-tab {
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+}
+
+.switch-tab.active {
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  font-weight: 600;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Form Headings */
+.form-intro {
+  margin-bottom: 28px;
+}
+
+.form-title {
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.8px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.form-subtitle {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+/* Form Elements */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.input-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.1px;
+}
+
+.forgot-password-link {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--accent-primary);
+  transition: color var(--transition-fast);
+}
+
+.forgot-password-link:hover {
+  color: var(--accent-primary-hover);
+  text-decoration: underline;
+}
+
+.input-container {
+  display: flex;
+  align-items: center;
+  position: relative;
+  background-color: var(--bg-input);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: 0 14px;
+  height: 48px;
+  transition: all var(--transition-smooth);
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+.input-container:hover {
+  border-color: var(--border-hover);
+}
+
+.input-container.focused {
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3.5px rgba(37, 99, 235, 0.12);
+}
+
+.input-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin-right: 12px;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.input-container.focused .input-icon {
+  color: var(--accent-primary);
+}
+
+.input-container input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  outline: none;
+  font-size: 14.5px;
+  color: var(--text-primary);
+  width: 100%;
+}
+
+.input-container input::placeholder {
+  color: #94A3B8;
+  font-weight: 400;
+}
+
+.password-toggle-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  padding: 6px;
+  border-radius: 6px;
+  transition: all var(--transition-fast);
+}
+
+.password-toggle-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-subtle);
+}
+
+/* Remember Me Checkbox */
+.remember-row {
+  display: flex;
+  align-items: center;
+  margin-top: -4px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.checkbox-container input {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 1.5px solid var(--border-hover);
+  border-radius: 5px;
+  margin-right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  background-color: var(--bg-card);
+}
+
+.checkbox-container:hover .checkbox-custom {
+  border-color: var(--text-secondary);
+}
+
+.checkbox-container input:checked ~ .checkbox-custom {
+  background-color: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+.checkbox-container input:checked ~ .checkbox-custom::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid #FFFFFF;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg) translate(-0.5px, -1px);
+}
+
+/* Submit Button */
+.submit-btn {
+  height: 48px;
+  background-color: #0F172A;
+  color: #FFFFFF;
+  border-radius: var(--radius-md);
+  font-size: 14.5px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-smooth);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.12);
+  margin-top: 4px;
+}
+
+.submit-btn:hover:not(:disabled) {
+  background-color: #1E293B;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.18);
+}
+
+.submit-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.submit-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.spinner-loader {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #FFFFFF;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Divider */
+.auth-divider {
+  display: flex;
+  align-items: center;
+  margin: 24px 0 20px;
+  gap: 14px;
+}
+
+.divider-line {
+  flex: 1;
+  height: 1px;
+  background-color: var(--border-subtle);
+}
+
+.divider-label {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+
+/* Social Buttons */
+.social-auth-container {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.social-auth-btn {
+  height: 44px;
+  background-color: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+}
+
+.social-auth-btn:hover {
+  background-color: var(--bg-subtle);
+  border-color: var(--border-hover);
+  transform: translateY(-1px);
+}
+
+.social-auth-btn:active {
+  transform: translateY(0);
+}
+
+.social-icon {
+  flex-shrink: 0;
+}
+
+/* Footer Switch & Subfooter */
+.form-footer-toggle {
+  text-align: center;
+  margin-top: 24px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.inline-link {
+  font-weight: 600;
+  color: var(--accent-primary);
+  margin-left: 4px;
+  transition: color var(--transition-fast);
+}
+
+.inline-link:hover {
+  color: var(--accent-primary-hover);
+  text-decoration: underline;
+}
+
+.form-sub-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-top: 36px;
+}
+
+.form-sub-footer a:hover {
+  color: var(--text-secondary);
+}
+
+.dot-sep {
+  opacity: 0.5;
+}
+
+/* Toast Message */
+.feedback-toast {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: #0F172A;
+  color: #FFFFFF;
+  padding: 12px 22px;
+  border-radius: var(--radius-full);
+  font-size: 13.5px;
+  font-weight: 500;
+  box-shadow: var(--shadow-lg);
+  z-index: 999;
+  animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translate(-50%, -12px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+
+/* =========================================================
+   RESPONSIVE DESIGN (Tablets & Mobile)
+   ========================================================= */
+@media (max-width: 960px) {
+  .login-screen-layout {
+    flex-direction: column;
+  }
+
+  .robot-left-pane {
+    flex: none;
+    padding: 36px 20px 24px;
+    order: 1;
+    min-height: 340px;
+  }
+
+  .login-right-pane {
+    max-width: 100%;
+    border-left: none;
+    border-top: 1px solid var(--border-subtle);
+    padding: 32px 20px;
+    order: 2;
+  }
+
+  .robot-svg {
+    max-width: 380px;
+  }
+}
+
+@media (max-width: 480px) {
+  .social-auth-container {
+    grid-template-columns: 1fr;
+  }
+  
+  .form-title {
+    font-size: 24px;
+  }
+  
+  .brand-header {
+    margin-bottom: 24px;
+  }
+}

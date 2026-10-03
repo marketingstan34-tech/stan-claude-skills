@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% from "parts.html" import report_card, calendar_card, events_card with context %}
+{% block title %}Нов случай · Legal AI Solo{% endblock %}
+{% block page_title %}Нов случай{% endblock %}
+{% block page_hint %}Най-лесно: качете въззивното решение като файл – съдът, делото и годината се разпознават сами – и добавете в полето „Текст“ бележки по казуса. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <form class="dash-col-left" method="post" action="/analyze" id="case" enctype="multipart/form-data">
+    <div class="card profile-card">
+      <div class="profile-header-row">
+        <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('scale', 22) }}</div>
+        <div class="profile-name-info">
+          <h2 class="profile-name">Нов случай</h2>
+          <p class="profile-role">Касация по чл. 280 ГПК · ВКС</p>
+        </div>
+        <a class="card-options-btn" href="/reports" title="Всички справки">{{ icon('more') }}</a>
+      </div>
+      <div class="profile-action-buttons">
+        <a class="action-circle-btn black-btn" href="/analyze" title="Нов случай">{{ icon('case') }}</a>
+        <a class="action-circle-btn light-btn" href="/reports" title="Справки">{{ icon('path') }}</a>
+        <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
+        <a class="action-circle-btn light-btn" href="/corpus" title="База">{{ icon('db') }}</a>
+      </div>
+      <div class="time-slots-section">
+        <span class="slots-label">Практика на ВКС до</span>
+        <div class="slots-row">
+          <label class="time-slot-pill" title="По избор. Без него: до 2 месеца след въззивното решение.">
+            <input type="text" name="until" pattern="\d{4}-\d{2}" maxlength="7" placeholder="ГГГГ-ММ (по избор)" aria-label="Практика до (по избор)">
+            {{ icon('cal', 13) }}
+          </label>
+          <a class="meetings-badge-pill" href="/reports"><span>Справки</span><span class="meetings-count-circle">{{ reports|length }}</span></a>
+        </div>
+      </div>
+    </div>
+
+    <div class="card details-card">
+      <h2 class="details-title">Данни за делото</h2>
+      {% if error %}<div class="notice">{{ error }}</div>{% endif %}
+      <div class="details-list">
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Въззивен съд</span>
+              <select class="detail-value detail-input" name="court" onchange="var o=this.options[this.selectedIndex];document.getElementById('court-city').textContent=o.dataset.city||'—'">
+                <option value="">— разпознай от документа —</option>
+                {% for lvl, title in [('апелативен', 'Апелативни съдилища'), ('градски', 'Софийски градски съд'), ('окръжен', 'Окръжни съдилища'), ('районен', 'Районни съдилища')] %}
+                {% set group = courts.values()|selectattr('level', 'equalto', lvl)|list %}
+                {% if group %}<optgroup label="{{ title }}">{% for c in group %}<option value="{{ c.key }}" data-city="{{ c.city }}" {{ 'selected' if c.key == 'as-plovdiv' }}>{{ c.name }}</option>{% endfor %}</optgroup>{% endif %}
+                {% endfor %}
+              </select></div></div>
+          <div class="detail-right"><span class="online-badge online" id="court-city">{{ courts["as-plovdiv"].city }}</span></div>
+        </label>
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Вид дело</span>
+              <select class="detail-value detail-input" name="case_type"><option value="">Всички</option><option>Гражданско</option><option>Търговско</option></select></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('court', 11) }}</span></div>
+        </label>
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Номер на делото</span>
+              <input class="detail-value detail-input" type="number" name="case" min="1" max="999999" placeholder="по избор"></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('hash', 11) }}</span></div>
+        </label>
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Година</span>
+              <input class="detail-value detail-input" type="number" name="year" min="2000" max="2100" placeholder="по избор"></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('cal', 11) }}</span></div>
+        </label>
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Въззивното решение – файл (PDF, Word, TXT) · може и с влачене</span>
+              <span class="file-pick"><input class="file-input" type="file" name="document" accept=".pdf,.docx,.html,.htm,.txt"
+                onchange="this.parentNode.querySelector('.file-name').textContent = this.files.length ? this.files[0].name : 'няма избран файл'">
+                <span class="file-btn">Избери файл</span><span class="file-name">няма избран файл</span></span></div></div>
+          <div class="detail-right"><span class="detail-action-circle help-tip" title="Съдът, делото и годината се разпознават от документа.">{{ icon('down', 11) }}</span></div>
+        </label>
+        <label class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Други документи по делото (по избор, до 5): първа инстанция, жалби, отговори · може и с влачене</span>
+              <span class="file-pick"><input class="file-input" type="file" name="extra" multiple accept=".pdf,.docx,.html,.htm,.txt"
+                onchange="this.parentNode.querySelector('.file-name').textContent = this.files.length ? (this.files.length === 1 ? this.files[0].name : this.files.length + ' файла') : 'няма избрани'">
+                <span class="file-btn">Избери файлове</span><span class="file-name">няма избрани</span></span></div></div>
+          <div class="detail-right"><span class="detail-action-circle help-tip" title="AI ги чете като контекст за казуса; цитатите са само от въззивното решение.">{{ icon('doc', 11) }}</span></div>
+        </label>
+        <label class="detail-item-row detail-text-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Текст – бележки на адвоката по казуса (или самото решение, ако нямате файл)</span>
+              <textarea class="detail-value detail-input detail-textarea" name="text" rows="5" maxlength="400000"
+                placeholder="С качен файл или номер на делото: опишете позицията на клиента и какво оспорваме – AI ще го вземе предвид. Без файл: поставете текста на въззивното решение (поне 300 знака)."></textarea></div></div>
+        </label>
+        <div class="detail-item-row">
+          <div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+            <div class="detail-text"><span class="detail-label">Режим</span>
+              <span class="mode-switch">
+                <label><input type="radio" name="mode" value="noai" checked><span>Без AI · безплатно</span></label>
+                <label><input type="radio" name="mode" value="ai"><span>С AI · ~{{ price.report[0]|round(1) }}–{{ price.report[1]|round(1) }} $</span></label>
+              </span>
+              {% if credits.set and credits.left < price.report[1] %}<span class="cost-note credits-warn">AI кредитът е ≈ {{ '%.2f'|format(credits.left) }} $ – може да не стигне за справка с AI. <a class="link" href="{{ credits.url }}" target="_blank" rel="noopener noreferrer">Заредете кредит</a>.</span>{% endif %}
+              <span class="cost-note">С AI приблизително: справка {{ '%.2f'|format(price.report[0]) }}–{{ '%.2f'|format(price.report[1]) }} $
+                (при повече документи – към горната граница), чернова на жалба {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.
+                Таван: {{ price.max_calls }} AI заявки на справка. Точната сума е в OpenAI → Usage.</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle help-tip" title="Без AI: пътят на делото, обжалваният акт и цитираната практика. С AI: правни въпроси и практика „противоречи/подкрепя“.">{{ icon('ai', 11) }}</span></div>
+        </div>
+        <button class="kit-submit" type="submit" {% if busy %}disabled{% endif %}>
+          {{ 'Вече тече справка…' if busy else 'Започни справката' }}</button>
+      </div>
+    </div>
+  </form>
+
+  <div class="dash-col-right">
+    <div class="ongoing-projects-section">
+      <div class="projects-header-row">
+        <div class="dropdown-wrapper">
+          <a class="ongoing-dropdown-btn" href="/reports"><span>Последни справки</span>{{ icon('chev', 14) }}</a>
+        </div>
+        <div class="projects-action-icons">
+          <a class="proj-icon-circle-btn" href="#case" title="Нов случай">{{ icon('plus', 14) }}</a>
+          <a class="proj-icon-circle-btn" href="/" title="Търсене">{{ icon('search', 14) }}</a>
+          <a class="proj-icon-circle-btn" href="/corpus" title="База">{{ icon('db', 14) }}</a>
+        </div>
+      </div>
+      <div class="project-cards-grid">
+        {% for i in range(3) %}{{ report_card(reports[i] if i < reports|length else none, i) }}{% endfor %}
+      </div>
+    </div>
+
+    <div class="calendar-inbox-row">
+      {{ calendar_card(month, '/analyze') }}
+      {{ events_card(events) }}
+    </div>
+  </div>
+</div>
+<script>
+(function () {   /* the town badge follows the selected court, also after the browser restores the form */
+  var sel = document.querySelector('select[name=court]'), badge = document.getElementById('court-city');
+  if (!sel || !badge) return;
+  function sync() { var o = sel.options[sel.selectedIndex]; badge.textContent = (o && o.dataset.city) || 'от документа'; }
+  window.addEventListener('pageshow', sync); sync();
+})();
+</script>
+<script>
+(function () {   /* drag and drop: the whole row of a file field takes the dropped files */
+  function names(input) {
+    var n = input.files.length;
+    return n === 0 ? (input.multiple ? 'няма избрани' : 'няма избран файл') : (n === 1 ? input.files[0].name : n + ' файла');
+  }
+  document.querySelectorAll('.file-pick').forEach(function (pick) {
+    var input = pick.querySelector('input[type=file]'), row = pick.closest('.detail-item-row') || pick, label = pick.querySelector('.file-name');
+    if (!input) return;
+    input.addEventListener('change', function () { label.textContent = names(input); });
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      row.addEventListener(ev, function (e) { e.preventDefault(); e.stopPropagation(); row.classList.add('drop-over'); });
+    });
+    ['dragleave', 'dragend'].forEach(function (ev) {
+      row.addEventListener(ev, function (e) { if (!row.contains(e.relatedTarget)) row.classList.remove('drop-over'); });
+    });
+    row.addEventListener('drop', function (e) {
+      e.preventDefault(); e.stopPropagation(); row.classList.remove('drop-over');
+      var files = e.dataTransfer && e.dataTransfer.files;
+      if (!files || !files.length) return;
+      var dt = new DataTransfer();
+      for (var i = 0; i < files.length && (input.multiple || i < 1); i++) dt.items.add(files[i]);
+      input.files = dt.files;
+      label.textContent = names(input);
+    });
+  });
+  /* a file dropped elsewhere on the page must not open it in the browser */
+  window.addEventListener('dragover', function (e) { e.preventDefault(); });
+  window.addEventListener('drop', function (e) { e.preventDefault(); });
+})();
+</script>
+{% endblock %}
