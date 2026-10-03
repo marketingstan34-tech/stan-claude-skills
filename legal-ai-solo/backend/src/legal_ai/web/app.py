@@ -337,8 +337,47 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"/{kind}/{job.run_dir}", status_code=303)
         return render(request, "job.html", {"job": job, "courts": COURTS})
 
+    def case_context(base: Path, item_id: str, label: str, run: dict | None = None) -> dict:
+        """The lawyer's data for a report, with the deadline, the threshold check and hints."""
+        from legal_ai.cassation import casefile, deadline
+        d = base / item_id
+        case = casefile.load_case(d)
+        try:
+            text = (d / "appellate.txt").read_text(encoding="utf-8")
+        except OSError:
+            text = ""
+        hint_amount = casefile.suggest_amount(text)
+        due = None
+        if case.get("served"):
+            due = deadline.appeal_deadline(date.fromisoformat(case["served"]))
+        kind = case.get("kind") or casefile.case_kind(label)
+        threshold = deadline.threshold_check(case.get("amount"), case.get("currency", "BGN"), kind,
+                                             bool(case.get("property")))
+        chosen = case.get("questions") or (casefile.default_questions(run) if run else [])
+        return {"case": case, "due": due, "threshold": threshold, "kind": kind, "chosen": chosen,
+                "ranked": casefile.rank_questions(run) if run else [],
+                "hint_amount": hint_amount, "act_number": casefile.decision_number(text),
+                "saved": bool(case)}
+
+    async def save_case_form(request: Request, base: Path, item_id: str, run: dict | None, back: str):
+        from legal_ai.cassation import casefile
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        data = {k: form.get(k) for k in ("served", "amount", "currency", "kind", "property", *casefile.FIELDS)}
+        qids = [q["id"] for q in run["analysis"]["questions"]] if run else []
+        if run is not None:
+            data["questions"] = form.getlist("questions")
+        clean, error = casefile.parse_form(data, qids)
+        if error:
+            return RedirectResponse(f"{back}?error={quote(error)}#case-data", status_code=303)
+        if run is not None and not clean.get("questions"):
+            return RedirectResponse(f"{back}?error={quote('Отметнете поне един въпрос.')}#case-data", status_code=303)
+        casefile.save_case(base / item_id, clean)
+        return RedirectResponse(f"{back}?saved=1#case-data", status_code=303)
+
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
-    def run_report(request: Request, run_id: str):
+    def run_report(request: Request, run_id: str, error: str = Query("", max_length=200)):
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
@@ -346,33 +385,88 @@ def create_app() -> FastAPI:
         for a in run["assessments"]:
             if a["relevant"] and a["stance"] != "неотносимо":
                 by_q.setdefault(a["question_id"], []).append(a)
-        return render(request, "report.html", {"run": run, "by_q": by_q})
+        return render(request, "report.html", {"run": run, "by_q": by_q, "run_id": run_id, "form_error": error,
+                                               **case_context(runs_dir, run_id, run["appellate"]["label"], run)})
 
-    @app.get("/runs/{run_id}/draft", response_class=HTMLResponse)
-    def run_draft(request: Request, run_id: str):
+    @app.post("/runs/{run_id}/case")
+    async def run_case(request: Request, run_id: str):
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return await save_case_form(request, runs_dir, run_id, run, f"/runs/{run_id}")
+
+    def draft_blocks(run_id: str):
         from legal_ai.cassation.draft import build_draft
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
-        return render(request, "draft.html", {"run": run, "run_id": run_id, "blocks": build_draft(run)})
+        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
+        case = {**ctx["case"], "questions": ctx["chosen"]}
+        return run, ctx, build_draft(run, case, ctx["act_number"])
+
+    @app.get("/runs/{run_id}/draft", response_class=HTMLResponse)
+    def run_draft(request: Request, run_id: str):
+        run, ctx, blocks = draft_blocks(run_id)
+        return render(request, "draft.html", {"run": run, "run_id": run_id, "blocks": blocks, **ctx})
 
     @app.get("/runs/{run_id}/draft.docx")
     def run_draft_docx(run_id: str):
         from fastapi.responses import Response
 
-        from legal_ai.cassation.draft import build_draft, to_docx
-        run = load_run(runs_dir, run_id)
-        if run is None:
-            raise HTTPException(404, "Няма такава справка.")
-        return Response(to_docx(build_draft(run)),
+        from legal_ai.cassation.draft import to_docx
+        _, _, blocks = draft_blocks(run_id)
+        return Response(to_docx(blocks),
                         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         headers={"Content-Disposition": f'attachment; filename="izlozhenie-{run_id}.docx"'})
 
+    @app.get("/runs/{run_id}/attachments.zip")
+    def run_attachments(run_id: str):
+        from fastapi.responses import Response
+
+        from legal_ai.cassation.attachments import build_zip
+        from legal_ai.cassation.draft import attached_labels
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
+        items = attached_labels(run, {"questions": ctx["chosen"]})
+        if runner.busy():   # the court sites get one client at a time; use only the own database then
+            fetch = None
+        else:
+            fetch = fetch_vks_text
+        try:
+            conn = connect(settings.database_url)
+        except psycopg.OperationalError:
+            conn = None
+        try:
+            body, _, _ = build_zip(items, conn, fetch)
+        finally:
+            if conn is not None:
+                conn.close()
+        return Response(body, media_type="application/zip",
+                        headers={"Content-Disposition": f'attachment; filename="prilozheniya-{run_id}.zip"'})
+
+    def fetch_vks_text(source_id: str) -> str | None:
+        from legal_ai.http import PoliteClient
+        from legal_ai.sources.vks import HOST as VKS_HOST
+        from legal_ai.sources.vks.parser import parse_act
+        from legal_ai.sources.vks.urls import act_url
+        ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
+        with PoliteClient([VKS_HOST], 2.0, ua) as vks:
+            return parse_act(vks.get(act_url(source_id)).body.decode("utf-8", errors="replace")).canonical_text
+
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
-    def trace_report(request: Request, trace_id: str):
+    def trace_report(request: Request, trace_id: str, error: str = Query("", max_length=200)):
         t = load_trace(traces_dir, trace_id)
         if t is None:
             raise HTTPException(404, "Няма такава справка.")
-        return render(request, "trace.html", {"t": t})
+        return render(request, "trace.html", {"t": t, "trace_id": trace_id, "form_error": error,
+                                              **case_context(traces_dir, trace_id, t["appellate"]["label"])})
+
+    @app.post("/traces/{trace_id}/case")
+    async def trace_case(request: Request, trace_id: str):
+        if load_trace(traces_dir, trace_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return await save_case_form(request, traces_dir, trace_id, None, f"/traces/{trace_id}")
 
     return app

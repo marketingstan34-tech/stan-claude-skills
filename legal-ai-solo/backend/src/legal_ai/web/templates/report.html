@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
-{% from "parts_case.html" import case_profile, path_cards with context %}
+{% from "parts_case.html" import case_profile, path_cards, case_form with context %}
 {% set a = run.analysis %}
 {% block title %}{{ run.appellate.label }} · Legal AI Solo{% endblock %}
 {% block page_title %}Касационен анализ с AI{% endblock %}
@@ -34,9 +34,10 @@
         {% else %}<div class="detail-item-row info-row"><div class="detail-left">
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
-        <a class="kit-submit" href="{{ request.url.path }}/draft" style="display:block;text-align:center">Чернова на изложение</a>
+        <a class="kit-submit" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Чернова на изложение</a>
       </div>
     </div>
+    {{ case_form('/runs/' ~ run_id ~ '/case', run) }}
   </div>
 
   <div class="dash-col-right scroll-col">

@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
-{% from "parts_case.html" import case_profile, path_cards, identified_note with context %}
+{% from "parts_case.html" import case_profile, path_cards, identified_note, case_form with context %}
 {% block title %}{{ t.appellate.label }} · Legal AI Solo{% endblock %}
 {% block page_title %}Справка без AI{% endblock %}
 {% block page_hint %}Справка без AI: пътят на делото (щракнете карта, за да отворите делото в сайта на съда), обжалваният акт и решенията на ВКС, които въззивният съд цитира. За правни въпроси и практика „противоречи“ пуснете справка с AI.{% endblock %}
@@ -23,6 +23,7 @@
         {% if not t.lower_instance %}<div class="notice">Обжалваният акт не се разчита от текста с правилата. Вижте текста вдясно.</div>{% endif %}
       </div>
     </div>
+    {{ case_form('/traces/' ~ trace_id ~ '/case') }}
   </div>
 
   <div class="dash-col-right scroll-col">
@@ -57,7 +58,7 @@
       </form>
     </div>
 
-    <details class="card page-card"><summary class="card-section-title">Текст на въззивното решение ({{ t.appellate.text_chars }} знака)</summary>
+    <details class="card page-card" data-print="closed"><summary class="card-section-title">Текст на въззивното решение ({{ t.appellate.text_chars }} знака)</summary>
       <div class="legal-text" style="white-space: pre-wrap; margin-top: 10px">{{ t.text }}</div></details>
   </div>
 </div>

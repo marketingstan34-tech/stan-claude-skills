@@ -6,7 +6,7 @@
 {% block page_hint %}Чернова на изложението по чл. 284, ал. 3, т. 1 ГПК. Свалете я като Word, попълнете [квадратните скоби], проверете всичко и махнете жълтите бележки.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
-  <div class="dash-col-left">
+  <div class="dash-col-left no-print">
     {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
     <div class="card details-card">
       <h2 class="details-title">Как да я ползвате</h2>
@@ -20,12 +20,17 @@
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft.docx" style="display:block;text-align:center">Свали като Word</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center"
+           title="Цитираните решения на ВКС като Word файлове – за „Прилагам“">Свали приложенията (ZIP)</a>
+        {% if not case.client or not case.lawyer %}<div class="notice">Данните за страните и адвоката не са попълнени –
+          <a class="link" href="/runs/{{ run_id }}#case-data">попълнете ги в справката</a> и черновата ще ги включи.</div>{% endif %}
+        <p class="muted small">В черновата са отметнатите въпроси ({{ chosen|length }}). <a class="link" href="/runs/{{ run_id }}#case-data">Промени</a></p>
         <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
       </div>
     </div>
   </div>
   <div class="dash-col-right scroll-col">
-    <div class="notice">Чернова, сглобена от справката без нов AI: въпросите, изводите и решенията са от справката, а
+    <div class="notice no-print">Чернова, сглобена от справката без нов AI: въпросите, изводите и решенията са от справката, а
       цитатите са само проверените дословно. Не е правно становище – адвокатът преглежда и редактира.</div>
     <div class="card page-card legal-text draft-text">
       {% for b in blocks %}

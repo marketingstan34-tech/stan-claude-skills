@@ -73,3 +73,59 @@
 </span></div>
 {% endif %}
 {%- endmacro %}
+
+{% macro case_form(action, run=None) -%}
+{# the lawyer's data: deadline, threshold, parties and (for AI reports) the questions for the draft #}
+<div class="card details-card {{ '' if (due or threshold.ok is not none) else 'no-print' }}" id="case-data">
+  <h2 class="details-title">Срок, праг и данни за изложението</h2>
+  {% if form_error %}<div class="notice bad">{{ form_error }}</div>{% elif request.query_params.get('saved') %}<div class="notice ok">Запазено.</div>{% endif %}
+  {% if due %}
+  <div class="case-result {{ 'bad' if due.days_left() < 0 else ('warn' if due.days_left() <= 7 else 'ok') }}">
+    <b>Последен ден за жалбата: {{ due.last_day.strftime('%d.%m.%Y') }}</b>
+    ({{ ['понеделник','вторник','сряда','четвъртък','петък','събота','неделя'][due.last_day.weekday()] }}) –
+    {% if due.days_left() >= 0 %}остават {{ due.days_left() }} дни{% else %}срокът е изтекъл преди {{ -due.days_left() }} дни{% endif %}.
+    {% if due.moved %}<br><span class="muted">Месецът изтича на {{ due.nominal.strftime('%d.%m.%Y') }}, неприсъствен ден – преместено на следващия присъствен (чл. 60, ал. 6 ГПК).</span>{% endif %}
+    <br><span class="muted">Изчислено по чл. 283 и чл. 60 ГПК с официалните празници. Дни, обявени за неработни с решение на МС, не са отчетени – проверете.</span>
+  </div>
+  {% endif %}
+  {% if threshold.ok is not none %}
+  <div class="case-result {{ 'ok' if threshold.ok else 'bad' }}">{{ threshold.text }}
+    <br><span class="muted">Проверете и другите изключения на чл. 280, ал. 3 ГПК.</span></div>
+  {% endif %}
+  <form method="post" action="{{ action }}" class="case-form">
+    <label>Дата на връчване на въззивното решение<input class="kit-input" type="date" name="served" value="{{ case.served or '' }}"></label>
+    <div class="case-row">
+      <label>Цена на иска<input class="kit-input" type="text" inputmode="decimal" name="amount" value="{{ case.amount if case.amount is not none else '' }}"
+        placeholder="{{ ('%.2f'|format(hint_amount[0])) if hint_amount else 'напр. 25000' }}"></label>
+      <label>Валута<select class="kit-input" name="currency">
+        <option value="BGN" {{ 'selected' if case.currency != 'EUR' }}>лв.</option><option value="EUR" {{ 'selected' if case.currency == 'EUR' }}>€</option></select></label>
+      <label>Дело<select class="kit-input" name="kind">
+        <option value="граждански" {{ 'selected' if kind == 'граждански' }}>гражданско</option>
+        <option value="търговски" {{ 'selected' if kind == 'търговски' }}>търговско</option></select></label>
+    </div>
+    {% if hint_amount and case.amount is none %}<p class="muted small">Най-голямата сума в решението е {{ '%.2f'|format(hint_amount[0]) }} {{ '€' if hint_amount[1] == 'EUR' else 'лв.' }} – това е само подсказка, цената на иска се проверява.</p>{% endif %}
+    <label class="check"><input type="checkbox" name="property" value="1" {{ 'checked' if case.property }}> Иск за собственост или други вещни права</label>
+    {% if run %}
+    <h3 class="section-heading">Въпроси в изложението</h3>
+    <p class="muted small">Отметнатите влизат в черновата. Предварително са избрани тези с намерена противоречаща практика.</p>
+    {% for qid in ranked %}{% set q = (run.analysis.questions|selectattr('id', 'equalto', qid)|first) %}
+    <label class="check q-check"><input type="checkbox" name="questions" value="{{ qid }}" {{ 'checked' if qid in chosen }}>
+      <span><b>{{ qid }}.</b> {{ q.text|truncate(160) }}</span></label>
+    {% endfor %}
+    <h3 class="section-heading">Страни и адвокат (за черновата)</h3>
+    <label>Доверител (име / фирма)<input class="kit-input" name="client" maxlength="200" value="{{ case.client or '' }}"></label>
+    <div class="case-row">
+      <label>ЕГН / ЕИК<input class="kit-input" name="client_id" maxlength="40" value="{{ case.client_id or '' }}"></label>
+      <label>Адрес<input class="kit-input" name="client_address" maxlength="300" value="{{ case.client_address or '' }}"></label>
+    </div>
+    <label>Насрещна страна<input class="kit-input" name="opponent" maxlength="200" value="{{ case.opponent or '' }}"></label>
+    <div class="case-row">
+      <label>Адвокат<input class="kit-input" name="lawyer" maxlength="120" value="{{ case.lawyer or '' }}"></label>
+      <label>Съдебен адрес<input class="kit-input" name="lawyer_address" maxlength="300" value="{{ case.lawyer_address or '' }}"></label>
+    </div>
+    {% endif %}
+    <button class="kit-submit" type="submit">Запази</button>
+    <p class="muted small">Пази се само в частната папка на сървъра, не в Git.</p>
+  </form>
+</div>
+{%- endmacro %}

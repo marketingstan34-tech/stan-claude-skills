@@ -58,6 +58,7 @@
       </div>
       <div class="title-right">
         {% block title_right %}
+        <button type="button" class="white-pill-btn link-pill print-btn" onclick="window.print()" title="Принтирай тази страница (или запази като PDF)">{{ icon('doc', 14) }}<span>Принтирай</span></button>
         <a class="white-pill-btn link-pill" href="/help" title="Как се работи с програмата"><span class="status-pill-dot"></span><span>Как се работи · не е правно становище</span></a>
         <a class="white-pill-btn with-icon link-pill" href="/?d={{ today_iso }}" title="Решенията на ВКС от днес"><span>{{ today }}</span>{{ icon('cal', 14) }}</a>
         {% endblock %}
@@ -115,6 +116,11 @@
   });
   dock.addEventListener('mouseleave', function () { items.forEach(function (b) { b.style.transform = ''; }); });
 })();
+</script>
+<script>
+window.addEventListener('beforeprint', function () {
+  document.querySelectorAll('details:not([data-print="closed"])').forEach(function (d) { d.open = true; });
+});
 </script>
 </body>
 </html>

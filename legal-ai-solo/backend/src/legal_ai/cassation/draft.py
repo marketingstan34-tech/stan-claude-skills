@@ -48,15 +48,22 @@ def _clause(sentence: str) -> str:
     return s
 
 
-def build_draft(run: dict) -> list[Block]:
-    a = run["analysis"]
+def build_draft(run: dict, case: dict | None = None, act_number: str = "") -> list[Block]:
+    """`case`: the lawyer's data (parties, chosen questions, see casefile); `act_number`: the
+    decision number read from the decision's heading."""
+    case = case or {}
+    a = dict(run["analysis"])
+    chosen = case.get("questions")
+    if chosen:   # only the questions the lawyer kept, in the order of the report
+        a["questions"] = [q for q in a["questions"] if q["id"] in chosen]
     court, case_ref, act_date = _court_short(run["appellate"]["label"])
-    act = f"Решение № [номер]/{act_date} г., постановено по {case_ref} по описа на {court}"
+    act = f"Решение № {act_number or '[номер]'}/{act_date} г., постановено по {case_ref} по описа на {court}"
     holdings = {h["id"]: h for h in a.get("holdings", [])}
     hq = run.get("holding_quotes", {})
     contra: dict[str, list[dict]] = {}
+    kept = {q["id"] for q in a["questions"]}
     for x in run.get("assessments", []):
-        if x.get("relevant") and x.get("stance") == "противоречи":
+        if x.get("relevant") and x.get("stance") == "противоречи" and x["question_id"] in kept:
             contra.setdefault(x["question_id"], []).append(x)
     # т.1 only when the report found contradicting VKS practice; other questions keep their own ground
     grounds = ({"т.1"} if contra else set()) | {q["ground"] for q in a["questions"] if not contra.get(q["id"])}
@@ -69,7 +76,9 @@ def build_draft(run: dict) -> list[Block]:
            Block("heading", case_ref.upper().replace(" Г.", " г.")),
            Block("center", "ИЗЛОЖЕНИЕ НА КАСАЦИОННИ ОСНОВАНИЯ"),
            Block("center", f"По {grounds_text}"),
-           Block("p", "От [име на доверителя, ЕГН/ЕИК, адрес] – чрез адв. [име], съдебен адрес: [адрес]."),
+           Block("p", f"От {_party(case)} – чрез адв. {case.get('lawyer') or '[име]'}, съдебен адрес: "
+                      f"{case.get('lawyer_address') or '[адрес]'}."
+                      + (f" Срещу {case['opponent']}." if case.get("opponent") else "")),
            Block("p", f"За допускане на касационно обжалване на {act}."),
            Block("heading", "УВАЖАЕМИ ВЪРХОВНИ СЪДИИ,"),
            Block("p", f"Моля да допуснете касационно обжалване на {act}."),
@@ -126,7 +135,32 @@ def build_draft(run: dict) -> list[Block]:
         out.append(Block("heading", "Прилагам:"))
         out += [Block("item", f"{k}. {label};") for k, label in enumerate(attached, 1)]
     out += [Block("p", "С уважение: ......................................"),
-            Block("p", "(адв. [име])")]
+            Block("p", f"(адв. {case.get('lawyer') or '[име]'})")]
+    return out
+
+
+def _party(case: dict) -> str:
+    if not case.get("client"):
+        return "[име на доверителя, ЕГН/ЕИК, адрес]"
+    parts = [case["client"]]
+    if case.get("client_id"):
+        parts.append(f"ЕГН/ЕИК {case['client_id']}")
+    parts.append(case.get("client_address") or "[адрес]")
+    return ", ".join(parts)
+
+
+def attached_labels(run: dict, case: dict | None = None) -> list[tuple[str, str, str]]:
+    """(label, source_id, url) of the decisions listed under "Прилагам", in draft order."""
+    chosen = (case or {}).get("questions")
+    out, seen = [], set()
+    for q in run["analysis"]["questions"]:
+        if chosen and q["id"] not in chosen:
+            continue
+        for x in run.get("assessments", []):
+            if x["question_id"] == q["id"] and x.get("relevant") and x.get("stance") == "противоречи" \
+                    and x["label"] not in seen:
+                seen.add(x["label"])
+                out.append((x["label"], x.get("source_id", ""), x.get("url", "")))
     return out
 
 
