@@ -24,6 +24,7 @@
   ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
 ] %}
 {% from "icons.html" import icon %}
+{% from "parts_credits.html" import credits_box %}
 <div class="fs-app">
   <div class="fs-window">
     <aside class="fs-sidebar" aria-label="Меню">
@@ -38,6 +39,7 @@
       </nav>
       <div class="fs-sidebar-bottom">
         {% if running_job %}<a class="fs-running" href="/jobs/{{ running_job.id }}" title="Тече справка – щракнете, за да я видите"><span class="fs-pulse"></span>Тече справка…</a>{% endif %}
+        {{ credits_box(credits, request) }}
         <a class="fs-nav-item {{ 'active' if path.startswith('/help') }}" href="/help" title="Как се работи с програмата">{{ icon('help', 18) }}<span>Как се работи</span></a>
         <a class="fs-nav-item" href="/logout" title="Изход от програмата" onclick="return confirm('Изход от програмата?')">{{ icon('logout', 18) }}<span>Изход</span></a>
         <p class="fs-disclaimer">Помощен инструмент · не е правно становище</p>

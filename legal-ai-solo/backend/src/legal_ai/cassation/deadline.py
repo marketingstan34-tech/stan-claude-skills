@@ -5,8 +5,10 @@
   date (ал. 3); if that day is not a working day, on the next working day (ал. 6). Non-working days
   are Saturdays, Sundays and the official holidays of чл. 154 КТ, including the day after a holiday
   that falls on a weekend. Days moved by a decision of the Council of Ministers are not known here.
-- Threshold (чл. 280, ал. 3, т. 1 ГПК): civil cases up to 5000 лв. and commercial cases up to
-  20 000 лв. are not appealable, except claims for ownership and other real rights.
+- Appealability (чл. 280, ал. 3 ГПК, ДВ, бр. 86 от 2017 г., as quoted by the VKS): т. 1 civil cases up to
+  5000 лв. and commercial cases up to 20 000 лв. are not appealable, except claims for ownership and
+  other real rights over real estate; т. 2 maintenance, matrimonial and the other listed claims are not;
+  т. 3 labour disputes are not, except чл. 344, ал. 1, т. 1-3 КТ and pay/compensation over 5000 лв.
 
 Both are shown as a check for the lawyer, never as a decision.
 """
@@ -18,7 +20,21 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 
 BGN_PER_EUR = 1.95583
-THRESHOLDS_BGN = {"граждански": 5000, "търговски": 20000}
+THRESHOLDS_BGN = {"граждански": 5000, "търговски": 20000, "трудов-възнаграждение": 5000}
+# value -> label in the form; the rule for each is in threshold_check
+CASE_KINDS = {
+    "граждански": "гражданско (вземане, облигационно и др.)",
+    "търговски": "търговско",
+    "вещен": "собственост / вещни права върху недвижим имот",
+    "трудов-уволнение": "трудово – уволнение (чл. 344, ал. 1, т. 1–3 КТ)",
+    "трудов-възнаграждение": "трудово – възнаграждение или обезщетение",
+    "трудов-друг": "трудово – друг трудов спор",
+    "семеен": "издръжка, брачен иск, чл. 126, 127а, 130 СК",
+    "т2-друг": "друго по чл. 280, ал. 3, т. 2 (чл. 40 ЗУЕС, чл. 32, ал. 2 ЗС, име и др.)",
+    "друго": "друго",
+}
+_KIND_WORD = {"граждански": "граждански дела", "търговски": "търговски дела",
+              "трудов-възнаграждение": "искове за трудово възнаграждение и обезщетение"}
 _FIXED = [(1, 1), (3, 3), (5, 1), (5, 6), (5, 24), (9, 6), (9, 22)]
 _CHRISTMAS = [(12, 24), (12, 25), (12, 26)]
 
@@ -80,19 +96,38 @@ def appeal_deadline(served: date) -> Deadline:
 class Threshold:
     ok: bool | None   # True: above the threshold or excepted; False: below; None: not enough data
     text: str
+    note: bool = False   # show the text even though ok is None
 
 
 def threshold_check(amount: float | None, currency: str, kind: str, property_claim: bool) -> Threshold:
-    if property_claim:
-        return Threshold(True, "Иск за собственост или други вещни права: прагът по чл. 280, ал. 3, т. 1 не се прилага.")
+    if property_claim or kind == "вещен":
+        return Threshold(True, "Иск за собственост или други вещни права върху недвижим имот: прагът по чл. 280, "
+                               "ал. 3, т. 1 ГПК не се прилага.")
+    if kind == "трудов-уволнение":
+        return Threshold(True, "Иск по чл. 344, ал. 1, т. 1–3 КТ: изключение от чл. 280, ал. 3, т. 3 ГПК – решението "
+                               "може да се обжалва при основанията по чл. 280, ал. 1 и 2.")
+    if kind == "трудов-друг":
+        return Threshold(False, "Трудов спор: решението по правило не подлежи на касационно обжалване (чл. 280, ал. 3, "
+                                "т. 3 ГПК), освен по чл. 344, ал. 1, т. 1–3 КТ и за възнаграждение/обезщетение над 5000 лв.")
+    if kind == "семеен":
+        return Threshold(False, "Издръжка, брачен иск или производство по чл. 126, ал. 2, чл. 127а, чл. 130, ал. 3 СК: "
+                                "решението по правило не подлежи на касационно обжалване (чл. 280, ал. 3, т. 2 ГПК). "
+                                "Изключение: въпросите по чл. 59, ал. 2 СК, ако има ненавършило пълнолетие дете.")
+    if kind == "т2-друг":
+        return Threshold(False, "Иск по чл. 280, ал. 3, т. 2 ГПК (напр. чл. 40 ЗУЕС, чл. 32, ал. 2 ЗС, промяна на име): "
+                                "решението не подлежи на касационно обжалване.")
+    if kind == "друго":
+        return Threshold(None, "Вид „друго“: проверете ръчно изключенията на чл. 280, ал. 3 ГПК.", note=True)
     if amount is None or kind not in THRESHOLDS_BGN:
         return Threshold(None, "Въведете цената на иска и вида на делото.")
     bgn = amount * BGN_PER_EUR if currency == "EUR" else amount
     limit = THRESHOLDS_BGN[kind]
+    word = _KIND_WORD[kind]
+    point = "т. 3" if kind.startswith("трудов") else "т. 1"
     shown = f"{amount:,.2f} {'€' if currency == 'EUR' else 'лв.'}".replace(",", " ")
     if currency == "EUR":
         shown += f" (= {bgn:,.2f} лв.)".replace(",", " ")
     if bgn <= limit:
-        return Threshold(False, f"Цена на иска {shown} – до {limit:,} лв. за {kind} дела: решението по правило не подлежи "
-                                "на касационно обжалване (чл. 280, ал. 3, т. 1 ГПК).".replace(",", " "))
-    return Threshold(True, f"Цена на иска {shown} – над {limit:,} лв. за {kind} дела.".replace(",", " "))
+        return Threshold(False, f"Цена на иска {shown} – до {limit:,} лв. за {word}: решението по правило не подлежи "
+                                f"на касационно обжалване (чл. 280, ал. 3, {point} ГПК).".replace(",", " "))
+    return Threshold(True, f"Цена на иска {shown} – над {limit:,} лв. за {word}.".replace(",", " "))

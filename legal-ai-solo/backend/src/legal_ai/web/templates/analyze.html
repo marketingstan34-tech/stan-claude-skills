@@ -97,6 +97,7 @@
                 <label><input type="radio" name="mode" value="noai" checked><span>Без AI · безплатно</span></label>
                 <label><input type="radio" name="mode" value="ai"><span>С AI · ~{{ price.report[0]|round(1) }}–{{ price.report[1]|round(1) }} $</span></label>
               </span>
+              {% if credits.set and credits.left < price.report[1] %}<span class="cost-note credits-warn">AI кредитът е ≈ {{ '%.2f'|format(credits.left) }} $ – може да не стигне за справка с AI. <a class="link" href="{{ credits.url }}" target="_blank" rel="noopener noreferrer">Заредете кредит</a>.</span>{% endif %}
               <span class="cost-note">С AI приблизително: справка {{ '%.2f'|format(price.report[0]) }}–{{ '%.2f'|format(price.report[1]) }} $
                 (при повече документи – към горната граница), чернова на жалба {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.
                 Таван: {{ price.max_calls }} AI заявки на справка. Точната сума е в OpenAI → Usage.</span></div></div>

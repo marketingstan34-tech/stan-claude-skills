@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "parts_credits.html" import credits_box %}
 {% from "icons.html" import icon %}
 {% block title %}Начало · Legal AI Solo{% endblock %}
 {% block page_title %}Начало{% endblock %}
@@ -27,6 +28,8 @@
       <span class="stat-label">Нов случай</span><span class="stat-num">{{ icon('plus', 26) }}</span>
       <span class="stat-sub">качете въззивното решение</span></a>
   </div>
+
+  <div class="card start-credits">{{ credits_box(credits, request) }}</div>
 
   <div class="start-charts">
     <div class="card page-card">

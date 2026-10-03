@@ -339,3 +339,42 @@ mark { background: #fef3c7; }
 .edit-actions .kit-submit { width: auto !important; display: inline-flex !important; align-items: center; justify-content: center; min-width: 110px; margin: 0 !important; }
 @media (max-width: 700px) { .edit-actions { flex-wrap: wrap; } }
 .help-page { max-width: none !important; }
+
+/* ---------------- AI credit bar ---------------- */
+.fs-credits { margin: 4px 0 10px; padding: 12px 12px 10px; border-radius: 16px; background: var(--fs-purple-light); border: 1px solid #e6e3fd; }
+.fs-credits.low { background: #fff7ed; border-color: #fed7aa; }
+.fs-credits-head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 11.5px; font-weight: 700; color: var(--fs-muted); }
+.fs-credits-head b { font-size: 17px; font-weight: 800; color: var(--fs-text); letter-spacing: -0.3px; }
+.fs-credits.low .fs-credits-head b { color: #c2410c; }
+.fs-credits-bar { height: 6px; border-radius: 999px; background: #fff; margin: 8px 0 6px; overflow: hidden; }
+.fs-credits-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--fs-purple), #9b8cff);
+  transform-origin: left; animation: fs-grow-x 1s var(--fs-ease) both; }
+.fs-credits.low .fs-credits-bar i { background: linear-gradient(90deg, #f97316, #fb923c); }
+.fs-credits-sub { font-size: 10.5px; color: var(--fs-muted); margin: 0 0 8px; line-height: 1.35; }
+.fs-credits-btn { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 10px; border-radius: 999px;
+  background: var(--fs-purple); color: #fff !important; font-size: 12px; font-weight: 700; text-decoration: none;
+  box-shadow: 0 6px 14px rgba(112, 100, 247, .28); transition: transform .15s ease, background-color .15s ease; }
+.fs-credits-btn:hover { background: #5f52f0; transform: translateY(-1px); }
+.fs-credits.low .fs-credits-btn { background: #ea580c; box-shadow: 0 6px 14px rgba(234, 88, 12, .28); }
+.fs-credits-edit { margin-top: 6px; }
+.fs-credits-edit summary { cursor: pointer; font-size: 11px; font-weight: 700; color: var(--fs-purple); text-align: center; list-style: none; padding: 2px 0; }
+.fs-credits-edit summary::-webkit-details-marker { display: none; }
+.fs-credits-edit form { display: flex; gap: 6px; margin-top: 6px; }
+.fs-credits-edit .kit-input { flex: 1; min-width: 0; padding: 6px 10px !important; font-size: 12.5px; height: auto; }
+.fs-credits-edit .kit-submit { width: auto !important; padding: 6px 12px !important; font-size: 12px !important; margin: 0 !important; }
+.fs-credits-hint { font-size: 10px; color: var(--fs-light); margin: 5px 0 0; line-height: 1.35; }
+.start-credits { display: none; padding: 14px !important; }
+.start-credits .fs-credits { margin: 0; }
+.credits-warn { display: block; color: #9a3412 !important; background: #fff7ed; border: 1px solid #fed7aa; border-radius: 10px; padding: 6px 10px; margin-bottom: 6px; }
+@media (max-width: 960px) { .start-credits { display: block; } }
+@media print { .fs-credits, .start-credits { display: none !important; } }
+.fs-sidebar { overflow-y: auto; scrollbar-width: none; } .fs-sidebar::-webkit-scrollbar { display: none; }
+/* the sidebar stays in place while the page scrolls (body must not be its own scroll box) */
+html { overflow-x: clip; overflow-y: visible; }
+body { overflow: visible !important; }
+.fs-sidebar { top: 22px; }
+/* the lawyer's case form uses .case-row for a row of fields, not the start-page case card */
+.case-form .case-row { display: grid !important; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)) !important; gap: 8px !important;
+  padding: 0 !important; border: 0 !important; box-shadow: none !important; background: transparent !important; transform: none !important; }
+.case-form .case-row label:has(select[name=kind]) { grid-column: 1 / -1; }
+@media (max-width: 960px) { .fs-sidebar { top: 0; } }

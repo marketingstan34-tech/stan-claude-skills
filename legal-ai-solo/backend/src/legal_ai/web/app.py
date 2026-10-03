@@ -23,7 +23,7 @@ from legal_ai.db import connect
 from legal_ai.retrieval.lexical import search
 from legal_ai.retrieval.text import Term, normalize_for_search, parse_query, word_matches
 from legal_ai.sources.courts import COURTS
-from legal_ai.web import auth
+from legal_ai.web import auth, credits
 from legal_ai.web.jobs import JobRunner, load_run, load_trace
 from legal_ai.web.views import corpus_events, corpus_month, empty_month, list_reports, month_param
 
@@ -90,7 +90,7 @@ def create_app() -> FastAPI:
         return _TEMPLATES.TemplateResponse(request, name, {
             "running_job": runner.running(),
             "today": date.today().strftime("%d.%m.%Y"), "today_iso": date.today().isoformat(),
-            "price": price_info(),
+            "price": price_info(), "credits": credits.summary(storage, runs_dir),
             **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
@@ -419,7 +419,7 @@ def create_app() -> FastAPI:
         threshold = deadline.threshold_check(case.get("amount"), case.get("currency", "BGN"), kind,
                                              bool(case.get("property")))
         chosen = case.get("questions") or (casefile.default_questions(run) if run else [])
-        return {"case": case, "due": due, "threshold": threshold, "kind": kind, "chosen": chosen,
+        return {"case": case, "due": due, "threshold": threshold, "kind": kind, "kinds": deadline.CASE_KINDS, "chosen": chosen,
                 "ranked": casefile.rank_questions(run) if run else [],
                 "hint_amount": hint_amount, "act_number": casefile.decision_number(text),
                 "saved": bool(case)}
@@ -448,6 +448,22 @@ def create_app() -> FastAPI:
             raise HTTPException(403, "Заявката не идва от тази страница.")
         form = await request.form()
         casefile.set_status(base / item_id, str(form.get("status", "")))
+        return RedirectResponse(back, status_code=303)
+
+    @app.post("/credits")
+    async def set_credits(request: Request):
+        """The balance shown on the OpenAI billing page, typed by the lawyer after a top-up."""
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        back = str(form.get("next") or "/start")
+        if not back.startswith("/") or back.startswith("//") or "\\" in back:
+            back = "/start"
+        balance = credits.parse_balance(str(form.get("balance") or ""))
+        if balance is None:
+            sep = "&" if "?" in back else "?"
+            return RedirectResponse(f"{back}{sep}credits_error=1", status_code=303)
+        credits.save(storage, balance)
         return RedirectResponse(back, status_code=303)
 
     @app.post("/runs/{run_id}/status")

@@ -20,6 +20,8 @@ _AMOUNT = re.compile(r"(\d{1,3}(?:[  .]\d{3})+|\d+)(?:,(\d{1,2}))?\s*(лв\.?|�
 _ACT_NO = re.compile(r"Р\s*Е\s*Ш\s*Е\s*Н\s*И\s*Е\s*(?:№|N)\s*(\d{1,7})")
 
 
+# kinds where the appealability check does not depend on the claim value
+NO_AMOUNT_KINDS = {"вещен", "трудов-уволнение", "трудов-друг", "семеен", "т2-друг", "друго"}
 STATUSES = ["нов", "в работа", "подадена жалба", "приключен"]
 
 
@@ -65,7 +67,8 @@ def parse_form(form: dict, question_ids: list[str]) -> tuple[dict, str]:
         if not 0 <= out["amount"] < 1e12:
             return {}, "Цената на иска е извън допустимите стойности."
     out["currency"] = "EUR" if form.get("currency") == "EUR" else "BGN"
-    out["kind"] = form.get("kind") if form.get("kind") in ("граждански", "търговски") else ""
+    from legal_ai.cassation.deadline import CASE_KINDS
+    out["kind"] = form.get("kind") if form.get("kind") in CASE_KINDS else ""
     out["property"] = form.get("property") == "1"
     for name, limit in FIELDS.items():
         out[name] = (form.get(name) or "").strip()[:limit]
@@ -133,7 +136,8 @@ def steps(rtype: str, rid: str, case: dict, has_appeal: bool, edited: set[str]) 
     out = [
         {"label": "Справка с AI (въпроси и практика)", "done": ai, "href": "/analyze"},
         {"label": "Дата на връчване (срок)", "done": bool(case.get("served")), "href": f"{base}#case-data"},
-        {"label": "Праг по чл. 280, ал. 3", "done": case.get("amount") is not None or bool(case.get("property")),
+        {"label": "Праг по чл. 280, ал. 3", "done": case.get("amount") is not None or bool(case.get("property"))
+         or case.get("kind") in NO_AMOUNT_KINDS,
          "href": f"{base}#case-data"},
     ]
     if ai:

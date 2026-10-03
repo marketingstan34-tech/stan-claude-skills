@@ -353,3 +353,56 @@ def test_steps_link_only_to_pages_that_exist():
     assert hrefs["Жалба прегледана"] == "/runs/r1/appeal"
     hrefs = {s["label"]: s["href"] for s in steps("run", "r1", {}, has_appeal=True, edited=set())}
     assert hrefs["Жалба прегледана"] == "/runs/r1/appeal/edit"
+
+
+@pytest.mark.parametrize("kind,amount,ok", [
+    ("вещен", None, True), ("трудов-уволнение", None, True), ("трудов-друг", 99999, False),
+    ("трудов-възнаграждение", 5000, False), ("трудов-възнаграждение", 5000.01, True),
+    ("семеен", None, False), ("т2-друг", None, False), ("друго", None, None)])
+def test_threshold_by_case_kind(kind, amount, ok):
+    t = threshold_check(amount, "BGN", kind, False)
+    assert t.ok is ok
+    assert t.note or t.ok is not None
+
+
+def test_case_form_accepts_every_listed_kind_only():
+    from legal_ai.cassation.deadline import CASE_KINDS
+    for kind in CASE_KINDS:
+        assert casefile.parse_form({"kind": kind}, [])[0]["kind"] == kind
+    assert casefile.parse_form({"kind": "измислен"}, [])[0]["kind"] == ""
+
+
+# the AI credit bar
+
+def test_credit_estimate(tmp_path):
+    from datetime import datetime, timezone
+
+    from legal_ai.web import credits
+    runs = tmp_path / "runs"
+    for name, created in (("20261003100000", "2026-10-03T10:00:00+00:00"), ("20261003130000", "2026-10-03T13:00:00+00:00")):
+        (runs / name).mkdir(parents=True)
+        (runs / name / "run.json").write_text(json.dumps({"created_at": created, "usage": {
+            "by_model": {"gpt-5.5-2026-04-23": [100_000, 10_000]}}}), encoding="utf-8")   # 0.50 + 0.30 = 0.80 $
+    (runs / "20261003130000" / "appeal.json").write_text(json.dumps({
+        "created_at": "2026-10-03T13:05:00+00:00", "model": "gpt-5.5-2026-04-23",
+        "usage": {"input_tokens": 20_000, "output_tokens": 2_000}}), encoding="utf-8")       # 0.10 + 0.06 = 0.16 $
+    assert credits.summary(tmp_path, runs) == {"set": False, "url": credits.BILLING_URL}
+    credits.save(tmp_path, 10.0, now=datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc))
+    s = credits.summary(tmp_path, runs)
+    assert round(s["spent"], 2) == 0.96 and round(s["left"], 2) == 9.04      # only what came after 12:00
+    assert s["reports_left"] == 9 and not s["low"] and s["pct"] == 90
+    assert credits.parse_balance("25,40 $") == 25.4 and credits.parse_balance("абв") is None
+    assert credits.parse_balance("-1") is None
+
+
+def test_credit_form_and_bar(client):
+    c, _ = client
+    page = c.get("/start").text
+    assert "Въведете баланса от OpenAI" in page and "platform.openai.com/settings/organization/billing" in page
+    h = {"origin": "http://127.0.0.1"}
+    r = c.post("/credits", data={"balance": "12.50", "next": "/reports"}, headers=h, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/reports"
+    assert "≈ 12.50 $" in c.get("/reports").text
+    r = c.post("/credits", data={"balance": "x", "next": "//evil.example"}, headers=h, follow_redirects=False)
+    assert r.headers["location"] == "/start?credits_error=1"
+    assert c.post("/credits", data={"balance": "5"}, headers={"origin": "http://evil.example"}).status_code == 403
