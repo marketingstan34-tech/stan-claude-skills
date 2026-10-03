@@ -73,6 +73,7 @@ class JobRunner:
                 job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
                 appellate = self._appellate(courts, p)
                 self._identify(p, appellate.text)
+                self._standard_label(appellate)
                 cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
                 if p.get("until"):   # practice up to the end of that month
                     y, m = (int(x) for x in p["until"].split("-"))
@@ -92,7 +93,8 @@ class JobRunner:
                 if self._can_trace(p):
                     job.message = "Проследяване на делото по инстанции…"
                     result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
-                                                 appellate.act_date, result.analysis.get("lower_instance")))
+                                                 appellate.act_date, result.analysis.get("lower_instance"),
+                                                 kind=self._kind(p)))
             run_dir = save_run(result, self.runs_dir)
             if p.get("extras"):   # kept for the appeal draft, next to the report (private storage)
                 write_atomic(run_dir / "context.json", json.dumps(
@@ -180,6 +182,17 @@ class JobRunner:
             p.update(court=site.key, case=head["number"], year=head["year"])
 
     @staticmethod
+    def _standard_label(appellate) -> None:
+        """A document gets the label read from its heading (court, case, date), not the file name."""
+        from legal_ai.cassation.labels import GENERIC, standard_label
+        if appellate.label.startswith(GENERIC):
+            appellate.label = standard_label(appellate.text) or appellate.label
+
+    @staticmethod
+    def _kind(p: dict) -> str:
+        return (p.get("identified") or {}).get("kind") or p.get("type") or ""
+
+    @staticmethod
     def _can_trace(p: dict) -> bool:
         return bool(p.get("court") and p.get("case") and p.get("year"))
 
@@ -209,12 +222,13 @@ class JobRunner:
                 job.message = "Четене на документа…" if p.get("file") else "Сваляне на въззивното решение…"
                 appellate = self._appellate(courts, p)
                 self._identify(p, appellate.text)
+                self._standard_label(appellate)
                 lower = extract_appealed(appellate.text)
                 path = []
                 if self._can_trace(p):
                     job.message = "Проследяване на делото по инстанции…"
                     path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
-                                          appellate.act_date, lower))
+                                          appellate.act_date, lower, kind=self._kind(p)))
             cites = extract_vks_citations(appellate.text)
             if os.environ.get("DATABASE_URL"):
                 from legal_ai.db import connect

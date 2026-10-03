@@ -108,8 +108,13 @@ def suggest_amount(text: str) -> tuple[float, str] | None:
     return best
 
 
+_REG_NO = re.compile(r"Рег\.?\s*(?:№|N)\s*(\d{1,7})\s*/\s*\d{1,2}\.\d{1,2}\.\d{4}")
+
+
 def decision_number(text: str) -> str:
-    m = _ACT_NO.search((text or "")[:400])
+    """"РЕШЕНИЕ № 125" or, in the court sites' files, "Рег.№ 163 / 03.08.2026" above the heading."""
+    head = (text or "")[:400]
+    m = _ACT_NO.search(head) or _REG_NO.search(head)
     return m.group(1) if m else ""
 
 

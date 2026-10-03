@@ -291,3 +291,28 @@ a.status-chip.active { box-shadow: 0 0 0 2px #111413 inset; }
 .days-left-pill.due-bad { background: #fee2e2 !important; color: #991b1b !important; }
 .detail-item-row.drop-over { outline: 2px dashed #111413; outline-offset: 2px; background: #f0fdf4 !important; }
 .cost-note { display: block; font-size: 12px; color: #52525b; line-height: 1.45; margin-top: 6px; font-weight: 500; }
+
+/* editor and documents */
+.edit-page { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 980px; }
+.edit-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; position: sticky; top: 8px; z-index: 5; }
+.edit-kinds { display: flex; flex-wrap: wrap; gap: 6px; }
+.edit-kinds button { border: 1px solid #d4d4d8; background: #fff; border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.edit-kinds button:hover { border-color: #111413; }
+.edit-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.edit-actions .kit-submit { padding: 8px 18px; text-decoration: none; }
+.edit-area { min-height: 60vh; outline: none; font-family: "Times New Roman", serif; }
+.edit-area:focus { box-shadow: 0 0 0 2px #111413 inset; }
+.edit-area p { margin: 0 0 10px; }
+.edit-area p[data-kind="heading"] { font-weight: 700; }
+.edit-area p[data-kind="center"] { font-weight: 700; text-align: center; }
+.edit-area p[data-kind="quote"] { font-style: italic; margin-left: 28px; border-left: 3px solid #d4d4d8; padding-left: 10px; }
+.edit-area p[data-kind="note"] { background: #fef08a; }
+.edit-area p[data-kind="item"] { margin-left: 18px; }
+.link-button { border: 0; background: none; color: #1d4ed8; font: inherit; text-decoration: underline; cursor: pointer; padding: 0; }
+.doc-row { display: flex; flex-direction: column; gap: 8px; }
+.doc-head { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.doc-title { font-weight: 700; font-size: 15px; }
+.doc-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.doc-table td { padding: 7px 4px; border-top: 1px solid #f1f1f3; vertical-align: middle; }
+.doc-links { text-align: right; white-space: nowrap; }
+@media (max-width: 700px) { .doc-links { white-space: normal; text-align: left; } }

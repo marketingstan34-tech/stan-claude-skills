@@ -20,6 +20,10 @@
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft.docx" style="display:block;text-align:center">Свали като Word</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/draft/edit" style="display:block;text-align:center">Редактирай</a>
+        {% if edited %}<div class="notice">Това е вашата редактирана версия ({{ edited[:10] }}).
+          <form method="post" action="/runs/{{ run_id }}/draft/reset" onsubmit="return confirm('Да се върне ли автоматичната версия? Редакцията ще се изтрие.')" style="display:inline">
+          <button type="submit" class="link-button">Върни автоматичната</button></form></div>{% endif %}
         <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center"
            title="Цитираните решения на ВКС като Word файлове – за „Прилагам“">Свали приложенията (ZIP)</a>

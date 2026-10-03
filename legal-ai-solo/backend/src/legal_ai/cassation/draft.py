@@ -39,6 +39,19 @@ _PREFIX = re.compile(r"^(?:въззивният\s+съд|съдът|ВКС|въ�
                      re.IGNORECASE)
 
 
+_SUBJECT = re.compile(r"^(?:въззивният\s+съд|съдът|въззивната\s+инстанция)\s+(?!е\s+приел|приема,?\s+че)",
+                      re.IGNORECASE)
+
+
+def _holding_sentence(lead: str, summary: str) -> str:
+    """"Освен това въззивният съд е приел, че X." – or, when the summary already starts with the court
+    as subject ("Въззивният съд прилага ..."), "Освен това въззивният съд прилага ..."."""
+    s = summary.strip().rstrip(" .")
+    if _SUBJECT.match(s):
+        return f"{lead}{s[0].lower() + s[1:]}."
+    return f"{lead}въззивният съд е приел, че {_clause(s)}."
+
+
 def _clause(sentence: str) -> str:
     """'Въззивният съд е приел, че X.' -> 'x' so it reads after '... е приел, че '."""
     s = _PREFIX.sub("", sentence.strip()).rstrip(" .")
@@ -86,20 +99,31 @@ def build_draft(run: dict, case: dict | None = None, act_number: str = "") -> li
 
     attached: list[str] = []
     seen: set[str] = set()
+    told: dict[str, str] = {}   # holding id -> where it was first described ("първо", "второ", ...)
     number = 0
     for i, q in enumerate(a["questions"]):
         place = ORDINALS[i] if i < len(ORDINALS) else f"{i + 1}-о"
         found = contra.get(q["id"], [])
         lead = f"На {place} място, "
+        repeated = []
         for hid in q.get("holding_ids", []):
             h = holdings.get(hid)
             if not h:
                 continue
-            out.append(Block("p", f"{lead or 'Освен това '}въззивният съд е приел, че {_clause(h['summary'])}."))
+            if hid in told:   # described under an earlier question: refer to it, do not repeat it
+                repeated.append(told[hid])
+                continue
+            told[hid] = place
+            out.append(Block("p", _holding_sentence(lead or "Освен това ", h["summary"])))
             lead = ""
             quote = hq.get(hid) or {}
             if quote.get("status") == "text_verified" and quote.get("text"):
                 out.append(Block("quote", f"„{quote['text']}“"))
+        if repeated:
+            places = sorted(set(repeated), key=ORDINALS.index) if all(r in ORDINALS for r in repeated) else repeated
+            ref = " и ".join(f"на {p} място" for p in places)
+            out.append(Block("p", f"{lead or 'Освен това '}значение имат и изводите на въззивния съд, изложени по-горе ({ref})."))
+            lead = ""
         if lead:   # no holding attached to the question
             out.append(Block("p", f"{lead}[опишете извода на въззивния съд по този въпрос]."))
         for x in found:

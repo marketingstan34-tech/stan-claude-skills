@@ -138,7 +138,8 @@ def test_analysis_uses_local_corpus_and_interpretative_decisions(conn, raw):
     r = run_analysis(ai, vks, SourceDoc("С", "file:///s", "текст", "txt", "now"), date(2030, 1, 1), conn=conn)
 
     labels = sorted(a.label for a in r.assessments)
-    assert any(lbl.startswith("Тълкувателно решение № 1/2013") for lbl in labels)
+    # cited with the decision date and the interpretative case: "... № 1/<дата> г. по тълк. д. № 1/2013 г. на ..."
+    assert any(lbl.startswith("Тълкувателно решение") and "тълк. д. № 1/2013 г." in lbl for lbl in labels), labels
     assert any(lbl.startswith("Решение №901/") for lbl in labels)
     assert not any("pregled-akt" in u for u in vks_urls)  # local acts are not downloaded again
     assert any(s.get("local") for s in r.searches)

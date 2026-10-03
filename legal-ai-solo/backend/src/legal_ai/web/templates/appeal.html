@@ -13,6 +13,10 @@
       {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
       {% if appeal %}
         <a class="kit-submit" href="/runs/{{ run_id }}/appeal.docx" style="display:block;text-align:center">Свали като Word</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/appeal/edit" style="display:block;text-align:center">Редактирай</a>
+        {% if edited %}<div class="notice">Това е вашата редактирана версия ({{ edited[:10] }}).
+          <form method="post" action="/runs/{{ run_id }}/appeal/reset" onsubmit="return confirm('Да се върне ли AI версията? Редакцията ще се изтрие.')" style="display:inline">
+          <button type="submit" class="link-button">Върни AI версията</button></form></div>{% endif %}
         <a class="kit-submit light" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Изложението по чл. 284, ал. 3, т. 1</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center">Свали приложенията (ZIP)</a>
         <p class="muted small">Написана на {{ appeal.created_at[:10].split('-')|reverse|join('.') }} · {{ appeal.model }} ·

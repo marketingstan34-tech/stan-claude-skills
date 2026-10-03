@@ -268,3 +268,68 @@ def test_empty_number_and_year_from_the_browser(client, monkeypatch):
     r = c.post("/analyze", data={"court": "as-plovdiv", "case": "899", "year": "2021", "mode": "noai"},
                headers=h, follow_redirects=False)
     assert r.status_code == 303 and started[-1]["case"] == 899 and started[-1]["year"] == 2021
+
+
+# fixes after the first real case (03.10.2026)
+
+def test_vks_case_of_another_kind_or_earlier_is_not_linked():
+    from legal_ai.tracing import vks_case_mismatch
+    acts = [{"date": "01.06.2026"}, {"date": "05.08.2026"}]
+    assert "друг вид" in vks_case_mismatch("тър.", acts, "Въззивно гражданско дело", date(2026, 8, 3))
+    assert "преди въззивното решение" in vks_case_mismatch("гр.", acts, "Въззивно гражданско дело", date(2026, 8, 3))
+    assert vks_case_mismatch("гр.", [{"date": "05.09.2026"}], "Въззивно гражданско дело", date(2026, 8, 3)) == ""
+    assert vks_case_mismatch("тър.", [], "", None) == ""
+
+
+def test_standard_label_from_the_decision_heading():
+    from legal_ai.cassation.labels import appellate_label, standard_label
+    text = ("Рег.№ 163 / 03.08.2026\nРЕШЕНИЕ\nгр. Пловдив\nВ ИМЕТО НА НАРОДА\nАПЕЛАТИВЕН СЪД – ПЛОВДИВ, "
+            "2-РИ ГРАЖДАНСКИ СЪСТАВ ... Въззивно гражданско дело № 20255000500553 по описа за 2025 година")
+    assert standard_label(text) == "Апелативен съд Пловдив, Въззивно гражданско дело № 553/2025, Решение от 03.08.2026"
+    assert casefile.decision_number(text) == "163"
+    assert appellate_label("Апелативен съд X, ...", None) == "Апелативен съд X, ..."   # not a document: kept
+
+
+def test_draft_does_not_repeat_holdings():
+    run = json.loads(json.dumps(RUN))
+    run["analysis"]["questions"][1]["holding_ids"] = ["H1"]
+    text = to_text(build_draft(run, {"questions": ["Q1", "Q2"]}))
+    assert text.count("е приел, че извод") == 1 and "изложени по-горе (на първо място)" in text
+
+
+def test_appeal_request_is_not_doubled():
+    from legal_ai.cassation.appeal import _request
+    assert _request("Да отмени въззивното решение и вместо него да постанови решение, с което да уважи иска.") == \
+        "вместо него да постановите решение, с което да уважите иска"
+
+
+def test_edit_draft_and_appeal_and_documents_page(client):
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    assert "contenteditable" in c.get("/runs/20260102030405/draft/edit").text
+    assert c.get("/runs/20260102030405/appeal/edit").status_code == 404        # no appeal yet
+    blocks = [{"kind": "heading", "text": "ДО ВКС"}, {"kind": "p", "text": "Моят текст."}, {"kind": "bad", "text": "x"},
+              {"kind": "p", "text": "   "}]
+    r = c.post("/runs/20260102030405/draft/edit", json={"blocks": blocks}, headers=h)
+    assert r.status_code == 200 and r.json()["ok"]
+    page = c.get("/runs/20260102030405/draft").text
+    assert "Моят текст." in page and "редактирана версия" in page
+    docx = c.get("/runs/20260102030405/draft.docx").content
+    import zipfile as _z
+    assert "Моят текст." in _z.ZipFile(io.BytesIO(docx)).read("word/document.xml").decode()
+    assert c.post("/runs/20260102030405/draft/edit", json={"blocks": []}, headers=h).status_code == 400
+    assert c.post("/runs/20260102030405/draft/edit", json={"blocks": blocks},
+                  headers={"origin": "http://evil.example"}).status_code == 403
+    docs = c.get("/documents").text
+    assert "редактирано" in docs and "/runs/20260102030405/draft/edit" in docs and "Напиши с AI" in docs
+    r = c.post("/runs/20260102030405/draft/reset", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and "Моят текст." not in c.get("/runs/20260102030405/draft").text
+    assert c.get("/runs/20260102030405/other/edit").status_code == 404
+
+
+def test_report_type_is_not_overwritten_by_the_case_kind(client):
+    """The case kind ("в.т.") and the report type (with or without AI) are different keys."""
+    c, _ = client
+    page = c.get("/reports").text
+    assert 'С AI</span><span class="meetings-count-circle">1</span>' in page
+    assert "в.т. 899/2021" in page

@@ -9,6 +9,7 @@ from datetime import date, datetime
 from pathlib import Path
 
 from legal_ai.cassation.casefile import load_case
+from legal_ai.cassation.labels import appellate_label
 from legal_ai.cassation.deadline import appeal_deadline
 
 MONTHS = ["Януари", "Февруари", "Март", "Април", "Май", "Юни", "Юли", "Август", "Септември",
@@ -61,10 +62,10 @@ def list_reports(runs_dir: Path, traces_dir: Path) -> list[dict]:
                 continue
             try:
                 data = json.loads(f.read_text(encoding="utf-8"))
-                label = data["appellate"]["label"]
+                label = appellate_label(data["appellate"]["label"], d)
             except (OSError, ValueError, KeyError):
                 continue   # a broken report must not break the pages that list reports
-            item = {"id": d.name, "kind": kind, "url": f"/{'traces' if kind == 'trace' else 'runs'}/{d.name}",
+            item = {"id": d.name, "rtype": kind, "url": f"/{'traces' if kind == 'trace' else 'runs'}/{d.name}",
                     "label": label, "created_at": data["created_at"], "created": _when(data["created_at"]),
                     **_short(label), **_path_summary(data.get("path") or [])}
             if kind == "trace":

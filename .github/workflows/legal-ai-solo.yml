@@ -1,0 +1,45 @@
+# Checks for legal-ai-solo on every push and pull request that touches it: lint and all tests,
+# including the PostgreSQL integration tests. Railway can be set to deploy only after this passes
+# (service Settings -> "Wait for CI").
+name: legal-ai-solo
+
+on:
+  push:
+    paths: ["legal-ai-solo/**", ".github/workflows/legal-ai-solo.yml"]
+  pull_request:
+    paths: ["legal-ai-solo/**", ".github/workflows/legal-ai-solo.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: legal-ai-solo/backend
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci-only-throwaway
+          POSTGRES_DB: legal_ai_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U ci" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql+psycopg://ci:ci-only-throwaway@127.0.0.1:5432/legal_ai_test
+      TEST_DATABASE_URL: postgresql+psycopg://ci:ci-only-throwaway@127.0.0.1:5432/legal_ai_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: legal-ai-solo/backend/pyproject.toml
+      - run: pip install -e ".[dev]"
+      - name: Lint (also catches undefined names that tests may not reach)
+        run: ruff check src tests
+      - name: Migrate the throwaway test database
+        run: legal-ai migrate
+      - name: Tests (unit, web and PostgreSQL integration)
+        run: pytest -q

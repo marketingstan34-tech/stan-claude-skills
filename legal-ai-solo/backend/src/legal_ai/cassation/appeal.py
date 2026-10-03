@@ -8,6 +8,7 @@ anything missing stay in [square brackets] for the lawyer.
 
 from __future__ import annotations
 
+import re
 from datetime import datetime, timezone
 
 from legal_ai.cassation import prompts as P
@@ -69,6 +70,23 @@ def generate(ai, run: dict, text: str, chosen: list[str] | None,
                       "output_tokens": ai.usage.output_tokens}}
 
 
+_ALREADY = re.compile(r"^\s*(?:и\s+)?да\s+отмени(?:те)?\s+(?:изцяло\s+|частично\s+)?(?:обжалваното\s+|въззивното\s+)?"
+                      r"решение(?:\s+(?:изцяло|частично|в\s+обжалваната\s+част))?\s*(?:,\s*)?(?:и\s+)?", re.IGNORECASE)
+
+
+def _request(text: str) -> str:
+    """What VKS should decide after setting aside, without repeating "да отмени ... решението"."""
+    t = _ALREADY.sub("", (text or "").strip()).strip().rstrip(".")
+    t = re.sub(r"^вместо\s+него\s+", "вместо него ", t, flags=re.IGNORECASE)
+    if t and t[0].isupper() and (len(t) < 2 or t[1].islower()):
+        t = t[0].lower() + t[1:]
+    t = re.sub(r"\bда\s+постанови\b", "да постановите", t)
+    t = re.sub(r"\bда\s+върне\b", "да върнете", t)
+    t = re.sub(r"\bда\s+уважи\b", "да уважите", t)
+    t = re.sub(r"\bда\s+признае\b", "да признаете", t)
+    return t or "[посочете какво да постанови ВКС]"
+
+
 def build_appeal(run: dict, appeal: dict, case: dict | None = None, act_number: str = "",
                  n_attached: int = 0) -> list[Block]:
     case = case or {}
@@ -109,7 +127,7 @@ def build_appeal(run: dict, appeal: dict, case: dict | None = None, act_number: 
     out.append(Block("p", "Съображенията за допускане на касационното обжалване са изложени в приложеното изложение "
                           "по чл. 284, ал. 3, т. 1 ГПК."))
     out.append(Block("p", f"Моля да допуснете касационно обжалване, да отмените въззивното решение {scope} и "
-                          f"{appeal['petitum_request'].strip().rstrip('.')}."))
+                          f"{_request(appeal['petitum_request'])}."))
     out.append(Block("p", "Моля да ми присъдите направените разноски пред всички инстанции, вкл. адвокатско "
                           "възнаграждение. [Списък по чл. 80 ГПК]"))
     out.append(Block("heading", "Прилагам:"))

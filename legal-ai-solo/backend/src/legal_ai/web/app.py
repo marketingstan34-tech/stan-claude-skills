@@ -265,11 +265,11 @@ def create_app() -> FastAPI:
         if ctx["status"]:
             all_reports = [r for r in all_reports if r["status"] == ctx["status"]]
             ctx["reports"] = all_reports
-        ctx["counts"] = {"noai": sum(r["kind"] == "trace" for r in all_reports),
-                         "ai": sum(r["kind"] == "run" for r in all_reports)}
+        ctx["counts"] = {"noai": sum(r["rtype"] == "trace" for r in all_reports),
+                         "ai": sum(r["rtype"] == "run" for r in all_reports)}
         mode = mode if mode in ("ai", "noai") else ""
         if mode:
-            ctx["reports"] = [r for r in all_reports if r["kind"] == ("run" if mode == "ai" else "trace")]
+            ctx["reports"] = [r for r in all_reports if r["rtype"] == ("run" if mode == "ai" else "trace")]
         ctx["mode"] = mode
         return render(request, "reports.html", ctx)
 
@@ -378,6 +378,19 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"/{kind}/{job.run_dir}", status_code=303)
         return render(request, "job.html", {"job": job, "courts": COURTS})
 
+    def refresh(run: dict, d: Path, appeal: dict | None = None) -> None:
+        """Standard labels for reports from documents and dated interpretative decisions."""
+        from legal_ai.cassation.labels import refresh_run
+        try:
+            conn = connect(settings.database_url)
+        except psycopg.OperationalError:
+            conn = None
+        try:
+            refresh_run(run, d, conn, appeal)
+        finally:
+            if conn is not None:
+                conn.close()
+
     def case_context(base: Path, item_id: str, label: str, run: dict | None = None) -> dict:
         """The lawyer's data for a report, with the deadline, the threshold check and hints."""
         from legal_ai.cassation import casefile, deadline
@@ -443,6 +456,7 @@ def create_app() -> FastAPI:
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
+        refresh(run, runs_dir / run_id)
         by_q: dict[str, list] = {}
         for a in run["assessments"]:
             if a["relevant"] and a["stance"] != "неотносимо":
@@ -464,9 +478,13 @@ def create_app() -> FastAPI:
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
+        refresh(run, runs_dir / run_id)
         ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
         case = {**ctx["case"], "questions": ctx["chosen"]}
-        return run, ctx, build_draft(run, case, ctx["act_number"])
+        from legal_ai.cassation.edits import load_edit
+        edit = load_edit(runs_dir / run_id, "draft")
+        ctx["edited"] = edit["saved_at"] if edit else ""
+        return run, ctx, edit["blocks"] if edit else build_draft(run, case, ctx["act_number"])
 
     @app.get("/runs/{run_id}/draft", response_class=HTMLResponse)
     def run_draft(request: Request, run_id: str):
@@ -492,6 +510,7 @@ def create_app() -> FastAPI:
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
+        refresh(run, runs_dir / run_id)
         ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
         items = attached_labels(run, {"questions": ctx["chosen"]})
         if runner.busy():   # the court sites get one client at a time; use only the own database then
@@ -527,13 +546,19 @@ def create_app() -> FastAPI:
         run = load_run(runs_dir, run_id)
         if run is None:
             raise HTTPException(404, "Няма такава справка.")
-        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
         try:
             appeal = _json.loads((runs_dir / run_id / "appeal.json").read_text(encoding="utf-8"))
         except (OSError, ValueError):
             appeal = None
+        refresh(run, runs_dir / run_id, appeal)
+        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
         blocks = build_appeal(run, appeal, ctx["case"], ctx["act_number"],
                               len(attached_labels(run, {"questions": ctx["chosen"]}))) if appeal else []
+        from legal_ai.cassation.edits import load_edit
+        edit = load_edit(runs_dir / run_id, "appeal")
+        ctx["edited"] = edit["saved_at"] if edit else ""
+        if edit:
+            blocks = edit["blocks"]
         return run, ctx, appeal, blocks
 
     @app.get("/runs/{run_id}/appeal", response_class=HTMLResponse)
@@ -569,11 +594,69 @@ def create_app() -> FastAPI:
                         media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         headers={"Content-Disposition": f'attachment; filename="zhalba-{run_id}.docx"'})
 
+    def doc_blocks(run_id: str, doc: str):
+        if doc == "draft":
+            run, ctx, blocks = draft_blocks(run_id)
+            return run, ctx, blocks
+        if doc == "appeal":
+            run, ctx, appeal, blocks = appeal_blocks(run_id)
+            if not appeal and not ctx["edited"]:
+                raise HTTPException(404, "Още няма чернова на жалбата.")
+            return run, ctx, blocks
+        raise HTTPException(404, "Няма такъв документ.")
+
+    @app.get("/runs/{run_id}/{doc}/edit", response_class=HTMLResponse)
+    def doc_edit(request: Request, run_id: str, doc: str):
+        from legal_ai.cassation.edits import DOCS
+        run, ctx, blocks = doc_blocks(run_id, doc)
+        return render(request, "edit.html", {"run": run, "run_id": run_id, "doc": doc, "doc_title": DOCS[doc],
+                                             "blocks": blocks, **ctx})
+
+    @app.post("/runs/{run_id}/{doc}/edit")
+    async def doc_edit_save(request: Request, run_id: str, doc: str):
+        from legal_ai.cassation.edits import DOCS, clean_blocks, save_edit
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if doc not in DOCS or load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такъв документ.")
+        try:
+            body = await request.json()
+            blocks = clean_blocks(body.get("blocks") if isinstance(body, dict) else None)
+        except ValueError as exc:
+            return JSONResponse({"ok": False, "error": str(exc) or "Невалиден текст."}, status_code=400)
+        return JSONResponse({"ok": True, "saved_at": save_edit(runs_dir / run_id, doc, blocks)})
+
+    @app.post("/runs/{run_id}/{doc}/reset")
+    def doc_edit_reset(request: Request, run_id: str, doc: str):
+        from legal_ai.cassation.edits import DOCS, reset_edit
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if doc not in DOCS or load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такъв документ.")
+        reset_edit(runs_dir / run_id, doc)
+        return RedirectResponse(f"/runs/{run_id}/{doc}", status_code=303)
+
+    @app.get("/documents", response_class=HTMLResponse)
+    def documents_page(request: Request):
+        from legal_ai.cassation.edits import load_edit
+        docs = []
+        for r in list_reports(runs_dir, traces_dir):
+            if r["rtype"] != "run":
+                continue
+            d = runs_dir / r["id"]
+            draft_edit, appeal_edit = load_edit(d, "draft"), load_edit(d, "appeal")
+            docs.append({**r, "draft_edited": draft_edit["saved_at"][:10] if draft_edit else "",
+                         "has_appeal": (d / "appeal.json").exists() or bool(appeal_edit),
+                         "appeal_edited": appeal_edit["saved_at"][:10] if appeal_edit else ""})
+        return render(request, "documents.html", {"docs": docs})
+
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str, error: str = Query("", max_length=200)):
         t = load_trace(traces_dir, trace_id)
         if t is None:
             raise HTTPException(404, "Няма такава справка.")
+        from legal_ai.cassation.labels import appellate_label
+        t["appellate"]["label"] = appellate_label(t["appellate"]["label"], traces_dir / trace_id)
         return render(request, "trace.html", {"t": t, "trace_id": trace_id, "form_error": error,
                                               **case_context(traces_dir, trace_id, t["appellate"]["label"])})
 

@@ -202,8 +202,46 @@ def parse_vks_case(page: str) -> dict:
 _CASE_REF = re.compile(r"(\d{1,6})\s*/\s*(\d{4})")
 
 
+def _kind_short(kind: str) -> str:
+    """"гр" or "тър" from "Въззивно гражданско дело", "в.т.д.", "тър.", "гр." ...; "" if unknown."""
+    k = (kind or "").lower().replace(" ", "")
+    if "търг" in k or "тър" in k or k.startswith(("т.", "в.т", "ч.т", "вт")):
+        return "тър"
+    if "граж" in k or k.startswith(("гр", "в.гр", "ч.гр", "вгр")):
+        return "гр"
+    return ""
+
+
+def _dmy(value: str) -> date | None:
+    m = re.match(r"(\d{1,2})\.(\d{1,2})\.(\d{4})", (value or "").strip())
+    if not m:
+        return None
+    try:
+        return date(int(m[3]), int(m[2]), int(m[1]))
+    except ValueError:
+        return None
+
+
+def vks_case_mismatch(row_kind: str, acts: list[dict], kind: str, appellate_date: date | None) -> str:
+    """Why a VKS case found by the appellate case number is not the cassation of this decision ("" if it fits).
+
+    The same number and year can belong to a civil and to a commercial appellate case of the same
+    court, and a VKS case can be an earlier proceeding (e.g. a private appeal) in the same case.
+    """
+    want, got = _kind_short(kind), _kind_short(row_kind)
+    if want and got and want != got:
+        return (f"друг вид дело ({row_kind.strip()} във ВКС, а въззивното дело е "
+                f"{'гражданско' if want == 'гр' else 'търговско'}) – вероятно друго дело със същия номер")
+    if appellate_date:
+        early = [a for a in acts if (d := _dmy(a.get("date", ""))) and d < appellate_date]
+        if early:
+            return (f"актовете на ВКС ({early[0]['date']}) са преди въззивното решение "
+                    f"({appellate_date.strftime('%d.%m.%Y')}) – друго производство или друго дело със същия номер")
+    return ""
+
+
 def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, year: int,
-          appellate_date: date | None, lower: dict | None) -> list[Instance]:
+          appellate_date: date | None, lower: dict | None, kind: str = "") -> list[Instance]:
     court = COURTS[court_key]
     path: list[Instance] = []
 
@@ -250,15 +288,22 @@ def trace(courts: PoliteClient, vks: PoliteClient, court_key: str, number: int, 
         url = vks_case_search_url(number, court.name)
         rows = [r for r in parse_vks_case_list(vks.get(url).body.decode("utf-8", errors="replace"))
                 if r["prev_case"] == f"{number}/{year}" and r["prev_court"] == court.name]
+        linked = 0
+        for r in rows:
+            case = parse_vks_case(vks.get(r["url"]).body.decode("utf-8", errors="replace"))
+            label = f"{r['kind']} {r['case'] or '(без номер)'}, {r['chamber']}".strip()
+            why = vks_case_mismatch(r["kind"], case["acts"], kind, appellate_date)
+            if why:   # shown, but not linked as the cassation of this decision
+                path.append(Instance("ВКС", "Върховен касационен съд", label, source_url=r["url"],
+                                     note=f"Намерено дело във ВКС по въззивно дело {number}/{year}, но не е свързано: {why}."))
+                continue
+            linked += 1
+            path.append(Instance("ВКС", "Върховен касационен съд", label,
+                                 acts=case["acts"], result=case["data"].get("Резултат от делото", ""),
+                                 source_url=r["url"]))
         if not rows:
             path.append(Instance("ВКС", "Върховен касационен съд", "-", source_url=url,
                                  note="Няма дело във ВКС по това въззивно дело (към днешна дата)."))
-        for r in rows:
-            case = parse_vks_case(vks.get(r["url"]).body.decode("utf-8", errors="replace"))
-            path.append(Instance("ВКС", "Върховен касационен съд",
-                                 f"{r['kind']} {r['case'] or '(без номер)'}, {r['chamber']}".strip(),
-                                 acts=case["acts"], result=case["data"].get("Резултат от делото", ""),
-                                 source_url=r["url"]))
     except FetchError as exc:
         path.append(Instance("ВКС", "Върховен касационен съд", "?", note=f"Справката не успя: {exc}"))
     return path

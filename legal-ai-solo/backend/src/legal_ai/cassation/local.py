@@ -37,9 +37,18 @@ class LocalAct:
     admission_paragraph_nos: list[int] = field(default_factory=list)
 
 
+def tr_label(act_number, act_date, case_year, chamber) -> str:
+    """How an interpretative decision is cited: "Тълкувателно решение № 4/14.03.2016 г. по тълк. д.
+    № 4/2014 г. на ОСГК". The year of the case is not the year of the decision."""
+    if act_date and case_year and act_date.year >= int(case_year):
+        return (f"Тълкувателно решение № {act_number}/{act_date.strftime('%d.%m.%Y')} г. "
+                f"по тълк. д. № {act_number}/{case_year} г. на {chamber}")
+    return f"Тълкувателно решение по тълк. д. № {act_number}/{case_year} г. на {chamber}"
+
+
 def _label(row: dict) -> str:
     if row["source"] == "vks-tr":
-        return f"Тълкувателно решение № {row['act_number']}/{row['case_year']} на {row['chamber']}"
+        return tr_label(row["act_number"], row["act_date"], row["case_year"], row["chamber"])
     d = row["act_date"].strftime("%d.%m.%Y") if row["act_date"] else "?"
     return f"Решение №{row['act_number']}/{d} по дело №{row['case_number']}/{row['case_year']}"
 

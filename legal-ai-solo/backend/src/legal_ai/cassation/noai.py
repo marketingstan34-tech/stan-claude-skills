@@ -140,14 +140,15 @@ def match_citations(conn, cites: list[Citation]) -> list[Citation]:
             if c.kind == "ТР" and c.tr_year:
                 # the same number and year exist in several colleges: match the college when it is
                 # written, otherwise only when exactly one decision fits
-                cur.execute("""SELECT id, act_number, case_year, chamber FROM decisions
+                cur.execute("""SELECT id, act_number, act_date, case_year, chamber FROM decisions
                                WHERE source = 'vks-tr' AND act_number = %s AND case_year = %s
                                  AND (%s = '' OR chamber = %s)""",
                             (c.act_number, c.tr_year, c.college, c.college))
                 rows = cur.fetchall()
                 row = rows[0] if len(rows) == 1 else None
                 if row:
-                    c.label = f"Тълкувателно решение № {row['act_number']}/{row['case_year']} на {row['chamber']}"
+                    from legal_ai.cassation.local import tr_label
+                    c.label = tr_label(row["act_number"], row["act_date"], row["case_year"], row["chamber"])
             elif c.act_number and c.act_date and _valid_date(c.act_date):
                 d, m, y = c.act_date.split(".")
                 cur.execute("""SELECT id, act_number, act_date, case_number, case_year FROM decisions

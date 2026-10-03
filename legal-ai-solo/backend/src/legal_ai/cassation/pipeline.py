@@ -292,7 +292,8 @@ def merge_local(conn, found: dict[str, dict], search_plan: list[dict], cutoff: d
                 is_tr = d["source"] == "vks-tr"
                 key = f"vks-tr:{d['source_record_id']}" if is_tr else d["source_record_id"]
                 if is_tr:
-                    label = f"Тълкувателно решение № {d['act_number']}/{d['case_year']} на {d['chamber']}"
+                    from legal_ai.cassation.local import tr_label
+                    label = tr_label(d["act_number"], d["act_date"], d["case_year"], d["chamber"])
                 else:
                     dd = d["act_date"].strftime("%d.%m.%Y") if d["act_date"] else "?"
                     label = f"Решение №{d['act_number']}/{dd} по дело №{d['case_number']}/{d['case_year']}"

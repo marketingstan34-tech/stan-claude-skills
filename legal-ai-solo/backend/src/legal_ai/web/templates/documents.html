@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Документи · Legal AI Solo{% endblock %}
+{% block page_title %}Документи{% endblock %}
+{% block page_hint %}Всички изложения и касационни жалби по справките с AI. Отворете, редактирайте или свалете като Word. Редактираната версия се пази отделно и автоматичната може да се върне.{% endblock %}
+{% block content %}
+<div class="help-page">
+  {% if not docs %}<div class="card page-card"><p>Още няма документи. Те се появяват след справка „С AI“. <a class="link" href="/analyze">Нов случай</a></p></div>{% endif %}
+  {% for r in docs %}
+  <div class="card page-card doc-row">
+    <div class="doc-head">
+      <a class="link doc-title" href="{{ r.url }}">{{ r.label }}</a>
+      <span class="status-chip st-{{ ['нов', 'в работа', 'подадена жалба', 'приключен'].index(r.status) if r.status in ['нов', 'в работа', 'подадена жалба', 'приключен'] else 0 }}">{{ r.status }}</span>
+      {% if r.due and r.status in ('нов', 'в работа') %}<span class="count-chip">срок {{ r.due }} · {{ r.days_left }} дни</span>{% endif %}
+      <span class="muted small">справка от {{ r.created }}</span>
+    </div>
+    <table class="doc-table">
+      <tr><td><b>Изложение</b> по чл. 284, ал. 3, т. 1 {% if r.draft_edited %}<span class="count-chip">редактирано {{ r.draft_edited }}</span>{% endif %}</td>
+        <td class="doc-links"><a class="link" href="/runs/{{ r.id }}/draft">Отвори</a> · <a class="link" href="/runs/{{ r.id }}/draft/edit">Редактирай</a> · <a class="link" href="/runs/{{ r.id }}/draft.docx">Word</a></td></tr>
+      <tr><td><b>Касационна жалба</b> {% if r.appeal_edited %}<span class="count-chip">редактирана {{ r.appeal_edited }}</span>{% endif %}</td>
+        <td class="doc-links">{% if r.has_appeal %}<a class="link" href="/runs/{{ r.id }}/appeal">Отвори</a> · <a class="link" href="/runs/{{ r.id }}/appeal/edit">Редактирай</a> · <a class="link" href="/runs/{{ r.id }}/appeal.docx">Word</a>
+          {% else %}<a class="link" href="/runs/{{ r.id }}/appeal">Напиши с AI</a>{% endif %}</td></tr>
+      <tr><td><b>Приложения</b> – цитираните решения на ВКС</td>
+        <td class="doc-links"><a class="link" href="/runs/{{ r.id }}/attachments.zip">ZIP</a></td></tr>
+    </table>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

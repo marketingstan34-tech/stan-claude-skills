@@ -16,7 +16,8 @@
 {% set path = request.url.path %}
 {% set nav = [
   ('/analyze', 'Нов случай', 'case', path.startswith(('/analyze', '/jobs')), 'Нов случай: качете въззивното решение или въведете номера на делото'),
-  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/runs', '/traces')), 'Всички направени справки и черновите на изложения'),
+  ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/traces')) or (path.startswith('/runs') and not path.endswith(('/draft', '/appeal', '/edit'))), 'Всички направени справки'),
+  ('/documents', 'Документи', 'msg', path.startswith('/documents') or path.endswith(('/draft', '/appeal', '/edit')), 'Всички изложения и касационни жалби – отваряне, редакция, Word'),
   ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
   ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
 ] %}
