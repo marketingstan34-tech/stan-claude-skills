@@ -345,3 +345,11 @@ def test_start_page_shows_open_cases_and_next_step(client, monkeypatch):
     assert "Следваща стъпка: Отметнати въпроси" in page and "срок" in page
     casefile.set_status(d, "приключен")
     assert "Няма активни случаи" in c.get("/start").text
+
+
+def test_steps_link_only_to_pages_that_exist():
+    from legal_ai.cassation.casefile import steps
+    hrefs = {s["label"]: s["href"] for s in steps("run", "r1", {}, has_appeal=False, edited=set())}
+    assert hrefs["Жалба прегледана"] == "/runs/r1/appeal"
+    hrefs = {s["label"]: s["href"] for s in steps("run", "r1", {}, has_appeal=True, edited=set())}
+    assert hrefs["Жалба прегледана"] == "/runs/r1/appeal/edit"

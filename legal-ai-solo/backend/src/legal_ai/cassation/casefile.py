@@ -143,7 +143,8 @@ def steps(rtype: str, rid: str, case: dict, has_appeal: bool, edited: set[str]) 
              "href": f"{base}#case-data"},
             {"label": "Изложение прегледано", "done": "draft" in edited, "href": f"{base}/draft/edit"},
             {"label": "Касационна жалба написана", "done": has_appeal, "href": f"{base}/appeal"},
-            {"label": "Жалба прегледана", "done": "appeal" in edited, "href": f"{base}/appeal/edit"},
+            {"label": "Жалба прегледана", "done": "appeal" in edited,
+             "href": f"{base}/appeal/edit" if has_appeal else f"{base}/appeal"},
         ]
     out.append({"label": "Подадена", "done": case.get("status") in ("подадена жалба", "приключен"), "href": base})
     return out

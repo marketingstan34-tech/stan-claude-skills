@@ -106,8 +106,31 @@ def overview(runs_dir: Path, traces_dir: Path) -> dict:
     open_cases.sort(key=lambda c: (c.get("days_left") is None, c.get("days_left") or 0))
     week = [c for c in open_cases if c.get("days_left") is not None and c["days_left"] <= 7]
     counts = {s: sum(r["status"] == s for r in reports) for s in ("нов", "в работа", "подадена жалба", "приключен")}
+    # reports per month, the last 6 months (AI / no AI)
+    today = date.today()
+    months = []
+    for k in range(5, -1, -1):
+        y, m = today.year, today.month - k
+        while m <= 0:
+            m, y = m + 12, y - 1
+        key = f"{y:04d}-{m:02d}"
+        rows = [r for r in reports if r["created_at"][:7] == key]
+        months.append({"label": MONTHS[m - 1][:3], "ai": sum(r["rtype"] == "run" for r in rows),
+                       "noai": sum(r["rtype"] == "trace" for r in rows)})
+    top = max([max(mo["ai"], mo["noai"]) for mo in months] + [1])
+    for mo in months:
+        mo["ai_pct"], mo["noai_pct"] = round(100 * mo["ai"] / top), round(100 * mo["noai"] / top)
+    # status donut: circumference of r=52 is 326.7
+    total = sum(counts.values()) or 1
+    donut, offset = [], 0.0
+    colors = {"нов": "#7064f7", "в работа": "#f59e0b", "подадена жалба": "#10b981", "приключен": "#cbd5e1"}
+    for s, n in counts.items():
+        length = 326.7 * n / total
+        donut.append({"status": s, "n": n, "color": colors[s], "dash": f"{max(length - 4, 0):.1f} {326.7:.1f}",
+                      "offset": f"{-offset:.1f}"})
+        offset += length
     return {"open_cases": open_cases, "due_soon": week, "counts": counts, "recent": reports[:5],
-            "total": len(reports)}
+            "total": len(reports), "months": months, "donut": donut}
 
 
 def month_param(value: str | None, default: date) -> tuple[int, int]:

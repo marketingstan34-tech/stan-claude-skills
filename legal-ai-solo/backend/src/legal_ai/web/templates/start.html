@@ -11,11 +11,49 @@
   {% endif %}
 
   <div class="start-stats">
-    <a class="card stat-card" href="/reports?status=нов"><span class="stat-num">{{ counts['нов'] + counts['в работа'] }}</span><span class="stat-label">активни случая</span></a>
-    <a class="card stat-card {{ 'stat-warn' if due_soon }}" href="#deadlines"><span class="stat-num">{{ due_soon|length }}</span><span class="stat-label">срока до 7 дни</span></a>
-    <a class="card stat-card" href="/reports?status=подадена жалба"><span class="stat-num">{{ counts['подадена жалба'] }}</span><span class="stat-label">подадени жалби</span></a>
-    <a class="card stat-card" href="/reports?status=приключен"><span class="stat-num">{{ counts['приключен'] }}</span><span class="stat-label">приключени</span></a>
-    <a class="card stat-card stat-new" href="/analyze"><span class="stat-num">{{ icon('plus', 22) }}</span><span class="stat-label">нов случай</span></a>
+    <a class="card stat-card" href="/reports?status=в работа"><span class="stat-arrow">{{ icon('arrow', 12) }}</span>
+      <span class="stat-label">Активни случаи</span><span class="stat-num" data-count="{{ counts['нов'] + counts['в работа'] }}">{{ counts['нов'] + counts['в работа'] }}</span>
+      <span class="stat-sub">{{ counts['нов'] }} нови · {{ counts['в работа'] }} в работа</span></a>
+    <a class="card stat-card {{ 'stat-warn' if due_soon }}" href="#deadlines"><span class="stat-arrow">{{ icon('arrow', 12) }}</span>
+      <span class="stat-label">Срокове до 7 дни</span><span class="stat-num" data-count="{{ due_soon|length }}">{{ due_soon|length }}</span>
+      <span class="stat-sub">{{ 'внимание' if due_soon else 'няма спешни' }}</span></a>
+    <a class="card stat-card" href="/reports?status=подадена жалба"><span class="stat-arrow">{{ icon('arrow', 12) }}</span>
+      <span class="stat-label">Подадени жалби</span><span class="stat-num" data-count="{{ counts['подадена жалба'] }}">{{ counts['подадена жалба'] }}</span>
+      <span class="stat-sub">чакат ВКС</span></a>
+    <a class="card stat-card" href="/reports?status=приключен"><span class="stat-arrow">{{ icon('arrow', 12) }}</span>
+      <span class="stat-label">Приключени</span><span class="stat-num" data-count="{{ counts['приключен'] }}">{{ counts['приключен'] }}</span>
+      <span class="stat-sub">общо {{ total }} справки</span></a>
+    <a class="card stat-card stat-new" href="/analyze"><span class="stat-arrow">{{ icon('arrow', 12) }}</span>
+      <span class="stat-label">Нов случай</span><span class="stat-num">{{ icon('plus', 26) }}</span>
+      <span class="stat-sub">качете въззивното решение</span></a>
+  </div>
+
+  <div class="start-charts">
+    <div class="card page-card">
+      <div class="chart-head"><h2 class="start-h">Справки по месеци</h2>
+        <div class="chart-legend"><span><i style="background:#7064f7"></i>С AI</span><span><i style="background:#b4aefb"></i>Без AI</span></div></div>
+      <div class="bars">
+        {% for mo in months %}<div class="bar-group">
+          <div class="bar-pair">
+            <div class="bar ai" style="height: {{ mo.ai_pct }}%; animation-delay: {{ loop.index0 * 70 }}ms"><span class="bar-tip">{{ mo.ai }} с AI</span></div>
+            <div class="bar noai" style="height: {{ mo.noai_pct }}%; animation-delay: {{ loop.index0 * 70 + 35 }}ms"><span class="bar-tip">{{ mo.noai }} без AI</span></div>
+          </div><span class="bar-month">{{ mo.label }}</span></div>{% endfor %}
+      </div>
+    </div>
+    <div class="card page-card">
+      <div class="chart-head"><h2 class="start-h">Случаи по статус</h2><a class="card-options-btn" href="/reports" title="Всички справки">{{ icon('arrow', 13) }}</a></div>
+      <div class="donut-wrap">
+        <div class="donut-legend">
+          {% for d in donut %}<a href="/reports?status={{ d.status|urlencode }}"><i style="background: {{ d.color }}"></i>{{ d.status }} · {{ d.n }}</a>{% endfor %}
+        </div>
+        <div class="donut">
+          <svg viewBox="0 0 136 136"><circle cx="68" cy="68" r="52" stroke="#f1f0fe"/>
+            {% for d in donut %}{% if d.n %}<circle class="seg" cx="68" cy="68" r="52" stroke="{{ d.color }}" stroke-dasharray="{{ d.dash }}" stroke-dashoffset="{{ d.offset }}"/>{% endif %}{% endfor %}
+          </svg>
+          <div class="donut-center"><b data-count="{{ total }}">{{ total }}</b><small>справки</small></div>
+        </div>
+      </div>
+    </div>
   </div>
 
   <div class="start-grid">

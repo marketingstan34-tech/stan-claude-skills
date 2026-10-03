@@ -92,7 +92,7 @@ def test_dashboard_pages_render_without_database(client):
     for url in ("/reports", "/corpus", "/analyze?m=2022-03"):
         r = client.get(url)
         assert r.status_code == 200, url
-        assert "/static/kit/dashboard.css" in r.text and "side-dock-nav" in r.text
+        assert "/static/finset.css" in r.text and "fs-sidebar" in r.text
     assert "Синтетичен съд, дело 1/2020" in client.get("/reports").text
     assert client.get("/static/kit/dashboard.css").status_code == 200
 
