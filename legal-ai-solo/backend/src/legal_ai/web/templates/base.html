@@ -15,7 +15,7 @@
 <body>
 {% set path = request.url.path %}
 {% set nav = [
-  ('/analyze', 'Анализ', 'case', path.startswith(('/analyze', '/jobs')), 'Нова справка по дело: номер на делото или качен документ'),
+  ('/analyze', 'Нов случай', 'case', path.startswith(('/analyze', '/jobs')), 'Нов случай: качете въззивното решение или въведете номера на делото'),
   ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/runs', '/traces')), 'Всички направени справки и черновите на изложения'),
   ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
   ('/corpus', 'База', 'db', path.startswith('/corpus'), 'Какво е свалено в базата и кога'),
@@ -87,7 +87,7 @@
     <div class="nav-tab1-group left">
       {% for href, label, ic, active, desc in nav[:2] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
     </div>
-    <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нова справка"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
+    <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нов случай"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
     <div class="nav-tab1-group right">
       {% for href, label, ic, active, desc in nav[2:] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
     </div>

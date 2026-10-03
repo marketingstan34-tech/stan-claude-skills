@@ -1,8 +1,8 @@
 {% extends "base.html" %}
 {% from "icons.html" import icon %}
 {% from "parts.html" import report_card, calendar_card, events_card with context %}
-{% block title %}Анализ на дело · Legal AI Solo{% endblock %}
-{% block page_title %}Касационен анализ{% endblock %}
+{% block title %}Нов случай · Legal AI Solo{% endblock %}
+{% block page_title %}Нов случай{% endblock %}
 {% block page_hint %}Най-лесно: качете въззивното решение като файл или поставете текста му – съдът, делото и годината се разпознават сами от документа. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
 {% block content %}
 <div class="dash-grid-container">
@@ -11,13 +11,13 @@
       <div class="profile-header-row">
         <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('scale', 22) }}</div>
         <div class="profile-name-info">
-          <h2 class="profile-name">Нова справка</h2>
+          <h2 class="profile-name">Нов случай</h2>
           <p class="profile-role">Касация по чл. 280 ГПК · ВКС</p>
         </div>
         <a class="card-options-btn" href="/reports" title="Всички справки">{{ icon('more') }}</a>
       </div>
       <div class="profile-action-buttons">
-        <a class="action-circle-btn black-btn" href="/analyze" title="Анализ на дело">{{ icon('case') }}</a>
+        <a class="action-circle-btn black-btn" href="/analyze" title="Нов случай">{{ icon('case') }}</a>
         <a class="action-circle-btn light-btn" href="/reports" title="Справки">{{ icon('path') }}</a>
         <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
         <a class="action-circle-btn light-btn" href="/corpus" title="База">{{ icon('db') }}</a>
@@ -104,7 +104,7 @@
           <a class="ongoing-dropdown-btn" href="/reports"><span>Последни справки</span>{{ icon('chev', 14) }}</a>
         </div>
         <div class="projects-action-icons">
-          <a class="proj-icon-circle-btn" href="#case" title="Нова справка">{{ icon('plus', 14) }}</a>
+          <a class="proj-icon-circle-btn" href="#case" title="Нов случай">{{ icon('plus', 14) }}</a>
           <a class="proj-icon-circle-btn" href="/" title="Търсене">{{ icon('search', 14) }}</a>
           <a class="proj-icon-circle-btn" href="/corpus" title="База">{{ icon('db', 14) }}</a>
         </div>

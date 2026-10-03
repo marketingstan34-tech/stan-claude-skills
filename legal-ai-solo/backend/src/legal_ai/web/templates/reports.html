@@ -12,18 +12,18 @@
         <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('doc', 22) }}</div>
         <div class="profile-name-info"><h2 class="profile-name">Всички справки</h2>
           <p class="profile-role">Пазят се само на този компютър</p></div>
-        <a class="card-options-btn" href="/analyze" title="Нова справка">{{ icon('plus') }}</a>
+        <a class="card-options-btn" href="/analyze" title="Нов случай">{{ icon('plus') }}</a>
       </div>
       <div class="time-slots-section"><div class="slots-row">
         <span class="time-slot-pill">Без AI: {{ reports|selectattr('kind', 'equalto', 'trace')|list|length }}</span>
         <span class="meetings-badge-pill"><span>С AI</span><span class="meetings-count-circle">{{ reports|selectattr('kind', 'equalto', 'run')|list|length }}</span></span>
       </div></div>
-      <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Нова справка</a>
+      <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Нов случай</a>
     </div>
     {{ events_card(events) }}
   </div>
   <div class="dash-col-right scroll-col">
-    {% if not reports %}<div class="card page-card"><p>Още няма справки. <a class="link" href="/analyze">Започнете от „Анализ“.</a></p></div>{% endif %}
+    {% if not reports %}<div class="card page-card"><p>Още няма справки. <a class="link" href="/analyze">Започнете от „Нов случай“.</a></p></div>{% endif %}
     <div class="project-cards-grid all-reports">
       {% for r in reports %}{{ report_card(r, loop.index0) }}{% endfor %}
     </div>
