@@ -164,7 +164,8 @@ def cmd_backfill_judges(_args) -> int:
                                 (Jsonb(panel), reporter, r["id"]))
             conn.commit()
             done += len(rows)
-    print(f"Съдии: попълнени {done} акта")
+            print(f"Съдии: {done} акта…", flush=True)
+    print(f"Съдии: попълнени {done} акта", flush=True)
     return 0
 
 

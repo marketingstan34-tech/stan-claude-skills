@@ -5,7 +5,8 @@ D="$PRIVATE_STORAGE_PATH/raw/vks-corpus"
 NOW=$(date -u +%Y-%m)
 YEAR=$(date -u +%Y)
 echo "$(date -u +%FT%TZ) corpus: start"
-legal-ai backfill-judges || echo "backfill-judges failed"
+# panel and reporter for acts loaded earlier: in the background, so the crawl is not held up
+(legal-ai backfill-judges || echo "backfill-judges failed") &
 # interpretative decisions: fetched once, then again with the weekly refresh (a restart or a new
 # deploy must not spend ~12 minutes fetching them again)
 TR_DONE="$PRIVATE_STORAGE_PATH/raw/.tr-fetched"

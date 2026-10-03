@@ -44,7 +44,7 @@ def parse_judges(text: str) -> tuple[list[str], str | None]:
         elif panel:
             break       # the first line after the names (e.g. "при участието на секретаря…")
     reporter = None
-    m = _REPORTER.search(text or "")
+    m = _REPORTER.search((text or "")[:5000])     # "докладваното от съдия …" is near the top
     if m:
         last = m.group(1).split()[-1].lower()
         full = [p for p in panel if p.split()[-1].lower() == last]
