@@ -44,3 +44,10 @@ def test_vks_citations_forms():
 
 def test_citations_ignore_plain_mentions_of_vks():
     assert extract_vks_citations("Решението подлежи на касационно обжалване пред ВКС в едномесечен срок.") == []
+
+
+def test_appealed_act_with_short_case_kind():
+    text = ("Постъпила е въззивна жалба срещу решение № 614/22.05.2025 г., постановено по г. д. № 458/2022 г. "
+            "по описа на ОС – Пловдив, с което е отхвърлен искът.")
+    assert extract_appealed(text) == {"act": "Решение № 614/22.05.2025", "date": "22.05.2025",
+                                      "case": "458/2022", "court": "ОС – Пловдив"}
