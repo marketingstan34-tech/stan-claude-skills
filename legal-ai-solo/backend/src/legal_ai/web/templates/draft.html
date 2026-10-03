@@ -20,6 +20,7 @@
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft.docx" style="display:block;text-align:center">Свали като Word</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center"
            title="Цитираните решения на ВКС като Word файлове – за „Прилагам“">Свали приложенията (ZIP)</a>
         {% if not case.client or not case.lawyer %}<div class="notice">Данните за страните и адвоката не са попълнени –

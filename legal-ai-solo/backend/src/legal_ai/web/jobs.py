@@ -53,6 +53,8 @@ class JobRunner:
     def _run(self, job: Job) -> None:
         if job.params.get("mode") == "noai":
             return self._run_noai(job)
+        if job.params.get("mode") == "appeal":
+            return self._run_appeal(job)
         from legal_ai.ai import OpenAIProvider, load_ai_config
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
@@ -91,6 +93,35 @@ class JobRunner:
                     result.path = as_dicts(trace(courts, vks, p["court"], p["case"], p["year"],
                                                  appellate.act_date, result.analysis.get("lower_instance")))
             job.run_dir = save_run(result, self.runs_dir).name
+            job.status = "done"
+            job.message = "Готово."
+        except Exception as exc:  # noqa: BLE001 - shown to the local user
+            self._fail(job, exc)
+        finally:
+            if job.cleanup:
+                job.cleanup()
+
+    def _run_appeal(self, job: Job) -> None:
+        """Draft of the cassation appeal for a saved AI report (one AI call)."""
+        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.cassation import casefile
+        from legal_ai.cassation.appeal import generate
+        job.status = "running"
+        run_id = job.params["run_id"]
+        try:
+            d = self.runs_dir / run_id
+            run = load_run(self.runs_dir, run_id)
+            if run is None:
+                raise ValueError("Няма такава справка.")
+            text = (d / "appellate.txt").read_text(encoding="utf-8")
+            case = casefile.load_case(d)
+            chosen = case.get("questions") or casefile.default_questions(run)
+            ai = OpenAIProvider(load_ai_config())
+            job.cleanup = ai.close
+            job.message = "AI пише оплакванията срещу въззивното решение…"
+            appeal = generate(ai, run, text, chosen)
+            write_atomic(d / "appeal.json", json.dumps(appeal, ensure_ascii=False, indent=1))
+            job.run_dir = run_id
             job.status = "done"
             job.message = "Готово."
         except Exception as exc:  # noqa: BLE001 - shown to the local user

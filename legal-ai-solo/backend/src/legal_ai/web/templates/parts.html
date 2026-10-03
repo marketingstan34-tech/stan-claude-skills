@@ -7,7 +7,7 @@
 <a class="project-card {{ color }}-card" href="{{ r.url }}">
   <div class="proj-card-top">
     <span class="proj-date-pill">{{ r.created }}</span>
-    <span class="proj-more-btn" title="{{ r.mode }}">{{ icon('more', 14) }}</span>
+    <span class="status-chip st-{{ ['нов', 'в работа', 'подадена жалба', 'приключен'].index(r.status) if r.status in ['нов', 'в работа', 'подадена жалба', 'приключен'] else 0 }}">{{ r.status }}</span>
   </div>
   <div class="proj-title-row">
     <h3 class="proj-title">{{ r.kind }} {{ r.case or r.label }}</h3>
@@ -22,7 +22,8 @@
     <div class="avatar-stack">
       {% for l in r.levels %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar {{ '' if l.ok else 'level-missing' }}" title="{{ 'потвърдено' if l.ok else 'не е потвърдено' }}">{{ l.short }}</span>{% endfor %}
     </div>
-    <span class="days-left-pill">{{ r.vks_text }}</span>
+    {% if r.due and r.status in ('нов', 'в работа') %}<span class="days-left-pill {{ 'due-bad' if r.days_left < 0 else ('due-warn' if r.days_left <= 7 else '') }}" title="Последен ден за жалбата">срок {{ r.due[:5] }} · {{ r.days_left }} дни</span>
+    {% else %}<span class="days-left-pill">{{ r.vks_text }}</span>{% endif %}
   </div>
 </a>
 {% else %}

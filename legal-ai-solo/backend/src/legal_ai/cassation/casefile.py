@@ -20,6 +20,19 @@ _AMOUNT = re.compile(r"(\d{1,3}(?:[  .]\d{3})+|\d+)(?:,(\d{1,2}))?\s*(лв\.?|�
 _ACT_NO = re.compile(r"Р\s*Е\s*Ш\s*Е\s*Н\s*И\s*Е\s*(?:№|N)\s*(\d{1,7})")
 
 
+STATUSES = ["нов", "в работа", "подадена жалба", "приключен"]
+
+
+def set_status(run_dir: Path, status: str) -> bool:
+    """Change only the status, keeping the rest of the case data."""
+    if status not in STATUSES:
+        return False
+    data = load_case(run_dir)
+    data["status"] = status
+    save_case(run_dir, data)
+    return True
+
+
 def load_case(run_dir: Path) -> dict:
     try:
         data = json.loads((run_dir / "case.json").read_text(encoding="utf-8"))

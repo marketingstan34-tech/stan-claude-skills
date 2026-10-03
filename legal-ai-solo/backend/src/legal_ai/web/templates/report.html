@@ -35,6 +35,7 @@
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
         {% endfor %}
         <a class="kit-submit" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Чернова на изложение</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
       </div>
     </div>
     {{ case_form('/runs/' ~ run_id ~ '/case', run) }}

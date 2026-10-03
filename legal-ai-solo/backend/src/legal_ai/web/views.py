@@ -8,6 +8,9 @@ import re
 from datetime import date, datetime
 from pathlib import Path
 
+from legal_ai.cassation.casefile import load_case
+from legal_ai.cassation.deadline import appeal_deadline
+
 MONTHS = ["Януари", "Февруари", "Март", "Април", "Май", "Юни", "Юли", "Август", "Септември",
           "Октомври", "Ноември", "Декември"]
 CARD_COLORS = ["peach", "blue", "pink"]
@@ -72,6 +75,12 @@ def list_reports(runs_dir: Path, traces_dir: Path) -> list[dict]:
                 contra = sum(1 for a in data.get("assessments", []) if a["relevant"] and a["stance"] == "противоречи")
                 item["mode"] = "С AI"
                 item["detail"] = f"{len(data['analysis']['questions'])} въпроса, {contra} решения „противоречи“"
+            case = load_case(d)
+            item["status"] = case.get("status") or "нов"
+            if case.get("served"):
+                due = appeal_deadline(date.fromisoformat(case["served"]))
+                item["due"] = due.last_day.strftime("%d.%m.%Y")
+                item["days_left"] = due.days_left()
             out.append(item)
     out.sort(key=lambda r: r["created_at"], reverse=True)
     return out

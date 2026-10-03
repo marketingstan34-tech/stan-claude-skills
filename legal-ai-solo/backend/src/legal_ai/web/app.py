@@ -247,9 +247,15 @@ def create_app() -> FastAPI:
 
     @app.get("/reports", response_class=HTMLResponse)
     def reports_page(request: Request, m: str | None = Query(None, max_length=7),
-                     mode: str = Query("", max_length=5)):
+                     mode: str = Query("", max_length=5), status: str = Query("", max_length=20)):
+        from legal_ai.cassation.casefile import STATUSES
         ctx = dashboard(m)
         all_reports = ctx["reports"]
+        ctx["statuses"] = [(s, sum(r["status"] == s for r in all_reports)) for s in STATUSES]
+        ctx["status"] = status if status in STATUSES else ""
+        if ctx["status"]:
+            all_reports = [r for r in all_reports if r["status"] == ctx["status"]]
+            ctx["reports"] = all_reports
         ctx["counts"] = {"noai": sum(r["kind"] == "trace" for r in all_reports),
                          "ai": sum(r["kind"] == "run" for r in all_reports)}
         mode = mode if mode in ("ai", "noai") else ""
@@ -333,6 +339,8 @@ def create_app() -> FastAPI:
         if job is None:
             raise HTTPException(404, "Няма такъв анализ.")
         if job.status == "done" and job.run_dir:
+            if job.params.get("mode") == "appeal":
+                return RedirectResponse(f"/runs/{job.run_dir}/appeal", status_code=303)
             kind = "traces" if job.params.get("mode") == "noai" else "runs"
             return RedirectResponse(f"/{kind}/{job.run_dir}", status_code=303)
         return render(request, "job.html", {"job": job, "courts": COURTS})
@@ -373,8 +381,29 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"{back}?error={quote(error)}#case-data", status_code=303)
         if run is not None and not clean.get("questions"):
             return RedirectResponse(f"{back}?error={quote('Отметнете поне един въпрос.')}#case-data", status_code=303)
+        clean["status"] = casefile.load_case(base / item_id).get("status", "нов")
         casefile.save_case(base / item_id, clean)
         return RedirectResponse(f"{back}?saved=1#case-data", status_code=303)
+
+    async def save_status(request: Request, base: Path, item_id: str, back: str):
+        from legal_ai.cassation import casefile
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        casefile.set_status(base / item_id, str(form.get("status", "")))
+        return RedirectResponse(back, status_code=303)
+
+    @app.post("/runs/{run_id}/status")
+    async def run_status(request: Request, run_id: str):
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return await save_status(request, runs_dir, run_id, f"/runs/{run_id}")
+
+    @app.post("/traces/{trace_id}/status")
+    async def trace_status(request: Request, trace_id: str):
+        if load_trace(traces_dir, trace_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        return await save_status(request, traces_dir, trace_id, f"/traces/{trace_id}")
 
     @app.get("/runs/{run_id}", response_class=HTMLResponse)
     def run_report(request: Request, run_id: str, error: str = Query("", max_length=200)):
@@ -454,6 +483,52 @@ def create_app() -> FastAPI:
         ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
         with PoliteClient([VKS_HOST], 2.0, ua) as vks:
             return parse_act(vks.get(act_url(source_id)).body.decode("utf-8", errors="replace")).canonical_text
+
+    def appeal_blocks(run_id: str):
+        import json as _json
+
+        from legal_ai.cassation.appeal import build_appeal
+        from legal_ai.cassation.draft import attached_labels
+        run = load_run(runs_dir, run_id)
+        if run is None:
+            raise HTTPException(404, "Няма такава справка.")
+        ctx = case_context(runs_dir, run_id, run["appellate"]["label"], run)
+        try:
+            appeal = _json.loads((runs_dir / run_id / "appeal.json").read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            appeal = None
+        blocks = build_appeal(run, appeal, ctx["case"], ctx["act_number"],
+                              len(attached_labels(run, {"questions": ctx["chosen"]}))) if appeal else []
+        return run, ctx, appeal, blocks
+
+    @app.get("/runs/{run_id}/appeal", response_class=HTMLResponse)
+    def run_appeal(request: Request, run_id: str):
+        run, ctx, appeal, blocks = appeal_blocks(run_id)
+        return render(request, "appeal.html", {"run": run, "run_id": run_id, "appeal": appeal, "blocks": blocks,
+                                               "busy": runner.busy(), **ctx})
+
+    @app.post("/runs/{run_id}/appeal")
+    def run_appeal_start(request: Request, run_id: str):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if load_run(runs_dir, run_id) is None:
+            raise HTTPException(404, "Няма такава справка.")
+        job = runner.start({"mode": "appeal", "run_id": run_id})
+        if job is None:
+            return RedirectResponse(f"/runs/{run_id}/appeal?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.get("/runs/{run_id}/appeal.docx")
+    def run_appeal_docx(run_id: str):
+        from fastapi.responses import Response
+
+        from legal_ai.cassation.draft import to_docx
+        _, _, appeal, blocks = appeal_blocks(run_id)
+        if not appeal:
+            raise HTTPException(404, "Още няма чернова на жалбата.")
+        return Response(to_docx(blocks),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f'attachment; filename="zhalba-{run_id}.docx"'})
 
     @app.get("/traces/{trace_id}", response_class=HTMLResponse)
     def trace_report(request: Request, trace_id: str, error: str = Query("", max_length=200)):

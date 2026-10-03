@@ -78,6 +78,13 @@
 {# the lawyer's data: deadline, threshold, parties and (for AI reports) the questions for the draft #}
 <div class="card details-card {{ '' if (due or threshold.ok is not none) else 'no-print' }}" id="case-data">
   <h2 class="details-title">Срок, праг и данни за изложението</h2>
+  <form method="post" action="{{ action[:-5] }}/status" class="status-form no-print">
+    <label>Статус на случая
+      <select class="kit-input" name="status" onchange="this.form.submit()">
+        {% for s in ['нов', 'в работа', 'подадена жалба', 'приключен'] %}<option {{ 'selected' if (case.status or 'нов') == s }}>{{ s }}</option>{% endfor %}
+      </select></label>
+    <noscript><button class="kit-submit light" type="submit">Смени</button></noscript>
+  </form>
   {% if form_error %}<div class="notice bad">{{ form_error }}</div>{% elif request.query_params.get('saved') %}<div class="notice ok">Запазено.</div>{% endif %}
   {% if due %}
   <div class="case-result {{ 'bad' if due.days_left() < 0 else ('warn' if due.days_left() <= 7 else 'ok') }}">

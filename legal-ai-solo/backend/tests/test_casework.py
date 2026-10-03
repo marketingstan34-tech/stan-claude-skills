@@ -127,3 +127,68 @@ def test_case_form_saves_and_feeds_the_draft(client):
     r = c.post("/runs/20260102030405/case", data={"served": "2026-10-03"}, headers=h, follow_redirects=False)
     assert "error=" in r.headers["location"]          # no question kept
     assert c.post("/runs/20260102030405/case", data={}, headers={"origin": "http://evil.example"}).status_code == 403
+
+
+# the appeal draft (one AI call; a fake AI here)
+
+class FakeAI:
+    def __init__(self, answer):
+        self.answer, self.prompts = answer, []
+        self.config = type("C", (), {"analysis_model": "fake-model"})()
+        self.usage = type("U", (), {"calls": 1, "input_tokens": 10, "output_tokens": 5})()
+
+    def structured(self, **kw):
+        self.prompts.append(kw["user"])
+        return self.answer
+
+
+APPELLATE = "РЕШЕНИЕ № 125 гр. Пловдив. Съдът приема, че банката правилно е отнесла плащането към главницата."
+ANSWER = {"grounds": [
+    {"kind": "материален закон", "holding_ids": ["H1"], "title": "Неправилно отнасяне на плащането",
+     "quote": "банката правилно е отнесла плащането към главницата", "complaint": "Порок.", "argument": "Довод.",
+     "vks_labels": ["Решение №1/01.01.2015 по дело №1/2014", "Решение №999/01.01.2020 по дело №9/2019"]},
+    {"kind": "процесуални правила", "holding_ids": [], "title": "Необсъдени доказателства",
+     "quote": "текст, който го няма в решението", "complaint": "Порок 2.", "argument": "Довод 2.", "vks_labels": []}],
+    "petitum_scope": "в частта", "petitum_part": "е отхвърлен искът", "petitum_request": "да уважите иска"}
+
+
+def test_appeal_checks_quotes_and_vks_labels():
+    from legal_ai.cassation.appeal import build_appeal, generate
+    ai = FakeAI(ANSWER)
+    appeal = generate(ai, RUN, APPELLATE, ["Q2"])
+    g1, g2 = appeal["grounds"]
+    assert g1["quote_status"] == "text_verified" and g2["quote_status"] == "not_found"
+    assert g1["vks_labels"] == ["Решение №1/01.01.2015 по дело №1/2014"]           # only from the report
+    assert g1["dropped_labels"] == ["Решение №999/01.01.2020 по дело №9/2019"]
+    assert "Въпрос две?" in ai.prompts[0] and "Въпрос едно?" not in ai.prompts[0]
+    text = to_text(build_appeal(RUN, appeal, {"client": "Х ЕООД", "opponent": "Банка АД", "lawyer": "А. Б."}, "125", 1))
+    assert "КАСАЦИОННА ЖАЛБА" in text and "срещу Банка АД" in text and "Решение № 125/14.03.2022" in text
+    assert "в частта, с която е отхвърлен искът" in text and "чл. 281, т. 3 ГПК" in text
+    assert "„банката правилно е отнесла плащането към главницата“" in text
+    assert "не е намерен дословно" in text and "Решение №999" not in text
+    assert "Копия на цитираните решения на ВКС (1 бр.)" in text
+
+
+def test_appeal_routes_and_status(client, monkeypatch):
+    import legal_ai.web.jobs as jobs
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    assert "Напиши жалбата с AI" in c.get("/runs/20260102030405/appeal").text
+    started = []
+    monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
+    r = c.post("/runs/20260102030405/appeal", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"].startswith("/jobs/") and started[0]["mode"] == "appeal"
+    from legal_ai.cassation.appeal import generate
+    (d / "appeal.json").write_text(json.dumps(generate(FakeAI(ANSWER), RUN, APPELLATE, ["Q2"]), ensure_ascii=False),
+                                   encoding="utf-8")
+    page = c.get("/runs/20260102030405/appeal").text
+    assert "КАСАЦИОННА ЖАЛБА" in page and "Неправилно отнасяне на плащането" in page
+    assert c.get("/runs/20260102030405/appeal.docx").status_code == 200
+    # status
+    assert c.post("/runs/20260102030405/status", data={"status": "в работа"}, headers=h,
+                  follow_redirects=False).status_code == 303
+    assert json.loads((d / "case.json").read_text(encoding="utf-8"))["status"] == "в работа"
+    reports = c.get("/reports?status=" + "в работа").text
+    assert "в работа · 1" in reports
+    assert "в.т. 899/2021" in reports or "899/2021" in reports
+    assert "899/2021" not in c.get("/reports?status=" + "приключен").text.split("all-reports")[1]

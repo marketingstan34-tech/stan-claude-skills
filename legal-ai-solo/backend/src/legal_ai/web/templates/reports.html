@@ -11,13 +11,17 @@
       <div class="profile-header-row">
         <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('doc', 22) }}</div>
         <div class="profile-name-info"><h2 class="profile-name">Всички справки</h2>
-          <p class="profile-role">Пазят се само на този компютър</p></div>
+          <p class="profile-role">Пазят се в частната папка на сървъра</p></div>
         <a class="card-options-btn" href="/analyze" title="Нов случай">{{ icon('plus') }}</a>
       </div>
       <div class="time-slots-section"><div class="slots-row">
         <a class="time-slot-pill link-pill {{ 'active' if mode == 'noai' }}" href="{{ '/reports' if mode == 'noai' else '/reports?mode=noai' }}" title="Покажи само тези">Без AI: {{ counts.noai }}</a>
         <a class="meetings-badge-pill {{ 'active' if mode == 'ai' }}" href="{{ '/reports' if mode == 'ai' else '/reports?mode=ai' }}" title="Покажи само тези"><span>С AI</span><span class="meetings-count-circle">{{ counts.ai }}</span></a>
       </div></div>
+      <div class="status-filter">
+        <a class="status-chip {{ 'active' if not status }}" href="/reports">Всички</a>
+        {% for s, n in statuses %}<a class="status-chip st-{{ loop.index0 }} {{ 'active' if status == s }}" href="/reports?status={{ s|urlencode }}">{{ s }} · {{ n }}</a>{% endfor %}
+      </div>
       <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Нов случай</a>
     </div>
     {{ events_card(events) }}
