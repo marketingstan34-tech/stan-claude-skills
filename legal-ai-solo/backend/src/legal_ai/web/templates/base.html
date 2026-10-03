@@ -70,7 +70,7 @@
     <div class="dash-body-layout">
       <aside class="side-dock-nav" aria-label="Меню">
         {% for href, label, ic, active, desc in nav %}
-        <div class="dock-item-wrapper"><a class="dock-btn {{ 'active' if active }}" href="{{ href }}" title="{{ label }}: {{ desc }}" aria-label="{{ label }}"><span class="dock-icon-inner">{{ icon(ic, 18) }}</span></a></div>
+        <a class="dock-labeled {{ 'active' if active }}" href="{{ href }}" title="{{ desc }}"><span class="dock-item-wrapper"><span class="dock-btn {{ 'active' if active }}"><span class="dock-icon-inner">{{ icon(ic, 18) }}</span></span></span><span class="dock-label">{{ label }}</span></a>
         {% endfor %}
       </aside>
       <div class="dash-view-content {% block view_class %}{% endblock %}">

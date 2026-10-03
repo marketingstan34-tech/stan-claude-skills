@@ -143,3 +143,21 @@ a.cal-day-cell:hover { outline: 2px solid #111413; }
   font: inherit; font-size: 12px; line-height: 1.45; background: rgba(255, 255, 255, 0.8); border: 1px solid #e4e4e7;
   border-radius: 10px; padding: 8px 10px; color: #111413; }
 .detail-textarea:focus { outline: none; border-color: #111413; }
+
+/* no stretched empty space: columns and cards take the height of their content */
+.dash-col-left, .dash-col-right { justify-content: flex-start; }
+.calendar-inbox-row { align-items: start; }
+.calendar-card, .inbox-card, .inbox-messages-list { justify-content: flex-start; }
+.calendar-grid-matrix { flex: 0 0 auto; align-content: start; margin-top: 10px; }
+.calendar-grid-matrix .cal-day-cell { height: 30px; }
+.inbox-messages-list { flex: 0 0 auto; }
+
+/* side menu with names under the icons */
+.side-dock-nav { width: 74px; height: auto; max-height: none; justify-content: flex-start; gap: 14px;
+  padding: 16px 0; align-self: flex-start; margin-top: 8px; position: sticky; top: 12px; }
+a.dock-labeled { display: flex; flex-direction: column; align-items: center; gap: 4px; text-decoration: none;
+  color: rgba(255, 255, 255, 0.62); width: 100%; }
+a.dock-labeled:hover, a.dock-labeled.active { color: #fff; }
+.dock-label { font-size: 10.5px; font-weight: 600; line-height: 1.1; letter-spacing: 0.01em; }
+.details-card { flex: 0 0 auto; justify-content: flex-start; }
+.details-card .details-list { flex: 0 0 auto; justify-content: flex-start; gap: 8px; }
