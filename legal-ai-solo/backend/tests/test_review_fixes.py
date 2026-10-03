@@ -298,3 +298,23 @@ def test_identify_fills_the_case_only_for_listed_courts():
     p = {"file": "uploads/x.txt", "court": "as-plovdiv", "case": 5, "year": 2020}
     JobRunner._identify(p, HEAD)
     assert p["case"] == 5 and "identified" not in p
+
+
+# the corpus build and an analysis on the same server take turns per site
+
+def test_rate_limit_is_shared_between_clients(tmp_path):
+    from legal_ai.http import PoliteClient
+
+    def ok(request):
+        return httpx.Response(200, text="ok")
+
+    sleeps_a, sleeps_b = [], []
+    a = PoliteClient(["www.vks.bg"], transport=httpx.MockTransport(ok), sleep=sleeps_a.append, lock_dir=str(tmp_path))
+    b = PoliteClient(["www.vks.bg"], transport=httpx.MockTransport(ok), sleep=sleeps_b.append, lock_dir=str(tmp_path))
+    a.get("https://www.vks.bg/x")
+    b.get("https://www.vks.bg/y")
+    assert sleeps_a == [] and len(sleeps_b) == 1 and 1.5 < sleeps_b[0] <= 2.0
+    c = PoliteClient(["other.justice.bg"], transport=httpx.MockTransport(ok), sleep=sleeps_a.append,
+                     lock_dir=str(tmp_path))
+    c.get("https://other.justice.bg/z")   # another site has its own turn
+    assert sleeps_a == []

@@ -4,6 +4,8 @@
 set -e
 export PRIVATE_STORAGE_PATH="${PRIVATE_STORAGE_PATH:-/data}"
 mkdir -p "$PRIVATE_STORAGE_PATH"
+# the corpus build and the analyses share one request every 2 s per court site
+export SOURCE_LOCK_DIR="${SOURCE_LOCK_DIR:-$PRIVATE_STORAGE_PATH/.ratelimit}"
 legal-ai migrate
 if [ "${CORPUS_BUILD:-0}" = "1" ]; then
   # also to stdout, so progress shows in the host's logs

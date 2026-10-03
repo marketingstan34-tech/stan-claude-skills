@@ -1,6 +1,8 @@
 """Polite HTTP client shared by all court sources.
 
 - one request at a time, at least `min_interval` seconds between requests (never below 2 s);
+  with SOURCE_LOCK_DIR set, the interval holds per host across processes too (the corpus build and
+  an analysis running on the same server take turns);
 - only https and only hosts on the allowlist (SSRF guard); redirects are not followed;
 - bounded retries for timeouts/429/5xx, honouring Retry-After; no retry on other 4xx;
 - response size cap.
@@ -8,7 +10,10 @@
 
 from __future__ import annotations
 
+import fcntl
+import os
 import random
+import re
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -54,7 +59,8 @@ class PoliteClient:
                  user_agent: str = "legal-ai-solo/0.1", max_bytes: int = 5 * 1024 * 1024,
                  transport: httpx.BaseTransport | None = None,
                  sleep: Callable[[float], None] = time.sleep,
-                 clock: Callable[[], float] = time.monotonic) -> None:
+                 clock: Callable[[], float] = time.monotonic, lock_dir: str | None = None) -> None:
+        self._lock_dir = lock_dir if lock_dir is not None else os.environ.get("SOURCE_LOCK_DIR", "")
         self._allowed = tuple(allowed_hosts)
         self._min_interval = max(2.0, min_interval)
         self._max_bytes = max_bytes
@@ -84,6 +90,30 @@ class PoliteClient:
                 self._sleep(remaining)
         self._last = self._clock()
 
+    def _shared_turn(self, host: str) -> None:
+        """Wait for this host's turn among all processes (a timestamp file held under flock)."""
+        if not self._lock_dir:
+            return
+        os.makedirs(self._lock_dir, exist_ok=True)
+        path = os.path.join(self._lock_dir, re.sub(r"[^a-z0-9.-]", "_", host.lower()))
+        with open(path, "a+", encoding="ascii") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.seek(0)
+                try:
+                    last = float(f.read().strip() or 0)
+                except ValueError:
+                    last = 0.0
+                wait = self._min_interval - (time.time() - last)
+                if wait > 0:
+                    self._sleep(min(wait, self._min_interval))
+                f.seek(0)
+                f.truncate()
+                f.write(f"{time.time():.3f}")
+                f.flush()
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
     def get(self, url: str) -> Fetched:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not host_allowed(parsed.hostname, self._allowed):
@@ -91,6 +121,7 @@ class PoliteClient:
         last_error = ""
         for attempt in range(1, MAX_ATTEMPTS + 1):
             self._wait_turn()
+            self._shared_turn(parsed.hostname or "")
             try:
                 with self._http.stream("GET", url) as resp:
                     if resp.status_code == 429 or resp.status_code >= 500:
