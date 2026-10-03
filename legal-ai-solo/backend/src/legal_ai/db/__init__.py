@@ -21,9 +21,19 @@ def with_required_ssl(database_url: str) -> str:
     return urlunsplit(parts._replace(query=urlencode(query)))
 
 
+def to_sqlalchemy_url(database_url: str) -> str:
+    """SQLAlchemy needs the psycopg 3 driver named (hosting platforms give postgresql://)."""
+    url = with_required_ssl(database_url)
+    for prefix in ("postgresql://", "postgres://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
 def to_psycopg_url(database_url: str) -> str:
     """Accept SQLAlchemy-style URLs (postgresql+psycopg://) as well."""
-    return with_required_ssl(database_url).replace("postgresql+psycopg://", "postgresql://", 1)
+    url = with_required_ssl(database_url).replace("postgresql+psycopg://", "postgresql://", 1)
+    return "postgresql://" + url[len("postgres://"):] if url.startswith("postgres://") else url
 
 
 def describe_target(database_url: str) -> str:

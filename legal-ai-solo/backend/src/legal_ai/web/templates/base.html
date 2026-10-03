@@ -45,7 +45,7 @@
         <a class="utility-icon-btn {{ 'with-badge' if running_job }}" href="{{ '/jobs/' ~ running_job.id if running_job else '/analyze' }}"
            title="{{ 'Тече справка' if running_job else 'Няма текущи справки' }}">{{ icon('bell', 16) }}{% if running_job %}<span class="notification-dot"></span>{% endif %}</a>
         <a class="utility-icon-btn" href="/" title="Търсене в практиката">{{ icon('search', 16) }}</a>
-        <span class="header-user-avatar app-avatar" title="Legal AI Solo · локално">{{ icon('scale', 16) }}</span>
+        <a class="header-user-avatar app-avatar" href="/logout" title="Изход">{{ icon('scale', 16) }}</a>
       </div>
     </header>
 

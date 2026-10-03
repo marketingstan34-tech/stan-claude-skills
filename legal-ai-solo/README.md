@@ -141,3 +141,15 @@ cd backend
 pytest                                         # без база: интеграционните тестове се пропускат
 TEST_DATABASE_URL=postgresql://... pytest      # с отделна тестова база, която може да се изтрива
 ```
+
+
+## Хостинг на Railway
+
+Приложението е в `backend/` (Dockerfile, `deploy/start.sh`). На Railway: услуга от това хранилище с
+Root Directory `legal-ai-solo/backend`, база Postgres, диск (Volume) на `/data` и променливи:
+`DATABASE_URL=${{Postgres.DATABASE_URL}}`, `PRIVATE_STORAGE_PATH=/data`, `CORPUS_BUILD=1`,
+`RAILWAY_RUN_UID=0` (дискът е на root), `SECRET_KEY` (случаен низ) и `APP_PASSWORD` (задава се от
+собственика в Railway → Variables). Без `APP_PASSWORD` приложението на хостинг показва само страница за вход
+със съобщение, че паролата липсва. `deploy/corpus.sh` тегли базата бавно (1 заявка на 2 сек.), първо
+от юли 2022 г. насам, после назад до 2012 г., и веднъж седмично обновява последните тримесечия;
+дневникът е в `/data/corpus.log`.

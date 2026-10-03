@@ -6,7 +6,7 @@ import os
 import re
 from datetime import date
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import quote, urlparse
 from uuid import UUID
 
 import psycopg
@@ -23,6 +23,7 @@ from legal_ai.db import connect
 from legal_ai.retrieval.lexical import search
 from legal_ai.retrieval.text import Term, normalize_for_search, parse_query, word_matches
 from legal_ai.sources.courts import COURTS
+from legal_ai.web import auth
 from legal_ai.web.jobs import JobRunner, load_run, load_trace
 from legal_ai.web.views import corpus_events, corpus_month, empty_month, list_reports, month_param
 
@@ -47,7 +48,27 @@ def highlight(text: str, terms: list[Term]) -> Markup:
 def create_app() -> FastAPI:
     settings = load_settings()
     app = FastAPI(title="Legal AI Solo", docs_url=None, redoc_url=None)
-    app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost"])
+    hosts = ["127.0.0.1", "localhost"] + [h.strip() for h in os.environ.get("ALLOWED_HOSTS", "").split(",") if h.strip()]
+    if os.environ.get("RAILWAY_PUBLIC_DOMAIN"):
+        hosts.append(os.environ["RAILWAY_PUBLIC_DOMAIN"])
+
+    @app.middleware("http")
+    async def require_login(request: Request, call_next):
+        path = request.url.path
+        if path in ("/login", "/health") or path.startswith("/static/"):
+            return await call_next(request)
+        if not auth.password():
+            if not auth.hosted() and (request.url.hostname or "") in auth.LOCAL_HOSTS:
+                return await call_next(request)   # local use without a password, as before
+            return RedirectResponse("/login", status_code=303)
+        if auth.cookie_ok(request.cookies.get(auth.COOKIE)):
+            return await call_next(request)
+        if request.method != "GET":
+            return HTMLResponse("Необходим е вход.", status_code=401)
+        return RedirectResponse("/login?next=" + quote(path + ("?" + request.url.query if request.url.query else "")),
+                                status_code=303)
+
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=hosts)
     app.mount("/static", StaticFiles(directory=str(Path(__file__).parent / "static")), name="static")
     _TEMPLATES.env.globals["highlight"] = highlight
     storage = Path(os.environ.get("PRIVATE_STORAGE_PATH", "data"))
@@ -78,6 +99,42 @@ def create_app() -> FastAPI:
                 WHERE s.source = t.source AND s.description LIKE t.description || '\_\_%')""")
         corpus["truncated_lists"] = cur.fetchone()["n"]
         return corpus
+
+    def safe_next(value: str) -> str:
+        return value if value.startswith("/") and not value.startswith("//") and "\\" not in value else "/analyze"
+
+    @app.get("/login", response_class=HTMLResponse)
+    def login_form(request: Request, next: str = Query("/analyze", max_length=500)):
+        return _TEMPLATES.TemplateResponse(request, "login.html", {
+            "configured": bool(auth.password()), "next": safe_next(next), "error": ""})
+
+    @app.post("/login")
+    def login(request: Request, password: str = Form("", max_length=500), next: str = Form("/analyze", max_length=500),
+              remember: str = Form("")):
+        client = request.headers.get("x-forwarded-for", "").split(",")[0].strip() or \
+            (request.client.host if request.client else "?")
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        error = ""
+        if auth.too_many_failures(client):
+            error = "Твърде много грешни опити. Опитайте след 10 минути."
+        elif not auth.check_password(password):
+            auth.record_failure(client)
+            error = "Грешна парола."
+        if error:
+            return _TEMPLATES.TemplateResponse(request, "login.html", {
+                "configured": bool(auth.password()), "next": safe_next(next), "error": error}, status_code=401)
+        resp = RedirectResponse(safe_next(next), status_code=303)
+        https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+        resp.set_cookie(auth.COOKIE, auth.make_cookie(), max_age=auth.MAX_AGE if remember else None,
+                        httponly=True, secure=https, samesite="lax")
+        return resp
+
+    @app.get("/logout")
+    def logout():
+        resp = RedirectResponse("/login", status_code=303)
+        resp.delete_cookie(auth.COOKIE)
+        return resp
 
     @app.get("/health")
     def health() -> JSONResponse:

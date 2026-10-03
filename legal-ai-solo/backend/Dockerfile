@@ -6,9 +6,11 @@ WORKDIR /app
 COPY pyproject.toml alembic.ini ./
 COPY src ./src
 COPY migrations ./migrations
+COPY deploy ./deploy
 RUN pip install --no-cache-dir .
 
 RUN useradd --create-home --uid 10001 app && mkdir -p /data && chown app /data
 USER app
 
-CMD ["sh", "-c", "legal-ai migrate && legal-ai serve --host 0.0.0.0 --port 8000"]
+# deploy/start.sh: migrate, optional background corpus build (CORPUS_BUILD=1), serve on $PORT.
+CMD ["sh", "/app/deploy/start.sh"]
