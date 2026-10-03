@@ -95,8 +95,11 @@
             <div class="detail-text"><span class="detail-label">Режим</span>
               <span class="mode-switch">
                 <label><input type="radio" name="mode" value="noai" checked><span>Без AI · безплатно</span></label>
-                <label><input type="radio" name="mode" value="ai"><span>С AI · ~10 ¢</span></label>
-              </span></div></div>
+                <label><input type="radio" name="mode" value="ai"><span>С AI · ~{{ price.report[0]|round(1) }}–{{ price.report[1]|round(1) }} $</span></label>
+              </span>
+              <span class="cost-note">С AI приблизително: справка {{ '%.2f'|format(price.report[0]) }}–{{ '%.2f'|format(price.report[1]) }} $
+                (при повече документи – към горната граница), чернова на жалба {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.
+                Таван: {{ price.max_calls }} AI заявки на справка. Точната сума е в OpenAI → Usage.</span></div></div>
           <div class="detail-right"><span class="detail-action-circle help-tip" title="Без AI: пътят на делото, обжалваният акт и цитираната практика. С AI: правни въпроси и практика „противоречи/подкрепя“.">{{ icon('ai', 11) }}</span></div>
         </div>
         <button class="kit-submit" type="submit" {% if busy %}disabled{% endif %}>

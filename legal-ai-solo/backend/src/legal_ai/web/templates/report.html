@@ -27,7 +27,7 @@
             ('Правни въпроси', a.questions|length, 'hash'), ('Решения „противоречи“', contra, 'court'),
             ('Практика на ВКС до', run.cutoff, 'cal'),
             ('Модели', run.models.analysis ~ (' · ' ~ run.models.assess if run.models.assess else ''), 'ai'),
-            ('AI заявки · токени', run.usage.calls ~ ' · ' ~ run.usage.input_tokens ~ '/' ~ run.usage.output_tokens, 'info')] %}
+            ('AI заявки · токени · цена', run.usage.calls ~ ' · ' ~ run.usage.input_tokens ~ '/' ~ run.usage.output_tokens ~ (' · ≈ ' ~ ('%.2f'|format(run_cost)) ~ ' $' if run_cost is not none else ''), 'info')] %}
         {% if links.get(label) %}<a class="detail-item-row link-row" href="{{ links[label] }}" title="Към раздела"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
           <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
           <div class="detail-right"><span class="detail-action-circle">{{ icon('right', 11) }}</span></div></a>

@@ -16,13 +16,13 @@
         <a class="kit-submit light" href="/runs/{{ run_id }}/draft" style="display:block;text-align:center">Изложението по чл. 284, ал. 3, т. 1</a>
         <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center">Свали приложенията (ZIP)</a>
         <p class="muted small">Написана на {{ appeal.created_at[:10].split('-')|reverse|join('.') }} · {{ appeal.model }} ·
-          AI заявки {{ appeal.usage.calls }} · токени {{ appeal.usage.input_tokens }}/{{ appeal.usage.output_tokens }}</p>
-        <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Нова чернова с AI (една платена заявка към OpenAI)?')">
+          AI заявки {{ appeal.usage.calls }} · токени {{ appeal.usage.input_tokens }}/{{ appeal.usage.output_tokens }}{% if appeal_cost is not none %} · ≈ {{ '%.2f'|format(appeal_cost) }} ${% endif %}</p>
+        <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Нова чернова с AI – една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $?')">
           <button class="kit-submit light" type="submit" {{ 'disabled' if busy }}>Напиши наново с AI</button></form>
       {% else %}
         <p>Още няма чернова. AI ще напише оплакванията и доводите срещу въззивното решение по отметнатите
           въпроси ({{ chosen|length }}) и практиката „противоречи“ от справката. Една заявка към OpenAI.</p>
-        <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Да напише ли AI черновата на жалбата (една платена заявка към OpenAI)?')">
+        <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Да напише ли AI черновата на жалбата? Една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.')">
           <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else 'Напиши жалбата с AI' }}</button></form>
       {% endif %}
       {% if not case.client or not case.lawyer or not case.opponent %}<div class="notice">Страните или адвокатът не са попълнени –

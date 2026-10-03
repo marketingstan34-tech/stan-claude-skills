@@ -229,3 +229,18 @@ def test_context_documents_in_the_prompts():
     assert len(block) < P.CONTEXT_MAX_TOTAL + 1000
     prompt = appeal_prompt(RUN, "Решение.", None, [("parva.txt", "Първа инстанция.")])
     assert "ДРУГ ДОКУМЕНТ ПО ДЕЛОТО: parva.txt" in prompt and "Първа инстанция." in prompt
+
+
+def test_cost_estimate():
+    from legal_ai.ai.pricing import cost_usd
+    measured = {"gpt-5.5-2026-04-23": [52217, 9652], "gpt-5.4-mini-2026-03-17": [113926, 15665]}
+    assert round(cost_usd(measured), 2) == 0.71
+    assert cost_usd({"unknown-model": [1, 1]}) is None
+
+
+def test_form_shows_the_cost(client, monkeypatch):
+    c, _ = client
+    monkeypatch.setattr("legal_ai.web.app.connect", lambda url: (_ for _ in ()).throw(
+        __import__("psycopg").OperationalError("no db")))
+    page = c.get("/analyze").text
+    assert "С AI приблизително: справка 0.70–1.00 $" in page and "10 ¢" not in page

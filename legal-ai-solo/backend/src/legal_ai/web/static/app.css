@@ -290,3 +290,4 @@ a.status-chip.active { box-shadow: 0 0 0 2px #111413 inset; }
 .days-left-pill.due-warn { background: #fef3c7 !important; color: #92400e !important; }
 .days-left-pill.due-bad { background: #fee2e2 !important; color: #991b1b !important; }
 .detail-item-row.drop-over { outline: 2px dashed #111413; outline-offset: 2px; background: #f0fdf4 !important; }
+.cost-note { display: block; font-size: 12px; color: #52525b; line-height: 1.45; margin-top: 6px; font-weight: 500; }

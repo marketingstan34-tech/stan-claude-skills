@@ -78,10 +78,19 @@ def create_app() -> FastAPI:
     traces_dir = storage / "traces"
     runner = JobRunner(runs_dir, traces_dir)
 
+    def price_info() -> dict:
+        from legal_ai.ai import pricing
+        try:
+            max_calls = int(os.environ.get("AI_MAX_CALLS_PER_RUN", "60"))
+        except ValueError:
+            max_calls = 60
+        return {"report": pricing.TYPICAL_REPORT_USD, "appeal": pricing.TYPICAL_APPEAL_USD, "max_calls": max_calls}
+
     def render(request: Request, name: str, ctx: dict, status_code: int = 200):
         return _TEMPLATES.TemplateResponse(request, name, {
             "running_job": runner.running(),
             "today": date.today().strftime("%d.%m.%Y"), "today_iso": date.today().isoformat(),
+            "price": price_info(),
             **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
@@ -432,7 +441,9 @@ def create_app() -> FastAPI:
         for a in run["assessments"]:
             if a["relevant"] and a["stance"] != "неотносимо":
                 by_q.setdefault(a["question_id"], []).append(a)
+        from legal_ai.ai.pricing import cost_usd
         return render(request, "report.html", {"run": run, "by_q": by_q, "run_id": run_id, "form_error": error,
+                                               "run_cost": cost_usd(run["usage"].get("by_model") or {}),
                                                **case_context(runs_dir, run_id, run["appellate"]["label"], run)})
 
     @app.post("/runs/{run_id}/case")
@@ -522,7 +533,11 @@ def create_app() -> FastAPI:
     @app.get("/runs/{run_id}/appeal", response_class=HTMLResponse)
     def run_appeal(request: Request, run_id: str):
         run, ctx, appeal, blocks = appeal_blocks(run_id)
+        from legal_ai.ai.pricing import cost_usd
+        appeal_cost = cost_usd({appeal["model"]: [appeal["usage"]["input_tokens"], appeal["usage"]["output_tokens"]]}) \
+            if appeal and appeal.get("usage") else None
         return render(request, "appeal.html", {"run": run, "run_id": run_id, "appeal": appeal, "blocks": blocks,
+                                               "appeal_cost": appeal_cost,
                                                "busy": runner.busy(), **ctx})
 
     @app.post("/runs/{run_id}/appeal")
