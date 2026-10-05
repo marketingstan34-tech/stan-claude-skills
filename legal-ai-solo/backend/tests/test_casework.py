@@ -617,7 +617,87 @@ def test_benchmark_page_and_start(client, monkeypatch):
                           ["Как се погасяват няколко еднородни задължения при частично плащане от длъжника?"]) >= 0.5
     s = score({"analysis": {"questions": [{"text": "Въпрос"}]},
                "assessments": [{"relevant": True, "stance": "противоречи", "label": "Решение №119/30.07.2018 по дело №1/2017"}]},
-              "Съгласно решение № 119 от 30.07.2018 г. по гр. д. № 1/2017 г.")
+              "Съгласно решение № 119 от 30.07.2018 г. по гр. д. № 1/2017 г. на ВКС, IV г.о.")
     assert s["practice_found"] == ["119/30.07.2018"] and s["contra"] == 1
     assert summary([{"outcome": "допуска", "score": {"question_match": 0.6, "cited": ["1/01.01.2020"],
                                                        "practice_found": []}}])["question_hits"] == 1
+
+
+def test_benchmark_reads_questions_as_rulings_state_them():
+    """Synthetic text in the three forms seen in real rulings (09.2026)."""
+    from legal_ai.benchmark import question_match, ruling_questions
+    quoted = ("В изложението е поставен въпросът: „Длъжен ли е въззивният съд при определяне на обезщетението "
+              "по чл. 52 ЗЗД да обсъди всички възражения на ответника?“. Ответникът не взема становище.")
+    listed = ("В изложението по чл. 284, ал. 3, т. 1 ГПК жалбоподателят поставя следните въпроси, за които твърди, "
+              "че са обуславящи: 1. За съдържанието на владението като основание за придобиване по давност; "
+              "2. Смущава ли владението подаването на жалба до прокуратурата от собственика. Върховният касационен "
+              "съд намира следното.")
+    about = ("Решението се обжалва по въпроси, материалноправните от които са за предпоставките на чл. 8 ЕКПЧ за "
+             "промяна на вписаните данни за пола в актовете за гражданско състояние.")
+    q1 = ruling_questions(quoted)
+    assert len(q1) == 1 and "чл. 52 ЗЗД" in q1[0] and q1[0].startswith("Длъжен")
+    q2 = ruling_questions(listed)
+    assert any(q.startswith("За съдържанието на владението") for q in q2)
+    assert any(q.startswith("Смущава ли владението") for q in q2)
+    assert any("промяна на вписаните данни за пола" in q for q in ruling_questions(about))
+    assert question_match(["Въпрос"], ruling_questions("Няма въпроси тук.")) is None
+
+
+def test_benchmark_counts_only_vks_citations_seen_by_the_report():
+    from datetime import date
+    from legal_ai.benchmark import cited_refs, score, summary
+    text = ("Обжалва се решение № 929 от 12.02.2025 г. по гр. д. № 8071/2024 г. на Софийски градски съд. "
+            "Касаторът сочи решение № 228 от 01.10.2014 г. по гр. д. № 1060/2014 г. на I г.о. и "
+            "решение № 50021 от 09.03.2026 г. по т. д. № 1476/2025 г. на ВКС, I т.о.")
+    assert cited_refs(text) == {"228/01.10.2014", "50021/09.03.2026"}
+    assert cited_refs(text, date(2025, 6, 1)) == {"228/01.10.2014"}
+    s = score({"analysis": {"questions": []}, "assessments": []}, text, date(2025, 6, 1))
+    assert s["cited"] == ["228/01.10.2014"] and s["cited_later"] == 1 and s["question_match"] is None
+    # a case whose question could not be read is not counted against the report
+    assert summary([{"outcome": "допуска", "score": {"question_match": None, "cited": [], "practice_found": []}}]
+                   )["admitted"] == 0
+
+
+def test_benchmark_gives_each_case_its_own_call_cap(tmp_path, monkeypatch):
+    import legal_ai.ai as ai_mod
+    import legal_ai.benchmark as bm
+    import legal_ai.cassation.pipeline as pipeline
+    import legal_ai.db as db
+    from datetime import date
+    from types import SimpleNamespace
+    from legal_ai.web.jobs import Job, JobRunner
+
+    made = []
+
+    class FakeAI:
+        def __init__(self, cfg):
+            self.usage = ai_mod.Usage()
+            self.usage.add("m", 10, 1)
+            made.append(self)
+        def close(self):
+            pass
+
+    class FakeConn:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+
+    cases = [{"ruling_id": str(i), "outcome": "допуска", "ruling": f"Определение №{i}", "ruling_url": "",
+              "ruling_text": "", "court": "x", "court_name": "Съд", "case": i, "year": 2025} for i in (1, 2, 3)]
+    monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
+    monkeypatch.setattr(db, "connect", lambda url: FakeConn())
+    monkeypatch.setattr(bm, "pick_cases", lambda conn, n: [dict(c) for c in cases])
+    monkeypatch.setattr(ai_mod, "OpenAIProvider", FakeAI)
+    monkeypatch.setattr(ai_mod, "load_ai_config", lambda: None)
+    monkeypatch.setattr(pipeline, "fetch_appellate",
+                        lambda courts, court, case, year: (None, SimpleNamespace(act_date=date(2025, 1, 10), label="Р")))
+    monkeypatch.setattr(pipeline, "run_analysis", lambda *a, **k: SimpleNamespace())
+    monkeypatch.setattr("legal_ai.web.jobs.asdict", lambda r: {"analysis": {"questions": []}, "assessments": []})
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    runner = JobRunner(runs)
+    job = Job(id="b1", params={"mode": "benchmark", "n": 3})
+    runner._run_benchmark(job)
+    assert job.status == "done" and len(made) == 3
+    saved = json.loads(next((tmp_path / "benchmark").glob("*.json")).read_text(encoding="utf-8"))
+    assert saved["usage"]["by_model"]["m"] == [30, 3]
+    assert all(c["cutoff"] == "2025-03-11" for c in saved["cases"])

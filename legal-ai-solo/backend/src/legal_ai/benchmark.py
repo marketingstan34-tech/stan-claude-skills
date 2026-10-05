@@ -12,15 +12,26 @@ usual one (appellate decision + 60 days), so the ruling itself cannot be seen. T
 from __future__ import annotations
 
 import re
+from datetime import date
 
 _APPEALED = re.compile(
     r"решение\s*№\s*(?P<no>\d{1,6})\s*(?:/|от)\s*(?P<date>\d{1,2}\.\d{1,2}\.\d{4})\s*г?\.?,?\s*"
     r"(?:постановено\s+)?по\s+(?P<kind>[а-я.\s]{1,20}?д(?:ело)?\.?)\s*№\s*(?P<case>\d{1,6})\s*(?:/|по описа за)\s*(?P<year>\d{4})"
     r"\s*г?\.?,?\s*(?P<court>(?:по\s+описа\s+на|на)\s+[^,.;]{3,60}?съд(?:\s*[–-]?\s*[А-Я][а-я]+)?)",
     re.IGNORECASE)
-_QUESTION = re.compile(r"(?:по\s+(?:поставения|първия|втория|третия|четвъртия|петия|въпроса|въпросите)[^:]{0,80}[:/–-]|"
-                       r"въпрос[ът]*\s*[:„\"])\s*(?P<q>[^?]{20,400}\?)", re.IGNORECASE)
+# How the rulings state the questions (seen in real rulings, 09.2026): a quoted question ending in
+# "?", a numbered list after "следните въпроси:", or "по въпроса за …" without a question mark.
+_SENT_Q = re.compile(r"(?:^|(?<=[.:;„“\"]))\s*([^.:;„“\"?]{25,900}\?)")
+_LIST_HEAD = re.compile(r"(?:следни[яте]*\s+(?:правни\s+)?въпрос[а-я]*|въпрос[а-я]*\s*(?:е|са)?\s*(?:със\s+следното\s+съдържание"
+                        r"|формулиран[а-я]*|поставен[а-я]*))[^:.?]{0,220}:", re.IGNORECASE)
+_ABBR = re.compile(r"\b(чл|ал|т|г|бр|д|гр|в\.гр|т\.д|търг|пр|предл|изр|ч|тълк|вр|напр|вкл|ГПК|ЗЗД|ЗС|ЗН|ЕС)\.(?=\s*[\dа-яA-Za-z§])")
+_LIST_ITEM = re.compile(r"(?:^|\s)(?:\d{1,2}[.)]|[а-е]\))\s+")
+_ABOUT = re.compile(r"по\s+(?:правни[яте]*\s+|материалноправни[яте]*\s+|процесуалноправни[яте]*\s+)?въпрос[а-я]*"
+                    r"[^.?]{0,40}?\b(?:за|относно|дали)\s+([^.?]{25,400})", re.IGNORECASE)
 _VKS_REF = re.compile(r"(?:решение|определение)\s*№\s*(\d{1,6})\s*(?:/|от)\s*(\d{1,2}\.\d{1,2}\.\d{4})", re.IGNORECASE)
+# a VKS act is cited with its chamber or the court's name right after the case number
+_VKS_TAIL = re.compile(r"ВКС|Върховния\s+касационен|[IV]+\s*-?\s*р?[аио]?\s*[гт]\.\s*о\.|\b[ГТ]К\b|ОСГ[ТК]?К")
+_OTHER_COURT = re.compile(r"(?:Окръжен|Апелативен|Районен|Софийски\s+градски|административен)\s+съд|\b[ОАР]С\b|СГС")
 
 
 def appealed_decision(text: str) -> dict | None:
@@ -36,12 +47,56 @@ def appealed_decision(text: str) -> dict | None:
 
 
 def ruling_questions(text: str) -> list[str]:
-    return [" ".join(m.group("q").split()) for m in _QUESTION.finditer(text or "")][:6]
+    """The legal questions as the ruling states them (the cassator's and the ones VKS admits)."""
+    text = " ".join((text or "").split())
+    # the dot of "чл. 52", "ал. 1", "т. 3", "г." does not end a sentence
+    text = _ABBR.sub(lambda m: m.group(1) + "\u2024", text)
+    found: list[str] = []
+    for m in _SENT_Q.finditer(text):
+        found.append(m.group(1))
+    for m in _LIST_HEAD.finditer(text):
+        block = text[m.end(): m.end() + 2500]
+        block = re.split(r"(?:Върховният касационен съд|Настоящият състав|ВКС,?\s+[IV]+|Ответник|Становище)", block)[0]
+        items = [i.strip(" ;,–-") for i in _LIST_ITEM.split(block)]
+        found += [i for i in items if 25 <= len(i) <= 600]
+    for m in _ABOUT.finditer(text):
+        found.append(m.group(1))
+    out, seen = [], []
+    for q in found:
+        q = q.strip(" „“\"").replace("\u2024", ".")
+        st = _stems(q) - _COMMON
+        if len(st) < 3 or any(len(st & s) >= 0.8 * len(st) for s in seen):
+            continue
+        seen.append(st)
+        out.append(q)
+    return out[:8]
 
 
-def cited_refs(text: str) -> set[str]:
+def cited_refs(text: str, cutoff: date | None = None) -> set[str]:
+    """VKS acts cited in the text ("N/dd.mm.yyyy"); with `cutoff`, only those the report could see.
+    Acts of other courts (the appealed decision and the first instance) are left out."""
     out = set()
-    for no, d in _VKS_REF.findall(text or ""):
+    for m in _VKS_REF.finditer(text or ""):
+        tail = text[m.end(): m.end() + 160]
+        cut = _OTHER_COURT.search(tail)
+        vks = _VKS_TAIL.search(tail)
+        if not vks or (cut and cut.start() < vks.start()):
+            continue
+        dd, mm, yy = m.group(2).split(".")
+        try:
+            d = date(int(yy), int(mm), int(dd))
+        except ValueError:
+            continue
+        if cutoff and d > cutoff:
+            continue
+        out.add(f"{int(m.group(1))}/{int(dd):02d}.{int(mm):02d}.{yy}")
+    return out
+
+
+def _label_refs(label: str) -> set[str]:
+    """The number/date of a VKS act in our report's label (it names VKS itself, so no tail check)."""
+    out = set()
+    for no, d in _VKS_REF.findall((label or "").replace("№", "№ ")):
         dd, mm, yy = d.split(".")
         out.add(f"{int(no)}/{int(dd):02d}.{int(mm):02d}.{yy}")
     return out
@@ -55,28 +110,31 @@ _COMMON = _stems("следва въпроса въпросът правен пр
                  "касационно обжалване допускане когато какви какво дали")
 
 
-def question_match(ours: list[str], theirs: list[str]) -> float:
-    """Best share of the VKS question's words found in one of our questions (0..1)."""
-    best = 0.0
+def question_match(ours: list[str], theirs: list[str]) -> float | None:
+    """Best share of a VKS question's words found in one of our questions (0..1); None when the
+    ruling's questions could not be read (then the case is left out of the count)."""
+    best, any_read = 0.0, False
     for t in theirs:
         want = _stems(t) - _COMMON
         if len(want) < 3:
             continue
+        any_read = True
         for q in ours:
             best = max(best, len(want & _stems(q)) / len(want))
-    return round(best, 2)
+    return round(best, 2) if any_read else None
 
 
-def score(run: dict, ruling_text: str) -> dict:
+def score(run: dict, ruling_text: str, cutoff: date | None = None) -> dict:
     ours = [q["text"] for q in run.get("analysis", {}).get("questions", [])]
     theirs = ruling_questions(ruling_text)
-    cited = cited_refs(ruling_text)
+    cited = cited_refs(ruling_text, cutoff)
     found = set()
     for a in run.get("assessments", []):
         if a.get("relevant"):
-            found |= cited_refs(a.get("label", "").replace("№", "№ "))
+            found |= _label_refs(a.get("label", ""))
     return {"vks_questions": theirs, "our_questions": ours, "question_match": question_match(ours, theirs),
             "cited": sorted(cited), "practice_found": sorted(cited & found),
+            "cited_later": len(cited_refs(ruling_text) - cited),
             "contra": sum(1 for a in run.get("assessments", []) if a.get("relevant") and a.get("stance") == "противоречи")}
 
 
@@ -107,7 +165,7 @@ def summary(cases: list[dict]) -> dict:
     done = [c for c in cases if c.get("score")]
     if not done:
         return {"done": 0}
-    adm = [c for c in done if c["outcome"] == "допуска"]
+    adm = [c for c in done if c["outcome"] == "допуска" and c["score"]["question_match"] is not None]
     hit = [c for c in adm if c["score"]["question_match"] >= 0.5]
     with_cited = [c for c in done if c["score"]["cited"]]
     practice = [c for c in with_cited if c["score"]["practice_found"]]

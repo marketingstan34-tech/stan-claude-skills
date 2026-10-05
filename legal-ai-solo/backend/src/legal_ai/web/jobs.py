@@ -235,7 +235,7 @@ class JobRunner:
 
     def _run_benchmark(self, job: Job) -> None:
         """Accuracy check on real VKS admission rulings (legal_ai/benchmark.py): one AI report per case."""
-        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.ai import OpenAIProvider, Usage, load_ai_config
         from legal_ai.benchmark import pick_cases, score, summary
         from legal_ai.cassation.pipeline import fetch_appellate, run_analysis
         from legal_ai.db import connect
@@ -255,26 +255,34 @@ class JobRunner:
                 cases = pick_cases(conn, int(job.params.get("n", 3)))
                 if not cases:
                     raise ValueError("В базата още няма подходящи определения по чл. 288. Опитайте след ден-два.")
-                ai = OpenAIProvider(load_ai_config())
-                job.cleanup = ai.close
+                usage = Usage()
                 with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
                         PoliteClient([VKS_HOST], interval, ua) as vks:
                     for i, c in enumerate(cases, 1):
                         ruling_text = c.pop("ruling_text")
                         result["cases"].append(c)
                         job.message = f"Дело {i} от {len(cases)}: {c['court_name']}, дело {c['case']}/{c['year']}…"
+                        # each case is one analysis with its own call cap (AI_MAX_CALLS_PER_RUN), as a report
+                        ai = OpenAIProvider(load_ai_config())
+                        job.cleanup = ai.close
                         try:
                             _, appellate = fetch_appellate(courts, c["court"], c["case"], c["year"])
                             cutoff = (appellate.act_date + timedelta(days=60)) if appellate.act_date else date.today()
                             run = asdict(run_analysis(ai, vks, appellate, cutoff, conn=conn))
                             c["appellate"] = appellate.label
-                            c["score"] = score(run, ruling_text)
+                            c["cutoff"] = cutoff.isoformat()
+                            c["score"] = score(run, ruling_text, cutoff)
                         except Exception as exc:  # noqa: BLE001 - one case must not stop the others
                             c["error"] = str(exc)[:300]
+                        finally:
+                            for model, (inp, out) in ai.usage.by_model.items():
+                                usage.add(model, inp, out)
+                            ai.close()
+                            job.cleanup = None
                         result["summary"] = summary(result["cases"])
                         write_atomic(out_dir / f"{stamp}.json", json.dumps(result, ensure_ascii=False, indent=1))
-            result["usage"] = {"input_tokens": ai.usage.input_tokens, "output_tokens": ai.usage.output_tokens,
-                               "by_model": ai.usage.by_model}
+            result["usage"] = {"input_tokens": usage.input_tokens, "output_tokens": usage.output_tokens,
+                               "by_model": usage.by_model}
             write_atomic(out_dir / f"{stamp}.json", json.dumps(result, ensure_ascii=False, indent=1))
             job.status = "done"
             job.message = "Готово."

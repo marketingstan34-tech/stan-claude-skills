@@ -31,9 +31,11 @@
         <span class="muted small">{{ c.court_name }}, дело {{ c.case }}/{{ c.year }}</span>
         {% if c.error %}<p class="notice bad">{{ c.error }}</p>
         {% elif c.score %}
-          <p class="small"><b>Съвпадение на въпроса:</b> {{ (c.score.question_match * 100)|round|int }}%{% if c.score.vks_questions %} · ВКС: „{{ c.score.vks_questions[0]|truncate(220) }}“{% endif %}</p>
+          {% if c.score.question_match is none %}<p class="small muted"><b>Съвпадение на въпроса:</b> въпросът в определението не е разчетен (не се брои).</p>
+          {% else %}<p class="small"><b>Съвпадение на въпроса:</b> {{ (c.score.question_match * 100)|round|int }}%</p>
+          <p class="small muted"><b>Въпроси в определението:</b> {% for q in c.score.vks_questions[:3] %}{{ loop.index }}. {{ q|truncate(160) }} {% endfor %}</p>{% endif %}
           <p class="small muted"><b>Наши въпроси:</b> {% for q in c.score.our_questions %}{{ loop.index }}. {{ q|truncate(140) }} {% endfor %}</p>
-          <p class="small"><b>Практика:</b> ВКС цитира {{ c.score.cited|length }}, ние намерихме {{ c.score.practice_found|length }} от тях · „противоречи“ в справката: {{ c.score.contra }}</p>
+          <p class="small"><b>Практика:</b> ВКС цитира {{ c.score.cited|length }} свои акта{% if c.cutoff %} до {{ c.cutoff }} (датата, до която справката търси){% endif %}, ние намерихме {{ c.score.practice_found|length }} от тях{% if c.score.cited_later %} · още {{ c.score.cited_later }} са по-нови и справката не може да ги види{% endif %} · „противоречи“ в справката: {{ c.score.contra }}</p>
         {% else %}<p class="muted small">тече…</p>{% endif %}
       </div>
       {% endfor %}
