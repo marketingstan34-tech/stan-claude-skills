@@ -296,7 +296,7 @@ def test_form_shows_the_cost(client, monkeypatch):
     monkeypatch.setattr("legal_ai.web.app.connect", lambda url: (_ for _ in ()).throw(
         __import__("psycopg").OperationalError("no db")))
     page = c.get("/analyze").text
-    assert "С AI приблизително: справка 0.70–1.00 $" in page and "10 ¢" not in page
+    assert "С AI приблизително: справка 1.00–1.40 $" in page and "10 ¢" not in page
 
 
 def test_empty_number_and_year_from_the_browser(client, monkeypatch):
@@ -443,7 +443,7 @@ def test_credit_estimate(tmp_path):
     credits.save(tmp_path, 10.0, now=datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc))
     s = credits.summary(tmp_path, runs)
     assert round(s["spent"], 2) == 0.96 and round(s["left"], 2) == 9.04      # only what came after 12:00
-    assert s["reports_left"] == 9 and not s["low"] and s["pct"] == 90
+    assert s["reports_left"] == 6 and not s["low"] and s["pct"] == 90
     assert credits.parse_balance("25,40 $") == 25.4 and credits.parse_balance("абв") is None
     assert credits.parse_balance("-1") is None
 
@@ -735,3 +735,17 @@ def test_benchmark_page_shows_pairs_and_missed(client, monkeypatch):
     html = c.get("/benchmark").text
     assert "наш въпрос 2 (40% общи думи)" in html
     assert "№ 5/01.01.2020 – няма го в базата" in html
+
+
+def test_broad_search_words_and_wider_limits():
+    from legal_ai.cassation import pipeline
+    from legal_ai.cassation import prompts as P
+    from legal_ai.cassation.local import key_words, local_broad
+    w = key_words("Длъжен ли е въззивният съд да съобрази установеното с влязло в сила решение "
+                  "по чл. 59 ЗЗД факт за погасяването на задължението?")
+    assert "въззивният" not in w and "погасяването" in w and "влязло" in w
+    assert local_broad(None, ["две", "думи"], date(2025, 1, 1)) == {}
+    assert pipeline.PER_QUESTION == 6 and pipeline.MAX_ACTS == 45
+    assert "сила на пресъдено нещо" in P.ANALYSIS_INSTRUCTIONS and "чл. 59 ЗЗД" in P.ANALYSIS_INSTRUCTIONS
+    from legal_ai.ai import MIN_CALLS
+    assert MIN_CALLS >= 2 * pipeline.MAX_ACTS

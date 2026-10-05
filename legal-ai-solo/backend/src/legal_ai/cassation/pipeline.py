@@ -25,9 +25,9 @@ from legal_ai.sources.vks import LIST_TRUNCATION_LIMIT
 from legal_ai.sources.vks.parser import ParsedAct, parse_act, parse_list
 from legal_ai.sources.vks.urls import ListQuery, act_url, list_url
 
-MAX_LIST_QUERIES = 30
-PER_QUESTION = 3
-MAX_ACTS = 24
+MAX_LIST_QUERIES = 40
+PER_QUESTION = 6
+MAX_ACTS = 45
 EXCERPT_CHARS = 5000
 AI_WORKERS = 4  # parallel AI assessments unless ai.config.workers says otherwise; source requests stay sequential
 # Local-first (ANALYSIS_LOCAL_FIRST=1): a question whose word sets already give this many
@@ -254,14 +254,24 @@ def pick_candidates(found: dict[str, dict], question_ids: list[str]) -> dict[str
 LocalHits = list[tuple[str, list[list[str]], dict[str, dict]]]  # (qid, word sets, hits) per plan item
 
 
-def search_local(conn, search_plan: list[dict], cutoff: date) -> LocalHits:
-    """Local-corpus candidates for every item of the search plan (read-only)."""
-    from legal_ai.cassation.local import local_candidates
+def search_local(conn, search_plan: list[dict], cutoff: date, analysis: dict | None = None) -> LocalHits:
+    """Local-corpus candidates for every item of the search plan (read-only). With `analysis`,
+    also a broad search per question with the key words of the question and of its holdings."""
+    from legal_ai.cassation.local import key_words, local_broad, local_candidates
 
     out: LocalHits = []
     for item in search_plan:
         sets = [w for w in (_words_ok(ws) for ws in item["word_sets"]) if w]
         out.append((item["question_id"], sets, local_candidates(conn, sets, cutoff)))
+    if analysis:
+        holdings = {h["id"]: h for h in analysis.get("holdings", [])}
+        for q in analysis.get("questions", []):
+            texts = [q.get("text", "")] + [holdings[h].get("summary", "") for h in q.get("holding_ids", [])
+                                           if h in holdings]
+            for t in texts[:2]:
+                words = key_words(t)
+                if len(words) >= 3:
+                    out.append((q["id"], [words], local_broad(conn, words, cutoff)))
     return out
 
 
@@ -360,7 +370,7 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     holding_quotes = {h["id"]: check_quote(appellate.text, h["quote"]) for h in analysis["holdings"]}
 
     searches: list[dict] = []
-    local = search_local(conn, analysis["search"], cutoff) if conn is not None else None
+    local = search_local(conn, analysis["search"], cutoff, analysis) if conn is not None else None
     skip_live = local_first_skips(local) if (local_first and local is not None) else {}
     found = search_vks(vks, analysis["search"], cutoff, searches, skip_live)
     if conn is not None:

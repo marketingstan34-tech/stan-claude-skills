@@ -52,11 +52,14 @@ class Usage:
         m[1] += out
 
 
+MIN_CALLS = 120
+
+
 @dataclass(frozen=True)
 class AIConfig:
     analysis_model: str
     light_model: str
-    max_calls: int = 60          # hard cap per analysis run
+    max_calls: int = 120         # hard cap per analysis run
     reasoning_effort: str = "medium"
     assess_model: str = ""       # stage 1: relevance filter; defaults to light_model
     assess_effort: str = "low"
@@ -107,7 +110,8 @@ def load_ai_config() -> AIConfig:
     return AIConfig(
         analysis_model=model("AI_ANALYSIS_MODEL"),
         light_model=model("AI_QUERY_MODEL"),
-        max_calls=int(os.environ.get("AI_MAX_CALLS_PER_RUN", "60")),
+        # at least MIN_CALLS: up to 45 assessed acts, each with a second (stance) call when related
+        max_calls=max(MIN_CALLS, int(os.environ.get("AI_MAX_CALLS_PER_RUN", str(MIN_CALLS)))),
         reasoning_effort=os.environ.get("AI_REASONING_EFFORT", "medium"),
         assess_model=os.environ.get("AI_ASSESS_MODEL", "") or model("AI_QUERY_MODEL"),
         assess_effort=os.environ.get("AI_ASSESS_EFFORT", "low"),

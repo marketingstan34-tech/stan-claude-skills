@@ -9,8 +9,9 @@ from __future__ import annotations
 
 PRICES_USD_PER_M = {"gpt-5.5": (5.00, 30.00), "gpt-5.4-mini": (0.75, 4.50)}
 PRICES_AS_OF = "10.2026"
-# measured on a real report (02.10.2026): 46 calls, 166 143 / 25 317 tokens -> 0.71 USD
-TYPICAL_REPORT_USD = (0.7, 1.0)
+# measured on a real report (02.10.2026): 46 calls, 166 143 / 25 317 tokens -> 0.71 USD; benchmark
+# 05.10.2026: 0.86 USD per report with 3 acts per question. With 6 per question (05.10.2026): estimate
+TYPICAL_REPORT_USD = (1.0, 1.4)
 # appeal-2 (03.10.2026): a long appeal with the case documents and style samples; estimate, not measured
 TYPICAL_APPEAL_USD = (0.8, 2.0)
 # „Съдия от ВКС": decision + statement + appeal in, a short review out; estimate

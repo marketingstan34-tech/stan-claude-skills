@@ -227,12 +227,17 @@ def pick_cases(conn, n: int = 10) -> list[dict]:
     return (picked["допуска"] + picked["не допуска"])[:n]
 
 
+# a question counts as found from this share of shared words: in the real runs (05.10.2026) the same
+# question in other words scored 0.44–0.48, a different question under 0.25
+HIT = 0.4
+
+
 def summary(cases: list[dict]) -> dict:
     done = [c for c in cases if c.get("score")]
     if not done:
         return {"done": 0}
     adm = [c for c in done if c["outcome"] == "допуска" and c["score"]["question_match"] is not None]
-    hit = [c for c in adm if c["score"]["question_match"] >= 0.5]
+    hit = [c for c in adm if c["score"]["question_match"] >= HIT]
     with_cited = [c for c in done if c["score"]["cited"]]
     practice = [c for c in with_cited if c["score"]["practice_found"]]
     return {"done": len(done), "admitted": len(adm), "question_hits": len(hit),

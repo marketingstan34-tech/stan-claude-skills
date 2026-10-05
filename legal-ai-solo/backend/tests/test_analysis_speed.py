@@ -254,8 +254,9 @@ def test_local_first_skips_only_questions_with_enough_art_290_decisions():
         ("В2", [["давност"]], {"d4": {"proceeding_article": "290"}, "tr": {"proceeding_article": "ТР"},
                                "d5": {"proceeding_article": "290"}}),
     ]
-    assert pipeline.LOCAL_FIRST_MIN == pipeline.PER_QUESTION == 3
-    assert local_first_skips(local) == {"В1": 3}          # В2: 2 decisions + a TR is not enough
+    assert pipeline.LOCAL_FIRST_MIN == pipeline.PER_QUESTION == 6
+    assert local_first_skips(local) == {}                 # under the default threshold
+    assert local_first_skips(local, threshold=3) == {"В1": 3}   # В2: 2 decisions + a TR is not enough
     assert local_first_skips(local, threshold=2) == {"В1": 3, "В2": 2}
     assert local_first_skips([]) == {}
 
@@ -269,7 +270,7 @@ def test_search_vks_records_skipped_live_searches():
     assert words_sent == ["давност вземане", "давност платеца"]   # nothing for В1
     skipped = [s for s in log if s.get("live_skipped")]
     assert [s["words"] for s in skipped] == [["волята", "платеца"], ["избор", "платеца"]]
-    assert all(s["question_id"] == "В1" and s["local_decisions"] == 4 and s["threshold"] == 3
+    assert all(s["question_id"] == "В1" and s["local_decisions"] == 4 and s["threshold"] == 6
                and "собствената база даде 4 решения по чл. 290" in s["skipped"] for s in skipped)
     assert not any("В1" in e["by_question"] for e in found.values())
 

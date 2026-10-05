@@ -7,6 +7,8 @@ they are not downloaded again.
 
 from __future__ import annotations
 
+import math
+import re
 from dataclasses import dataclass, field
 from datetime import date
 
@@ -104,4 +106,45 @@ def local_candidates(conn: psycopg.Connection, word_sets: list[list[str]], cutof
             e = found.setdefault(d.decision_id, {"hits": [], "proceeding_article": d.proceeding_article})
             e["hits"].append(ws)
             kept += 1
+    return found
+
+
+# words that say nothing about the legal problem (they are in most decisions)
+_PLAIN = set("""следва дали когато който която което които може трябва длъжен длъжна допустимо
+правно правен правни правна съдът въззивния въззивният въззивен първоинстанционния решението решение
+определение страните страна делото дело иска искът искове основание основанието производство случай
+случаите посочени съответно относно смисъла разпоредбата""".split())
+
+
+def key_words(text: str, limit: int = 10) -> list[str]:
+    """The distinctive words of a question or a holding, in order, for a broad search."""
+    out: list[str] = []
+    for w in re.findall(r"[А-Яа-я]{5,}|\d{2,4}", text or ""):
+        lw = w.lower()
+        if lw in _PLAIN or lw in out:
+            continue
+        out.append(lw)
+        if len(out) >= limit:
+            break
+    return out
+
+
+def local_broad(conn: psycopg.Connection, words: list[str], cutoff: date, per_set: int = 6,
+                min_share: float = 0.6) -> dict[str, dict]:
+    """Like local_candidates, but a decision needs only most of the words (min_share of them, at
+    least 3): finds acts the narrow word sets miss because they word the problem differently."""
+    found: dict[str, dict] = {}
+    if len(words) < 3:
+        return found
+    result = search(conn, " ".join(words), only_290=False, limit=40, passages_per_decision=1,
+                    articles=["290", "ТР"], until=cutoff)
+    need = max(3, math.ceil(min_share * len(result.terms)))
+    for d in result.decisions:
+        if len(found) >= per_set:
+            break
+        if d.terms_matched < need or d.proceeding_article not in ("290", "ТР"):
+            continue
+        if d.act_date and d.act_date > cutoff:
+            continue
+        found[d.decision_id] = {"hits": [words], "proceeding_article": d.proceeding_article}
     return found
