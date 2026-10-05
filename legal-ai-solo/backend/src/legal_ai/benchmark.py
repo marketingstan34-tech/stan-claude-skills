@@ -5,7 +5,8 @@ The appealed appellate decision is read from the ruling ("решение № …
 … съд"), downloaded from the court's site and analysed like any report; the practice cutoff is the
 usual one (appellate decision + 60 days), so the ruling itself cannot be seen. Then, by rules:
 - question match: how many words of the question the VKS admitted (or discussed) are in the best
-  of our questions;
+  of our questions; then one AI call per case judges by meaning (judge_questions), since VKS often
+  restates a question in other words;
 - practice match: VKS decisions cited in the ruling that our report also found (number and date).
 """
 
@@ -205,19 +206,70 @@ def pick_cases(conn, n: int = 10) -> list[dict]:
     return (picked["допуска"] + picked["не допуска"])[:n]
 
 
+# AI judgement of each question read from the ruling against ours, by meaning
+VERDICTS = ("същият", "частично", "няма", "не е въпрос")
+JUDGE_SYSTEM = ("Ти си български юрист и сравняваш правни въпроси по чл. 280, ал. 1 ГПК. Преценяваш по смисъла, "
+                "не по думите.")
+JUDGE_INSTRUCTIONS = """За всеки ВЪПРОС НА ВКС (извлечен автоматично от определение на ВКС, затова може да е откъс,
+който не е правен въпрос) посочи най-близкия НАШ ВЪПРОС и оценка:
+- "същият": нашият въпрос поставя същия правен проблем, дори с други думи или малко по-широко/по-тясно,
+  така че отговорът на ВКС би отговорил и на него;
+- "частично": засяга същата материя или норма, но основният правен проблем е друг;
+- "няма": нито един наш въпрос не засяга този проблем (тогава ours = 0);
+- "не е въпрос": текстът не е правен въпрос (напр. откъс от мотиви или изложение на фактите) (ours = 0).
+why: едно кратко изречение защо."""
+JUDGE_SCHEMA = {
+    "type": "object", "additionalProperties": False, "required": ["items"],
+    "properties": {"items": {"type": "array", "items": {
+        "type": "object", "additionalProperties": False, "required": ["vks", "ours", "verdict", "why"],
+        "properties": {"vks": {"type": "integer"}, "ours": {"type": "integer"},
+                       "verdict": {"type": "string", "enum": list(VERDICTS)}, "why": {"type": "string"}}}}}}
+
+
+def judge_questions(ai, model: str, effort: str, sc: dict) -> None:
+    """One AI call: adds {"ours", "verdict", "why"} as "judge" to each pair of the score, and the best
+    verdict of the case as sc["judged"] (None when no VKS question is a real question)."""
+    pairs, ours = sc.get("pairs") or [], sc.get("our_questions") or []
+    if not pairs or not ours:
+        return
+    user = (JUDGE_INSTRUCTIONS + "\n\n=== ВЪПРОСИ НА ВКС ===\n"
+            + "\n".join(f"{i}. {p['vks']}" for i, p in enumerate(pairs, 1))
+            + "\n\n=== НАШИ ВЪПРОСИ ===\n" + "\n".join(f"{k}. {q}" for k, q in enumerate(ours, 1)))
+    out = ai.structured(model=model, system=JUDGE_SYSTEM, user=user, schema_name="question_match",
+                        schema=JUDGE_SCHEMA, effort=effort)
+    for it in out.get("items", []):
+        i = it.get("vks", 0)
+        if 1 <= i <= len(pairs) and it.get("verdict") in VERDICTS:
+            k = it.get("ours", 0)
+            pairs[i - 1]["judge"] = {"ours": k if 1 <= k <= len(ours) else None,
+                                     "verdict": it["verdict"], "why": str(it.get("why", ""))[:300]}
+    real = [p["judge"]["verdict"] for p in pairs if p.get("judge") and p["judge"]["verdict"] != "не е въпрос"]
+    sc["judged"] = next((v for v in VERDICTS if v in real), None)
+
+
 # a question counts as found from this share of shared words: in the real runs (05.10.2026) the same
 # question in other words scored 0.44–0.48, a different question under 0.25
 HIT = 0.4
+
+
+def _verdict(sc: dict) -> str | None:
+    """By meaning (AI) when judged, else by shared words."""
+    if sc.get("judged") is not None or any(p.get("judge") for p in sc.get("pairs") or []):
+        return sc.get("judged")
+    if sc.get("question_match") is None:
+        return None
+    return "същият" if sc["question_match"] >= HIT else "няма"
 
 
 def summary(cases: list[dict]) -> dict:
     done = [c for c in cases if c.get("score")]
     if not done:
         return {"done": 0}
-    adm = [c for c in done if c["outcome"] == "допуска" and c["score"]["question_match"] is not None]
-    hit = [c for c in adm if c["score"]["question_match"] >= HIT]
+    adm = [c for c in done if c["outcome"] == "допуска" and _verdict(c["score"]) is not None]
+    hit = [c for c in adm if _verdict(c["score"]) == "същият"]
     with_cited = [c for c in done if c["score"]["cited"]]
     practice = [c for c in with_cited if c["score"]["practice_found"]]
     return {"done": len(done), "admitted": len(adm), "question_hits": len(hit),
             "with_cited": len(with_cited), "practice_hits": len(practice),
-            "failed": sum(1 for c in cases if c.get("error"))}
+            "failed": sum(1 for c in cases if c.get("error")),
+            "by_meaning": any(c["score"].get("judged") is not None for c in done)}

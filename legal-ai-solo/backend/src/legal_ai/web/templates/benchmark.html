@@ -22,7 +22,7 @@
     <div class="card page-card">
       <h2>Проверка от {{ r.created_at[:16].replace('T', ' ') }} UTC{% if r.cost is not none %} · ≈ {{ '%.2f'|format(r.cost) }} ${% endif %}</h2>
       {% set s = r.summary or {} %}
-      {% if s.done %}<p><b>Въпросът на ВКС е намерен</b> в {{ s.question_hits }} от {{ s.admitted }} допуснати дела ·
+      {% if s.done %}<p><b>Въпросът на ВКС е намерен</b>{% if s.by_meaning %} (по смисъл){% endif %} в {{ s.question_hits }} от {{ s.admitted }} допуснати дела ·
         <b>цитираната от ВКС практика е намерена</b> в {{ s.practice_hits }} от {{ s.with_cited }} дела с цитати{% if s.failed %} · {{ s.failed }} не се изпълниха{% endif %}.</p>{% endif %}
       {% for c in r.cases %}
       <div class="adm-example">
@@ -32,10 +32,11 @@
         {% if c.error %}<p class="notice bad">{{ c.error }}</p>
         {% elif c.score %}
           {% if c.score.question_match is none %}<p class="small muted"><b>Съвпадение на въпроса:</b> въпросът в определението не е разчетен (не се брои).</p>
-          {% else %}<p class="small"><b>Съвпадение на въпроса:</b> {{ (c.score.question_match * 100)|round|int }}%</p>
+          {% else %}<p class="small"><b>Съвпадение на въпроса:</b>{% if c.score.judged %} по смисъл – <b>{{ c.score.judged }}</b> ·{% endif %} по общи думи – {{ (c.score.question_match * 100)|round|int }}%{% if c.score.judge_error %} <span class="muted">(сравнението по смисъл не се изпълни – брои се по думи)</span>{% endif %}</p>
           {% if c.score.pairs %}<div class="small"><b>Въпроси в определението и нашият най-близък:</b>
             <ol class="bench-pairs">{% for p in c.score.pairs[:5] %}<li>{{ p.vks|truncate(170) }}
-              <span class="muted">→ {% if p.ours %}наш въпрос {{ p.ours }} ({{ (p.share * 100)|round|int }}% общи думи){% else %}няма близък наш въпрос{% endif %}</span></li>{% endfor %}</ol></div>
+              {% if p.judge %}<span class="muted">→ по смисъл: <b>{{ p.judge.verdict }}</b>{% if p.judge.ours %} – наш въпрос {{ p.judge.ours }}{% endif %}. {{ p.judge.why }}</span><br>{% endif %}
+              <span class="muted">→ {% if p.ours %}по думи: наш въпрос {{ p.ours }} ({{ (p.share * 100)|round|int }}% общи думи){% else %}няма близък наш въпрос по думи{% endif %}</span></li>{% endfor %}</ol></div>
           {% else %}<p class="small muted"><b>Въпроси в определението:</b> {% for q in c.score.vks_questions[:3] %}{{ loop.index }}. {{ q|truncate(160) }} {% endfor %}</p>{% endif %}{% endif %}
           <p class="small muted"><b>Наши въпроси:</b> {% for q in c.score.our_questions %}{{ loop.index }}. {{ q|truncate(140) }} {% endfor %}</p>
           <p class="small"><b>Практика:</b> ВКС цитира {{ c.score.cited|length }} свои акта{% if c.cutoff %} до {{ c.cutoff }} (датата, до която справката търси){% endif %}, ние намерихме {{ c.score.practice_found|length }} от тях{% if c.score.cited_later %} · още {{ c.score.cited_later }} са по-нови и справката не може да ги види{% endif %} · „противоречи“ в справката: {{ c.score.contra }}</p>

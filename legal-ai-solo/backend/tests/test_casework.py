@@ -749,3 +749,60 @@ def test_broad_search_words_and_wider_limits():
     assert "сила на пресъдено нещо" in P.ANALYSIS_INSTRUCTIONS and "чл. 59 ЗЗД" in P.ANALYSIS_INSTRUCTIONS
     from legal_ai.ai import MIN_CALLS
     assert MIN_CALLS >= 2 * pipeline.MAX_ACTS
+
+
+def test_benchmark_judges_questions_by_meaning():
+    from legal_ai.benchmark import judge_questions, summary
+
+    class FakeAI:
+        def __init__(self, items):
+            self.items, self.calls = items, []
+        def structured(self, **kw):
+            self.calls.append(kw)
+            return {"items": self.items}
+
+    def sc():
+        return {"our_questions": ["Погасява ли се вземането по чл. 59 ЗЗД с давност?", "Друго"],
+                "pairs": [{"vks": "Изтекла ли е давността за обезщетение за ползване?", "ours": 2, "share": 0.1},
+                          {"vks": "Съдът намира, че касаторът е прав?", "ours": None, "share": 0.0}],
+                "question_match": 0.1, "cited": [], "practice_found": []}
+    s = sc()
+    ai = FakeAI([{"vks": 1, "ours": 1, "verdict": "същият", "why": "Същият въпрос за давността."},
+                 {"vks": 2, "ours": 0, "verdict": "не е въпрос", "why": "Откъс от мотивите."},
+                 {"vks": 9, "ours": 1, "verdict": "същият", "why": "няма такъв"}])
+    judge_questions(ai, "m", "low", s)
+    assert len(ai.calls) == 1 and "1. Погасява ли се" in ai.calls[0]["user"]
+    assert s["pairs"][0]["judge"] == {"ours": 1, "verdict": "същият", "why": "Същият въпрос за давността."}
+    assert s["judged"] == "същият"
+    # by words this case is a miss (10%), by meaning a hit
+    out = summary([{"outcome": "допуска", "score": s}])
+    assert out["question_hits"] == 1 and out["by_meaning"]
+    # only non-questions read from the ruling: the case is not counted
+    s2 = sc()
+    judge_questions(FakeAI([{"vks": 1, "ours": 0, "verdict": "не е въпрос", "why": ""},
+                            {"vks": 2, "ours": 0, "verdict": "не е въпрос", "why": ""}]), "m", "low", s2)
+    assert s2["judged"] is None and summary([{"outcome": "допуска", "score": s2}])["admitted"] == 0
+    # nothing to compare: no call
+    idle = FakeAI([])
+    judge_questions(idle, "m", "low", {"pairs": [], "our_questions": ["x"]})
+    assert idle.calls == []
+
+
+def test_benchmark_page_shows_meaning_verdict(client):
+    c, d = client
+    out = d.parent.parent / "benchmark"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "20261005110000.json").write_text(json.dumps({
+        "created_at": "2026-10-05T11:00:00+00:00", "summary": {"done": 1, "admitted": 1, "question_hits": 1,
+                                                               "with_cited": 0, "practice_hits": 0, "failed": 0,
+                                                               "by_meaning": True},
+        "cases": [{"ruling": "Определение №2/01.10.2026", "ruling_url": "", "outcome": "допуска",
+                   "court_name": "Съд", "case": 1, "year": 2025,
+                   "score": {"question_match": 0.2, "judged": "същият", "vks_questions": ["В"],
+                             "pairs": [{"vks": "Въпрос за давността", "ours": 2, "share": 0.2,
+                                        "judge": {"ours": 1, "verdict": "същият", "why": "Същият проблем."}}],
+                             "our_questions": ["а", "б"], "cited": [], "practice_found": [], "missed": [],
+                             "contra": 0}}]}, ensure_ascii=False), encoding="utf-8")
+    html = c.get("/benchmark").text
+    assert "(по смисъл) в 1 от 1" in html and "по смисъл – <b>същият</b>" in html
+    assert "наш въпрос 1. Същият проблем." in html and "по думи: наш въпрос 2 (20% общи думи)" in html

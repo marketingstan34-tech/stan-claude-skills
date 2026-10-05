@@ -236,7 +236,7 @@ class JobRunner:
     def _run_benchmark(self, job: Job) -> None:
         """Accuracy check on real VKS admission rulings (legal_ai/benchmark.py): one AI report per case."""
         from legal_ai.ai import OpenAIProvider, Usage, load_ai_config
-        from legal_ai.benchmark import in_database, pick_cases, score, summary
+        from legal_ai.benchmark import in_database, judge_questions, pick_cases, score, summary
         from legal_ai.cassation.pipeline import fetch_appellate, run_analysis
         from legal_ai.db import connect
         from legal_ai.http import PoliteClient
@@ -280,6 +280,20 @@ class JobRunner:
                                             m["why"] = "not_in_db"
                                         elif art not in ("290", "ТР"):
                                             m["detail"] = "в базата е, но не е решение по чл. 290 – справката търси само такива"
+                            if sc["pairs"] and sc["our_questions"]:
+                                # one more call, outside the report's cap: same question by meaning?
+                                job.message = f"Дело {i} от {len(cases)}: сравнение на въпросите по смисъл…"
+                                cfg = load_ai_config()
+                                judge_ai = OpenAIProvider(cfg)
+                                try:
+                                    judge_questions(judge_ai, cfg.stance_model or cfg.analysis_model,
+                                                    cfg.stance_effort, sc)
+                                except Exception as exc:  # noqa: BLE001 - words still count
+                                    sc["judge_error"] = str(exc)[:200]
+                                finally:
+                                    for model, (inp, out) in judge_ai.usage.by_model.items():
+                                        usage.add(model, inp, out)
+                                    judge_ai.close()
                         except Exception as exc:  # noqa: BLE001 - one case must not stop the others
                             c["error"] = str(exc)[:300]
                         finally:
