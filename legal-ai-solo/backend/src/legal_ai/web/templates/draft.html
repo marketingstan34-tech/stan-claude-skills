@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% from "parts_case.html" import case_profile with context %}
+{% block title %}Чернова на изложение · Legal AI Solo{% endblock %}
+{% block page_title %}Чернова на изложение по чл. 284, ал. 3, т. 1 ГПК{% endblock %}
+{% block page_hint %}Чернова на изложението по чл. 284, ал. 3, т. 1 ГПК. Свалете я като Word, попълнете [квадратните скоби], проверете всичко и махнете жълтите бележки.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left no-print">
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
+    <div class="card details-card">
+      <h2 class="details-title">Как да я ползвате</h2>
+      <div class="details-list">
+        {% for label, value, ic in [('1. Свалете', 'Word файл за редакция', 'down'), ('2. Попълнете', 'всичко в [квадратни скоби]', 'doc'),
+            ('3. Проверете', 'всеки въпрос, извод и решение', 'info'), ('4. Махнете', 'жълтите бележки преди подаване', 'hash')] %}
+        {% if loop.first %}<a class="detail-item-row link-row" href="/runs/{{ run_id }}/draft.docx"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('down', 11) }}</span></div></a>
+        {% else %}<div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div></div>{% endif %}
+        {% endfor %}
+        <a class="kit-submit" href="/runs/{{ run_id }}/draft.docx" style="display:block;text-align:center">Свали като Word</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/draft/edit" style="display:block;text-align:center">Редактирай</a>
+        {% if edited %}<div class="notice">Това е вашата редактирана версия ({{ edited[:10] }}).
+          <form method="post" action="/runs/{{ run_id }}/draft/reset" onsubmit="return confirm('Да се върне ли автоматичната версия? Редакцията ще се изтрие.')" style="display:inline">
+          <button type="submit" class="link-button">Върни автоматичната</button></form></div>{% endif %}
+        <a class="kit-submit light" href="/runs/{{ run_id }}/appeal" style="display:block;text-align:center">Чернова на касационна жалба</a>
+        <a class="kit-submit light" href="/runs/{{ run_id }}/attachments.zip" style="display:block;text-align:center"
+           title="Цитираните решения на ВКС като Word файлове – за „Прилагам“">Свали приложенията (ZIP)</a>
+        {% if not case.client or not case.lawyer %}<div class="notice">Данните за страните и адвоката не са попълнени –
+          <a class="link" href="/runs/{{ run_id }}#case-data">попълнете ги в справката</a> и черновата ще ги включи.</div>{% endif %}
+        <p class="muted small">В черновата са отметнатите въпроси ({{ chosen|length }}). <a class="link" href="/runs/{{ run_id }}#case-data">Промени</a></p>
+        <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
+      </div>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    <div class="notice no-print">Чернова, сглобена от справката без нов AI: въпросите, изводите и решенията са от справката, а
+      цитатите са само проверените дословно. Не е правно становище – адвокатът преглежда и редактира.</div>
+    <div class="card page-card legal-text draft-text">
+      {% for b in blocks %}
+        {% if b.kind == 'heading' %}<p><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'center' %}<p style="text-align:center"><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'quote' %}<blockquote>{{ b.text }}</blockquote>
+        {% elif b.kind == 'note' %}<p><mark>{{ b.text }}</mark></p>
+        {% else %}<p>{{ b.text }}</p>{% endif %}
+      {% endfor %}
+    </div>
+  </div>
+</div>
+{% endblock %}

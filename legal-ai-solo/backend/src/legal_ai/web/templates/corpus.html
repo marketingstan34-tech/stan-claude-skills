@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% from "parts.html" import calendar_card, events_card with context %}
+{% block title %}База · Legal AI Solo{% endblock %}
+{% block page_title %}База с практика{% endblock %}
+{% block page_hint %}Какво е свалено от сайта на ВКС. Календарът показва решенията по дни (по-тъмно значи повече). Щракнете ден, за да видите решенията. Базата се попълва сама и се обновява всяка седмица.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    <div class="card profile-card">
+      <div class="profile-header-row">
+        <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('db', 22) }}</div>
+        <div class="profile-name-info"><h2 class="profile-name">Собствена база</h2>
+          <p class="profile-role">Свалена от vks.bg бавно, само за лично ползване</p></div>
+        <a class="card-options-btn" href="/" title="Търсене">{{ icon('search') }}</a>
+      </div>
+      <div class="time-slots-section"><div class="slots-row">
+        <span class="time-slot-pill">{{ corpus.first.strftime('%Y') if corpus.n else '—' }} – {{ corpus.last.strftime('%Y') if corpus.n else '—' }}</span>
+        <a class="meetings-badge-pill" href="/?kind=all" title="Всички актове"><span>Актове</span><span class="meetings-count-circle wide-count">{{ corpus.n }}</span></a>
+      </div></div>
+    </div>
+    <div class="card details-card">
+      <h2 class="details-title">Какво има</h2>
+      <div class="details-list">
+        {% for kind, label, value in [('gr', 'Граждански дела (ВКС)', corpus.ngr), ('targ', 'Търговски дела (ВКС)', corpus.ntarg),
+            ('290', 'Решения по чл. 290 ГПК', corpus.n290), ('tr', 'Тълкувателни решения', corpus.ntr)] %}
+        <a class="detail-item-row link-row" href="/?kind={{ kind }}" title="Покажи списъка"><div class="detail-left"><div class="radio-dot-icon"><div class="inner-dot"></div></div>
+          <div class="detail-text"><span class="detail-label">{{ label }}</span><span class="detail-value">{{ value }}</span></div></div>
+          <div class="detail-right"><span class="detail-action-circle">{{ icon('right', 11) }}</span></div></a>
+        {% endfor %}
+        <div class="detail-item-row info-row"><div class="detail-left">
+          <div class="detail-text"><span class="detail-label">Пълнота на списъците</span><span class="detail-value">Над 249 реда се делят</span></div></div>
+          <div class="detail-right">{% if corpus.truncated_lists %}<span class="online-badge offline">{{ corpus.truncated_lists }} отрязани</span>{% else %}<span class="online-badge online">пълни</span>{% endif %}</div></div>
+      </div>
+    </div>
+  </div>
+  <div class="dash-col-right">
+    <div class="calendar-inbox-row corpus-row">
+      {{ calendar_card(month, '/corpus') }}
+      {{ events_card(events) }}
+    </div>
+  </div>
+</div>
+{% endblock %}

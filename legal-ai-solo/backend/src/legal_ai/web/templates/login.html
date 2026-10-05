@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="bg">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Вход · Legal AI Solo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/kit/login-index.css">
+<link rel="stylesheet" href="/static/kit/login.css">
+<link rel="stylesheet" href="/static/finset-login.css">
+</head>
+<body>
+<div id="root">
+<div class="login-screen-layout">
+  {% include "login_art.html" %}
+  <section class="login-right-pane">
+    <div class="form-content-wrapper">
+      <header class="brand-header">
+        <div class="brand-badge"><div class="brand-logo-mark">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/><path d="M7 21h10"/><path d="M12 3v18"/><path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/></svg>
+        </div></div>
+        <div class="auth-mode-switch"><span class="switch-tab active">Вход</span></div>
+      </header>
+
+      <div class="form-intro">
+        <h1 class="form-title">Legal AI Solo</h1>
+        <p class="form-subtitle">{% if configured %}Въведете общата парола, за да влезете.{% else %}Паролата не е зададена на сървъра. Задайте APP_PASSWORD в настройките (Railway → Variables).{% endif %}</p>
+      </div>
+
+      {% if configured %}
+      <form class="auth-form" method="post" action="/login">
+        <input type="hidden" name="next" value="{{ next }}">
+        <div class="input-group">
+          <div class="label-row"><label for="password" class="input-label">Парола</label></div>
+          <div class="input-container">
+            <span class="input-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
+            <input id="password" name="password" type="password" autocomplete="current-password" required autofocus>
+            <button type="button" class="password-toggle-btn" title="Покажи паролата" aria-label="Покажи паролата"
+                    onclick="var i=document.getElementById('password'); i.type = i.type === 'password' ? 'text' : 'password';">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg>
+            </button>
+          </div>
+          {% if error %}<p class="input-error-text" style="color:#e11d48;font-size:13px;margin-top:6px">{{ error }}</p>{% endif %}
+        </div>
+        <div class="remember-row">
+          <label class="checkbox-container"><input type="checkbox" name="remember" value="1" checked>
+            <span class="checkbox-custom"></span><span class="checkbox-label">Запомни ме за 30 дни</span></label>
+        </div>
+        <button type="submit" class="submit-btn"><span>Влез</span></button>
+      </form>
+      {% endif %}
+
+      <footer class="form-sub-footer"><span>© 2026</span><span class="dot-sep">•</span><span>Локален инструмент</span><span class="dot-sep">•</span><span>Не е правно становище</span></footer>
+    </div>
+  </section>
+</div>
+</div>
+</body>
+</html>

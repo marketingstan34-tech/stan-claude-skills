@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Съдии · Legal AI Solo{% endblock %}
+{% block page_title %}Проучване по съдия{% endblock %}
+{% block page_hint %}Съдиите докладчици във ВКС според актовете в собствената база: колко акта са докладвали, в кое отделение и как са се произнасяли по допускането (чл. 288 ГПК). Щракнете съдия за подробности и търсене в неговите актове. Данните растат, докато базата се попълва.{% endblock %}
+{% block content %}
+<div class="card page-card">
+  <form method="get" action="/judges" class="judge-search">
+    <input class="kit-input" name="q" value="{{ q }}" placeholder="име на съдия, напр. Петрова" aria-label="Търсене по име">
+    <button class="kit-submit" type="submit">Търси</button>
+  </form>
+  {% if error %}<div class="notice bad">{{ error }}</div>
+  {% elif not rows %}<p class="muted">{{ 'Няма съдия с това име.' if q else 'Съставите още се попълват в базата – опитайте след малко.' }}</p>
+  {% else %}
+  <table class="doc-table judges-table">
+    <tr class="muted small"><td>Съдия докладчик</td><td>Отделение</td><td>Акта</td><td>По чл. 288</td><td>Допуска</td></tr>
+    {% for r in rows %}
+    <tr><td><a class="link" href="/judges/{{ r.name|urlencode }}"><b>{{ r.name }}</b></a></td>
+      <td class="muted small">{{ r.chamber or '—' }}</td><td>{{ r.n }}</td><td>{{ r.n288 }}</td>
+      <td>{% if r.share is not none %}<span class="adm-pill" style="--p: {{ r.share }}%">{{ r.share }}%</span>{% else %}<span class="muted">—</span>{% endif %}</td></tr>
+    {% endfor %}
+  </table>
+  <p class="muted small">„Допуска“ = дял на допуснатите (вкл. частично) от определенията по чл. 288, в които е докладчик. При малко определения процентът е несигурен.</p>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,19 @@
+/* FinSet look for the login page (same purple palette as the app). */
+body { font-family: 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; }
+.login-screen-layout { background: #dbe0f5; }
+.robot-left-pane { background: linear-gradient(140deg, #f3f2fe 0%, #e6e3ff 55%, #dbe0f5 100%) !important; }
+.left-pane-backdrop { background: radial-gradient(circle, rgba(112, 100, 247, .22) 0%, rgba(155, 140, 255, .12) 50%, transparent 70%) !important; }
+.login-right-pane { border-left: 0 !important; border-radius: 36px 0 0 36px; box-shadow: -10px 0 40px rgba(76, 70, 160, .08); }
+.brand-logo-mark { width: 40px; height: 40px; border-radius: 12px; background: #1a1d2e; color: #fff; display: grid; place-items: center; }
+.form-title { letter-spacing: -0.6px; }
+.switch-tab.active { color: #7064f7 !important; }
+.input-container { border-radius: 12px !important; transition: border-color .15s ease, box-shadow .15s ease; }
+.input-container:focus-within { border-color: #7064f7 !important; box-shadow: 0 0 0 4px rgba(112, 100, 247, .12) !important; }
+.checkbox-container input:checked ~ .checkbox-custom { background-color: #7064f7 !important; border-color: #7064f7 !important; }
+.submit-btn { background: #7064f7 !important; border-radius: 999px !important; box-shadow: 0 10px 24px rgba(112, 100, 247, .35);
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease; }
+.submit-btn:hover { background: #5f52f0 !important; transform: translateY(-1px); box-shadow: 0 14px 28px rgba(112, 100, 247, .42); }
+.form-content-wrapper { animation: fs-rise .55s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes fs-rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@media (max-width: 900px) { .login-right-pane { border-radius: 28px 28px 0 0; } }
+@media (prefers-reduced-motion: reduce) { .form-content-wrapper { animation: none; } }
