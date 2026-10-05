@@ -261,3 +261,15 @@ def test_research_by_judge(conn, raw):
     assert d["totals"]["n"] == 0 and d["totals"]["panel"] >= 1
     d = judge_detail(conn, "Мария Петрова")
     assert d["totals"]["n"] == len(d["acts"]) >= 1 and d["years"]
+
+
+def test_benchmark_checks_cited_acts_in_database(conn, raw):
+    from legal_ai.benchmark import in_database
+    ingest_raw_dir(conn, raw, raw.parent, "manual", "synthetic")
+    with conn.cursor() as cur:
+        cur.execute("SELECT act_number, act_date, coalesce(proceeding_article, '') AS art FROM decisions "
+                    "WHERE act_number IS NOT NULL AND act_date IS NOT NULL LIMIT 1")
+        row = cur.fetchone()
+    ref = f"{int(row['act_number'])}/{row['act_date'].strftime('%d.%m.%Y')}"
+    assert in_database(conn, [ref, "99999/01.01.1999"]) == {ref: row["art"], "99999/01.01.1999": None}
+    assert in_database(conn, []) == {}

@@ -110,18 +110,82 @@ _COMMON = _stems("следва въпроса въпросът правен пр
                  "касационно обжалване допускане когато какви какво дали")
 
 
-def question_match(ours: list[str], theirs: list[str]) -> float | None:
-    """Best share of a VKS question's words found in one of our questions (0..1); None when the
-    ruling's questions could not be read (then the case is left out of the count)."""
-    best, any_read = 0.0, False
+def question_pairs(ours: list[str], theirs: list[str]) -> list[dict]:
+    """For every question read from the ruling: our closest question (index from 1) and the share of
+    its words found there (0..1)."""
+    out = []
     for t in theirs:
         want = _stems(t) - _COMMON
         if len(want) < 3:
             continue
-        any_read = True
-        for q in ours:
-            best = max(best, len(want & _stems(q)) / len(want))
-    return round(best, 2) if any_read else None
+        best, idx = 0.0, None
+        for k, q in enumerate(ours, 1):
+            share = len(want & _stems(q)) / len(want)
+            if share > best:
+                best, idx = share, k
+        out.append({"vks": t, "ours": idx, "share": round(best, 2)})
+    return out
+
+
+def question_match(ours: list[str], theirs: list[str]) -> float | None:
+    """Best share of a VKS question's words found in one of our questions (0..1); None when the
+    ruling's questions could not be read (then the case is left out of the count)."""
+    pairs = question_pairs(ours, theirs)
+    return max(p["share"] for p in pairs) if pairs else None
+
+
+# why a cited act is not in our report, from the run alone (the database check is added by the job)
+WHY = {"irrelevant": "намерено и оценено, но AI го прецени като неотносимо",
+       "skipped": "намерено, но отпадна",
+       "not_picked": "намерено от търсенето, но не влезе сред оценените (лимит на брой)",
+       "not_found": "търсенето не го намери",
+       "not_in_db": "няма го в базата (не е търсено в сайта)"}
+
+
+def missed(run: dict, refs: set[str]) -> list[dict]:
+    """For each cited act our report did not mark as relevant: where it was lost."""
+    assessed: dict[str, bool] = {}
+    for a in run.get("assessments", []):
+        for r in _label_refs(a.get("label", "")):
+            assessed[r] = assessed.get(r, False) or bool(a.get("relevant"))
+    skipped = {}
+    for line in run.get("skipped", []):
+        for r in _label_refs(line.split(":", 1)[0]):
+            skipped[r] = line.split(":", 1)[1].strip() if ":" in line else ""
+    found = set()
+    for label in run.get("candidates", []):
+        found |= _label_refs(label)
+    out = []
+    for r in sorted(refs):
+        if assessed.get(r):
+            continue
+        if r in assessed:
+            out.append({"ref": r, "why": "irrelevant"})
+        elif r in skipped:
+            out.append({"ref": r, "why": "skipped", "detail": skipped[r]})
+        elif r in found:
+            out.append({"ref": r, "why": "not_picked"})
+        else:
+            out.append({"ref": r, "why": "not_found"})
+    return out
+
+
+def in_database(conn, refs: list[str]) -> dict[str, str | None]:
+    """ref -> proceeding article of the VKS act in our database ("290", "288", "" for other), or None
+    when the act is not there."""
+    out: dict[str, str | None] = {}
+    if not refs:
+        return out
+    with conn.cursor() as cur:
+        for r in refs:
+            no, d = r.split("/")
+            dd, mm, yy = d.split(".")
+            cur.execute("""SELECT coalesce(proceeding_article, '') AS art FROM decisions
+                           WHERE source IN ('vks', 'vks-tr') AND act_number = %s AND act_date = %s LIMIT 1""",
+                        (no, date(int(yy), int(mm), int(dd))))
+            row = cur.fetchone()
+            out[r] = row["art"] if row else None
+    return out
 
 
 def score(run: dict, ruling_text: str, cutoff: date | None = None) -> dict:
@@ -133,7 +197,9 @@ def score(run: dict, ruling_text: str, cutoff: date | None = None) -> dict:
         if a.get("relevant"):
             found |= _label_refs(a.get("label", ""))
     return {"vks_questions": theirs, "our_questions": ours, "question_match": question_match(ours, theirs),
+            "pairs": question_pairs(ours, theirs),
             "cited": sorted(cited), "practice_found": sorted(cited & found),
+            "missed": missed(run, cited - found),
             "cited_later": len(cited_refs(ruling_text) - cited),
             "contra": sum(1 for a in run.get("assessments", []) if a.get("relevant") and a.get("stance") == "противоречи")}
 

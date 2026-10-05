@@ -701,3 +701,37 @@ def test_benchmark_gives_each_case_its_own_call_cap(tmp_path, monkeypatch):
     saved = json.loads(next((tmp_path / "benchmark").glob("*.json")).read_text(encoding="utf-8"))
     assert saved["usage"]["by_model"]["m"] == [30, 3]
     assert all(c["cutoff"] == "2025-03-11" for c in saved["cases"])
+
+
+def test_benchmark_explains_each_missed_citation_and_pairs_questions():
+    from legal_ai.benchmark import missed, question_pairs
+    run = {"assessments": [{"label": "Решение №10/01.02.2015 по дело №1/2014", "relevant": False},
+                           {"label": "Решение №11/01.02.2015 по дело №2/2014", "relevant": True}],
+           "skipped": ["Решение №12/01.02.2015 по дело №3/2014: не е решение по чл. 290 ГПК"],
+           "candidates": ["Решение №13/01.02.2015 по дело №4/2014", "Решение №10/01.02.2015 по дело №1/2014"]}
+    refs = {"10/01.02.2015", "12/01.02.2015", "13/01.02.2015", "14/01.02.2015"}
+    why = {m["ref"]: m["why"] for m in missed(run, refs)}
+    assert why == {"10/01.02.2015": "irrelevant", "12/01.02.2015": "skipped",
+                   "13/01.02.2015": "not_picked", "14/01.02.2015": "not_found"}
+    pairs = question_pairs(["Как се погасяват еднородни задължения при частично плащане?", "Друго нещо съвсем"],
+                           ["Как се погасяват няколко еднородни задължения при частично плащане?"])
+    assert pairs[0]["ours"] == 1 and pairs[0]["share"] >= 0.5
+
+
+def test_benchmark_page_shows_pairs_and_missed(client, monkeypatch):
+    c, d = client
+    out = d.parent.parent / "benchmark"
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "20261005090000.json").write_text(json.dumps({
+        "created_at": "2026-10-05T09:00:00+00:00", "summary": {"done": 1, "admitted": 1, "question_hits": 0,
+                                                               "with_cited": 1, "practice_hits": 0, "failed": 0},
+        "cases": [{"ruling": "Определение №1/01.10.2026", "ruling_url": "", "outcome": "допуска",
+                   "court_name": "Съд", "case": 1, "year": 2025, "cutoff": "2025-03-11",
+                   "score": {"question_match": 0.4, "vks_questions": ["Въпрос на ВКС за давността при владение"],
+                             "pairs": [{"vks": "Въпрос на ВКС за давността при владение", "ours": 2, "share": 0.4}],
+                             "our_questions": ["а", "б"], "cited": ["5/01.01.2020"], "practice_found": [],
+                             "missed": [{"ref": "5/01.01.2020", "why": "not_in_db"}], "contra": 0}}]},
+        ensure_ascii=False), encoding="utf-8")
+    html = c.get("/benchmark").text
+    assert "наш въпрос 2 (40% общи думи)" in html
+    assert "№ 5/01.01.2020 – няма го в базата" in html

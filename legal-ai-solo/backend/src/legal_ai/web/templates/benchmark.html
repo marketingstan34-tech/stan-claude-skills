@@ -33,9 +33,14 @@
         {% elif c.score %}
           {% if c.score.question_match is none %}<p class="small muted"><b>Съвпадение на въпроса:</b> въпросът в определението не е разчетен (не се брои).</p>
           {% else %}<p class="small"><b>Съвпадение на въпроса:</b> {{ (c.score.question_match * 100)|round|int }}%</p>
-          <p class="small muted"><b>Въпроси в определението:</b> {% for q in c.score.vks_questions[:3] %}{{ loop.index }}. {{ q|truncate(160) }} {% endfor %}</p>{% endif %}
+          {% if c.score.pairs %}<div class="small"><b>Въпроси в определението и нашият най-близък:</b>
+            <ol class="bench-pairs">{% for p in c.score.pairs[:5] %}<li>{{ p.vks|truncate(170) }}
+              <span class="muted">→ {% if p.ours %}наш въпрос {{ p.ours }} ({{ (p.share * 100)|round|int }}% общи думи){% else %}няма близък наш въпрос{% endif %}</span></li>{% endfor %}</ol></div>
+          {% else %}<p class="small muted"><b>Въпроси в определението:</b> {% for q in c.score.vks_questions[:3] %}{{ loop.index }}. {{ q|truncate(160) }} {% endfor %}</p>{% endif %}{% endif %}
           <p class="small muted"><b>Наши въпроси:</b> {% for q in c.score.our_questions %}{{ loop.index }}. {{ q|truncate(140) }} {% endfor %}</p>
           <p class="small"><b>Практика:</b> ВКС цитира {{ c.score.cited|length }} свои акта{% if c.cutoff %} до {{ c.cutoff }} (датата, до която справката търси){% endif %}, ние намерихме {{ c.score.practice_found|length }} от тях{% if c.score.cited_later %} · още {{ c.score.cited_later }} са по-нови и справката не може да ги види{% endif %} · „противоречи“ в справката: {{ c.score.contra }}</p>
+          {% if c.score.missed %}<details class="small"><summary>Пропуснати ({{ c.score.missed|length }}) – защо</summary>
+            <ul class="bench-missed">{% for m in c.score.missed %}<li>№ {{ m.ref }} – {{ why[m.why] }}{% if m.detail %} ({{ m.detail }}){% endif %}</li>{% endfor %}</ul></details>{% endif %}
         {% else %}<p class="muted small">тече…</p>{% endif %}
       </div>
       {% endfor %}

@@ -686,7 +686,8 @@ def create_app() -> FastAPI:
                 available = admission.rulings_count(conn)
         except psycopg.Error:
             pass
-        return render(request, "benchmark.html", {"runs": runs, "available": available,
+        from legal_ai.benchmark import WHY
+        return render(request, "benchmark.html", {"runs": runs, "available": available, "why": WHY,
                                                   "price_one": TYPICAL_REPORT_USD, "busy": runner.busy()})
 
     @app.post("/benchmark")

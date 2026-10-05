@@ -435,3 +435,8 @@ body { overflow: visible !important; }
   .dash-grid-container > .dash-col-right { order: 1; }
   .dash-grid-container > .dash-col-left { order: 2; }
 }
+
+.bench-pairs{margin:4px 0 6px 18px;padding:0}
+.bench-pairs li{margin:2px 0}
+.bench-missed{margin:4px 0 0 18px;padding:0}
+details.small summary{cursor:pointer;color:var(--primary,#5b5bd6)}

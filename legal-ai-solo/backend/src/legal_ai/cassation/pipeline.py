@@ -102,6 +102,7 @@ class RunResult:
     notes: str = ""                            # the lawyer's notes given with the case
     context_names: list = field(default_factory=list)   # other case documents given as context
     assess_inputs: list = field(default_factory=list)  # private: exact assessment prompts
+    candidates: list = field(default_factory=list)  # labels of every act the searches found (picked or not)
 
 
 _SENTENCE = re.compile(r"(?<=[.!?])\s+(?=[„\"(]?[А-ЯA-Z0-9])")
@@ -462,6 +463,7 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
         appellate=appellate, analysis=analysis, holding_quotes=holding_quotes, notes=notes.strip(),
         context_names=[name for name, _ in (context_docs or [])],
         assessments=assessments, searches=searches, skipped=skipped,
+        candidates=[e["label"] for e in found.values()],
         usage={"calls": ai.usage.calls, "input_tokens": ai.usage.input_tokens,
                "output_tokens": ai.usage.output_tokens, "by_model": ai.usage.by_model},
         models={"analysis": cfg.analysis_model, "assess": cfg.assess_model or cfg.light_model,

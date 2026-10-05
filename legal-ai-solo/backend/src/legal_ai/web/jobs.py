@@ -236,7 +236,7 @@ class JobRunner:
     def _run_benchmark(self, job: Job) -> None:
         """Accuracy check on real VKS admission rulings (legal_ai/benchmark.py): one AI report per case."""
         from legal_ai.ai import OpenAIProvider, Usage, load_ai_config
-        from legal_ai.benchmark import pick_cases, score, summary
+        from legal_ai.benchmark import in_database, pick_cases, score, summary
         from legal_ai.cassation.pipeline import fetch_appellate, run_analysis
         from legal_ai.db import connect
         from legal_ai.http import PoliteClient
@@ -271,7 +271,15 @@ class JobRunner:
                             run = asdict(run_analysis(ai, vks, appellate, cutoff, conn=conn))
                             c["appellate"] = appellate.label
                             c["cutoff"] = cutoff.isoformat()
-                            c["score"] = score(run, ruling_text, cutoff)
+                            c["score"] = sc = score(run, ruling_text, cutoff)
+                            lost = [m["ref"] for m in sc["missed"] if m["why"] == "not_found"]
+                            for ref, art in in_database(conn, lost).items():
+                                for m in sc["missed"]:
+                                    if m["ref"] == ref:
+                                        if art is None:
+                                            m["why"] = "not_in_db"
+                                        elif art not in ("290", "ТР"):
+                                            m["detail"] = "в базата е, но не е решение по чл. 290 – справката търси само такива"
                         except Exception as exc:  # noqa: BLE001 - one case must not stop the others
                             c["error"] = str(exc)[:300]
                         finally:
