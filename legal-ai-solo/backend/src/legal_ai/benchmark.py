@@ -14,6 +14,9 @@ from __future__ import annotations
 import re
 from datetime import date
 
+from legal_ai.citations.refs import VKS_REF as _VKS_REF
+from legal_ai.citations.refs import cited_refs
+
 _APPEALED = re.compile(
     r"решение\s*№\s*(?P<no>\d{1,6})\s*(?:/|от)\s*(?P<date>\d{1,2}\.\d{1,2}\.\d{4})\s*г?\.?,?\s*"
     r"(?:постановено\s+)?по\s+(?P<kind>[а-я.\s]{1,20}?д(?:ело)?\.?)\s*№\s*(?P<case>\d{1,6})\s*(?:/|по описа за)\s*(?P<year>\d{4})"
@@ -28,10 +31,6 @@ _ABBR = re.compile(r"\b(чл|ал|т|г|бр|д|гр|в\.гр|т\.д|търг|п
 _LIST_ITEM = re.compile(r"(?:^|\s)(?:\d{1,2}[.)]|[а-е]\))\s+")
 _ABOUT = re.compile(r"по\s+(?:правни[яте]*\s+|материалноправни[яте]*\s+|процесуалноправни[яте]*\s+)?въпрос[а-я]*"
                     r"[^.?]{0,40}?\b(?:за|относно|дали)\s+([^.?]{25,400})", re.IGNORECASE)
-_VKS_REF = re.compile(r"(?:решение|определение)\s*№\s*(\d{1,6})\s*(?:/|от)\s*(\d{1,2}\.\d{1,2}\.\d{4})", re.IGNORECASE)
-# a VKS act is cited with its chamber or the court's name right after the case number
-_VKS_TAIL = re.compile(r"ВКС|Върховния\s+касационен|[IV]+\s*-?\s*р?[аио]?\s*[гт]\.\s*о\.|\b[ГТ]К\b|ОСГ[ТК]?К")
-_OTHER_COURT = re.compile(r"(?:Окръжен|Апелативен|Районен|Софийски\s+градски|административен)\s+съд|\b[ОАР]С\b|СГС")
 
 
 def appealed_decision(text: str) -> dict | None:
@@ -70,27 +69,6 @@ def ruling_questions(text: str) -> list[str]:
         seen.append(st)
         out.append(q)
     return out[:8]
-
-
-def cited_refs(text: str, cutoff: date | None = None) -> set[str]:
-    """VKS acts cited in the text ("N/dd.mm.yyyy"); with `cutoff`, only those the report could see.
-    Acts of other courts (the appealed decision and the first instance) are left out."""
-    out = set()
-    for m in _VKS_REF.finditer(text or ""):
-        tail = text[m.end(): m.end() + 160]
-        cut = _OTHER_COURT.search(tail)
-        vks = _VKS_TAIL.search(tail)
-        if not vks or (cut and cut.start() < vks.start()):
-            continue
-        dd, mm, yy = m.group(2).split(".")
-        try:
-            d = date(int(yy), int(mm), int(dd))
-        except ValueError:
-            continue
-        if cutoff and d > cutoff:
-            continue
-        out.add(f"{int(m.group(1))}/{int(dd):02d}.{int(mm):02d}.{yy}")
-    return out
 
 
 def _label_refs(label: str) -> set[str]:
@@ -212,7 +190,7 @@ def pick_cases(conn, n: int = 10) -> list[dict]:
                               v.canonical_text
                        FROM decisions d JOIN decision_versions v ON v.id = d.current_version_id
                        WHERE d.admission_result IN ('допуска', 'не допуска')
-                       ORDER BY d.act_date DESC NULLS LAST LIMIT 600""")
+                       ORDER BY d.act_date DESC NULLS LAST LIMIT 4000""")
         for r in cur:
             bucket = picked[r["admission_result"]]
             if len(bucket) >= (n + 1) // 2:

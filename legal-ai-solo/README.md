@@ -120,7 +120,7 @@ legal-ai analyze --file ~/Downloads/reshenie.pdf --label "АС Пловдив, �
 
 ```bash
 legal-ai fetch-tr --from-year 2008 --to-year 2026          # тълкувателни решения ОСГТК/ОСГК/ОСТК
-legal-ai build-corpus --from 2012-01 --to 2026-09 --newest-first   # решения на ВКС по тримесечия
+legal-ai build-corpus --from 2008-03 --to 2026-09 --newest-first   # решения на ВКС по тримесечия (ГПК от 01.03.2008)
 ```
 
 `build-corpus` е бавен нарочно (1 заявка на 2 сек.) и продължава оттам, където е спрял. Докато

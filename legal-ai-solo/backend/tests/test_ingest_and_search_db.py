@@ -273,3 +273,23 @@ def test_benchmark_checks_cited_acts_in_database(conn, raw):
     ref = f"{int(row['act_number'])}/{row['act_date'].strftime('%d.%m.%Y')}"
     assert in_database(conn, [ref, "99999/01.01.1999"]) == {ref: row["art"], "99999/01.01.1999": None}
     assert in_database(conn, []) == {}
+
+
+def test_cited_acts_follow_citations_into_the_database(conn, raw):
+    from legal_ai.cassation.local import cited_acts
+    ingest_raw_dir(conn, raw, raw.parent, "manual", "synthetic")
+    with conn.cursor() as cur:
+        cur.execute("UPDATE decisions SET proceeding_article = '290' WHERE proceeding_article IS NULL")
+        cur.execute("SELECT source_record_id, act_number, act_date FROM decisions "
+                    "WHERE act_number IS NOT NULL AND act_date IS NOT NULL LIMIT 1")
+        d = cur.fetchone()
+    conn.commit()
+    text = (f"Съгласно решение № {int(d['act_number'])} от {d['act_date'].strftime('%d.%m.%Y')} г. по гр. д. "
+            f"№ 1/2010 г. на ВКС, IV г.о., и решение № 99999 от 01.01.2011 г. по гр. д. № 2/2010 г. на I г.о.")
+    later = d["act_date"].replace(year=d["act_date"].year + 1)
+    got = cited_acts(conn, [("В1", text, "Решение №5/01.01.2020")], later, set(), 10)
+    assert [g["key"] for g in got] == [d["source_record_id"]] and got[0]["via"] == "Решение №5/01.01.2020"
+    assert got[0]["label"].startswith(f"Решение №{d['act_number']}/")
+    assert cited_acts(conn, [("В1", text, "x")], later, {d["source_record_id"]}, 10) == []
+    before = d["act_date"].replace(year=d["act_date"].year - 1)
+    assert cited_acts(conn, [("В1", text, "x")], before, set(), 10) == []   # after the cutoff

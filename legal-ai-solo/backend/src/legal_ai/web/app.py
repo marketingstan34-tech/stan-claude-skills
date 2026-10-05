@@ -84,7 +84,7 @@ def create_app() -> FastAPI:
             from legal_ai.ai import MIN_CALLS
             max_calls = max(MIN_CALLS, int(os.environ.get("AI_MAX_CALLS_PER_RUN", str(MIN_CALLS))))
         except ValueError:
-            max_calls = 120
+            max_calls = 140
         return {"report": pricing.TYPICAL_REPORT_USD, "appeal": pricing.TYPICAL_APPEAL_USD, "max_calls": max_calls}
 
     def render(request: Request, name: str, ctx: dict, status_code: int = 200):

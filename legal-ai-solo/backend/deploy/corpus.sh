@@ -18,7 +18,8 @@ fi
 legal-ai build-corpus --from 2022-07 --to "$NOW" --newest-first || echo "build-corpus (recent) failed"
 # admission rulings (чл. 288 ГПК) for the "chance of admission" check, newest first
 legal-ai build-corpus --act-type определение --from 2023-01 --to "$NOW" --newest-first || echo "build-corpus (288) failed"
-legal-ai build-corpus --from "${CORPUS_FROM:-2012-01}" --to 2022-06 --newest-first || echo "build-corpus (older) failed"
+# from 01.03.2008, when the current ГПК (and its чл. 290) came into force
+legal-ai build-corpus --from "${CORPUS_FROM:-2008-03}" --to 2022-06 --newest-first || echo "build-corpus (older) failed"
 echo "$(date -u +%FT%TZ) corpus: initial build done"
 while true; do
   sleep 604800
@@ -32,6 +33,6 @@ while true; do
   legal-ai build-corpus --act-type определение --from 2023-01 --to "$NOW" --newest-first || echo "weekly 288 refresh failed"
   # older quarters left empty or incomplete (e.g. the site was briefly down) are retried; finished
   # quarters are skipped without a request
-  legal-ai build-corpus --from "${CORPUS_FROM:-2012-01}" --to 2022-06 --newest-first || echo "weekly older retry failed"
+  legal-ai build-corpus --from "${CORPUS_FROM:-2008-03}" --to 2022-06 --newest-first || echo "weekly older retry failed"
   echo "$(date -u +%FT%TZ) corpus: weekly refresh done"
 done

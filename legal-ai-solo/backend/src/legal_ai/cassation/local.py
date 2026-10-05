@@ -148,3 +148,44 @@ def local_broad(conn: psycopg.Connection, words: list[str], cutoff: date, per_se
             continue
         found[d.decision_id] = {"hits": [words], "proceeding_article": d.proceeding_article}
     return found
+
+
+def cited_acts(conn: psycopg.Connection, sources: list[tuple[str, str, str]], cutoff: date,
+               exclude: set[str], limit: int) -> list[dict]:
+    """VKS art. 290 and interpretative decisions cited in the given related acts and present in the
+    database, up to the cutoff. `sources`: (question id, text of a related act, its label).
+    The acts cited by more related acts come first; `exclude` holds keys already assessed."""
+    from legal_ai.citations.refs import cited_refs, ref_date
+
+    count: dict[tuple[str, str], int] = {}
+    via: dict[tuple[str, str], str] = {}
+    for qid, text, label in sources:
+        for ref in cited_refs(text, cutoff):
+            count[(qid, ref)] = count.get((qid, ref), 0) + 1
+            via.setdefault((qid, ref), label)
+    out: list[dict] = []
+    seen: set[str] = set()
+    with conn.cursor() as cur:
+        for (qid, ref), _ in sorted(count.items(), key=lambda kv: -kv[1]):
+            if len(out) >= limit:
+                break
+            no = ref.split("/")[0]
+            cur.execute("""SELECT id, source, source_record_id, act_number, act_date, case_number, case_year,
+                                  chamber FROM decisions
+                           WHERE source IN ('vks', 'vks-tr') AND act_number = %s AND act_date = %s
+                             AND proceeding_article IN ('290', 'ТР') AND current_version_id IS NOT NULL
+                           LIMIT 1""", (no, ref_date(ref)))
+            d = cur.fetchone()
+            if d is None:
+                continue
+            is_tr = d["source"] == "vks-tr"
+            key = f"vks-tr:{d['source_record_id']}" if is_tr else d["source_record_id"]
+            if key in exclude or key in seen:
+                continue
+            seen.add(key)
+            dd = d["act_date"].strftime("%d.%m.%Y")
+            label = (tr_label(d["act_number"], d["act_date"], d["case_year"], d["chamber"]) if is_tr else
+                     f"Решение №{d['act_number']}/{dd} по дело №{d['case_number']}/{d['case_year']}")
+            out.append({"question_id": qid, "key": key, "decision_id": d["id"], "label": label,
+                        "date": d["act_date"], "is_tr": is_tr, "via": via[(qid, ref)]})
+    return out

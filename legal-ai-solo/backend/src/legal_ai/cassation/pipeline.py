@@ -28,6 +28,8 @@ from legal_ai.sources.vks.urls import ListQuery, act_url, list_url
 MAX_LIST_QUERIES = 40
 PER_QUESTION = 6
 MAX_ACTS = 45
+# acts cited in the related acts, assessed in a second round (see run_analysis)
+CHASE_MAX = 15
 EXCERPT_CHARS = 5000
 AI_WORKERS = 4  # parallel AI assessments unless ai.config.workers says otherwise; source requests stay sequential
 # Local-first (ANALYSIS_LOCAL_FIRST=1): a question whose word sets already give this many
@@ -417,39 +419,46 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
     pool = ThreadPoolExecutor(max_workers=workers)
     futures: list[Future] = []
     assessments: list[Assessment] = []
+    def prepare(q: dict, sid: str) -> tuple[dict, str, str] | None:
+        """Read the act (database first, else the site) and build its assessment prompt."""
+        if sid not in acts:
+            local_id = found[sid].get("decision_id") or _local_id(conn, sid)
+            if local_id is not None:  # already in the database: never downloaded again
+                from legal_ai.cassation.local import load_act
+                acts[sid] = load_act(conn, local_id)
+            else:  # sequential, polite fetching
+                try:
+                    acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
+                except FetchError as exc:
+                    acts[sid] = None
+                    skipped.append(f"{sid}: {exc}")
+        act = acts[sid]
+        if act is None:
+            return None
+        if act.chamber and "наказател" in act.chamber.lower():
+            skipped.append(f"{found[sid]['label']}: наказателно дело")
+            return None
+        if act.proceeding_article not in ("290", "ТР"):
+            skipped.append(f"{found[sid]['label']}: не е решение по чл. 290 ГПК")
+            return None
+        qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
+                         for ws in item["word_sets"] for w in _words_ok(ws)})
+        hold = "\n".join(f"- {holdings[h]['summary']}" for h in q["holding_ids"] if h in holdings)
+        user = (f"{P.ASSESS_INSTRUCTIONS}\n\n(А) ВЪПРОС: {q['text']}\n"
+                f"Извод на въззивния съд:\n{hold or '-'}\n\n"
+                f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
+                f"{excerpt(act, qwords)}")
+        return (q, sid, user)
+
     try:
         for q in analysis["questions"]:
-            qwords = sorted({w for item in analysis["search"] if item["question_id"] == q["id"]
-                             for ws in item["word_sets"] for w in _words_ok(ws)})
             for sid in picked.get(q["id"], []):
                 if overlap:
                     _raise_quota_error(futures)  # no credit left: stop downloading as well
-                if sid not in acts:
-                    local_id = found[sid].get("decision_id") or _local_id(conn, sid)
-                    if local_id is not None:  # already in the database: never downloaded again
-                        from legal_ai.cassation.local import load_act
-                        acts[sid] = load_act(conn, local_id)
-                    else:  # sequential, polite fetching
-                        try:
-                            acts[sid] = parse_act(vks.get(act_url(sid)).body.decode("utf-8", errors="replace"))
-                        except FetchError as exc:
-                            acts[sid] = None
-                            skipped.append(f"{sid}: {exc}")
-                act = acts[sid]
-                if act is None:
+                job = prepare(q, sid)
+                if job is None:
                     continue
-                if act.chamber and "наказател" in act.chamber.lower():
-                    skipped.append(f"{found[sid]['label']}: наказателно дело")
-                    continue
-                if act.proceeding_article not in ("290", "ТР"):
-                    skipped.append(f"{found[sid]['label']}: не е решение по чл. 290 ГПК")
-                    continue
-                hold = "\n".join(f"- {holdings[h]['summary']}" for h in q["holding_ids"] if h in holdings)
-                user = (f"{P.ASSESS_INSTRUCTIONS}\n\n(А) ВЪПРОС: {q['text']}\n"
-                        f"Извод на въззивния съд:\n{hold or '-'}\n\n"
-                        f"(Б) {found[sid]['label']} ({act.chamber or 'отделение не е разпознато'})\n"
-                        f"{excerpt(act, qwords)}")
-                jobs.append((q, sid, user))
+                jobs.append(job)
                 if overlap:
                     futures.append(pool.submit(assess, jobs[-1]))
         if not overlap:
@@ -460,6 +469,28 @@ def run_analysis(ai: OpenAIProvider, vks: PoliteClient, appellate: SourceDoc,
                 skipped.append(res)
             else:
                 assessments.append(res)
+        # second round: the VKS acts cited in the related acts (lawyers follow these; they are usually
+        # the same line of practice). Only acts already in the database, no new site requests.
+        if conn is not None and CHASE_MAX:
+            from legal_ai.cassation.local import cited_acts
+            qmap = {q["id"]: q for q in analysis["questions"]}
+            sources = [(a.question_id, acts[a.source_id].canonical_text, a.label) for a in assessments
+                       if a.relevant and acts.get(a.source_id) is not None and a.question_id in qmap]
+            futures = []
+            for c in cited_acts(conn, sources, cutoff, set(acts), CHASE_MAX):
+                found[c["key"]] = {"label": c["label"], "date": c["date"], "is_tr": c["is_tr"],
+                                   "decision_id": c["decision_id"],
+                                   "by_question": {c["question_id"]: [[f"цитирано в {c['via']}"]]}}
+                job = prepare(qmap[c["question_id"]], c["key"])
+                if job is not None:
+                    jobs.append(job)
+                    futures.append(pool.submit(assess, job))
+            for f in futures:
+                res = f.result()
+                if isinstance(res, str):
+                    skipped.append(res)
+                else:
+                    assessments.append(res)
     except BaseException:
         # e.g. no credit left: queued assessments would only fail or be wasted
         pool.shutdown(wait=True, cancel_futures=True)
