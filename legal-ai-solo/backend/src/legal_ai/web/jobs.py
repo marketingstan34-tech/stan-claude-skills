@@ -415,10 +415,13 @@ class JobRunner:
 
     def _extras(self, p: dict) -> list[tuple[str, str]]:
         """The other case documents uploaded with the decision: (file name, text)."""
-        from legal_ai.upload import read_stored
+        from legal_ai.upload import UploadError, read_stored
         out = []
         for e in p.get("extras", []):
-            out.append((e["filename"], read_stored(self.runs_dir.parent / e["file"], e["filename"])[0]))
+            try:
+                out.append((e["filename"], read_stored(self.runs_dir.parent / e["file"], e["filename"])[0]))
+            except UploadError:   # a blurred photo or an unreadable scan: the report goes on without it
+                continue
         return out
 
     def _appellate(self, courts, p: dict):

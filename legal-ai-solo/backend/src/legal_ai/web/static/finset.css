@@ -446,3 +446,8 @@ details.small summary{cursor:pointer;color:var(--primary,#5b5bd6)}
 .dictate-btn { width: auto; padding: 6px 14px; font-size: 13px; }
 .dictate-btn.on { background: #fde8e8; border-color: #e05252; color: #b42318; }
 .dictate-live { flex: 1; min-width: 120px; }
+/* drag and drop zones (data-drop): a dashed frame shows where files can be dropped */
+.docs-upload[data-drop] { border: 2px dashed #d9d6fc; border-radius: 14px; padding: 10px; transition: border-color .15s ease, background-color .15s ease; }
+.docs-upload[data-drop]:hover { border-color: var(--fs-purple-bar); }
+.docs-upload .drop-hint { width: 100%; margin: 0; text-align: center; }
+[data-drop].drop-over { outline: 2px dashed var(--fs-purple) !important; outline-offset: 2px; border-color: var(--fs-purple) !important; background: var(--fs-purple-light) !important; }

@@ -1,8 +1,9 @@
 """Text from a document the lawyer uploads (the appellate decision as PDF, Word, HTML or text).
 
 The file is kept only in private storage. Nothing is guessed: if the text cannot be read, the
-user gets a plain message saying which format to use instead. A scanned PDF (no text layer) is
-read with OCR (Tesseract, Bulgarian) when the server has it; the result is marked as OCR.
+user gets a plain message saying which format to use instead. A scanned PDF (no text layer) and a
+photo or scan of a page (JPEG, PNG) are read with OCR (Tesseract, Bulgarian) when the server has it;
+the result is marked as OCR.
 """
 
 from __future__ import annotations
@@ -20,7 +21,8 @@ from xml.etree import ElementTree
 from legal_ai.sources.courts.document import DocumentError, _normalize, extract_text
 
 MAX_BYTES = 20 * 1024 * 1024
-ALLOWED = {".pdf", ".docx", ".html", ".htm", ".txt"}
+IMAGES = {".jpg", ".jpeg", ".png"}
+ALLOWED = {".pdf", ".docx", ".html", ".htm", ".txt"} | IMAGES
 _W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
 _DATE = re.compile(r"(\d{1,2})\s*\.\s*(\d{1,2})\s*\.\s*(\d{4})")
 
@@ -61,6 +63,23 @@ def ocr_pdf(body: bytes) -> str:
                                  check=True, capture_output=True, timeout=120)
             pages.append(out.stdout.decode("utf-8", "replace"))
     return "\f".join(pages)   # form feed between pages, so attachments can be dropped page by page
+
+
+def ocr_image(body: bytes) -> str:
+    """Text of a photo or scan of a page. Phone photos are turned upright first (EXIF orientation)
+    and made grey; small pictures are enlarged so Tesseract sees letters of a readable size."""
+    from PIL import Image, ImageOps
+    with tempfile.TemporaryDirectory() as tmp:
+        img = Path(tmp) / "page.png"
+        with Image.open(BytesIO(body)) as im:
+            im = ImageOps.exif_transpose(im).convert("L")
+            if max(im.size) < 1800:
+                k = 1800 / max(im.size)
+                im = im.resize((round(im.width * k), round(im.height * k)), Image.LANCZOS)
+            im.save(img)
+        out = subprocess.run(["tesseract", str(img), "stdout", "-l", "bul+eng", "--psm", "6"],
+                             check=True, capture_output=True, timeout=120)
+    return out.stdout.decode("utf-8", "replace")
 
 
 def extension(filename: str) -> str:
@@ -112,11 +131,13 @@ def read_upload(filename: str, body: bytes, ocr: bool = True) -> tuple[str, str,
     if ext in (".doc", ".rtf", ".odt"):
         raise UploadError("Този формат не се чете. Запазете документа като .docx или PDF и го качете отново.")
     if ext not in ALLOWED:
-        raise UploadError("Позволени са PDF, Word (.docx), HTML и текст (.txt).")
+        raise UploadError("Позволени са PDF, Word (.docx), снимки (JPEG, PNG), HTML и текст (.txt).")
     if not body:
         raise UploadError("Файлът е празен.")
     if len(body) > MAX_BYTES:
         raise UploadError("Файлът е над 20 MB.")
+    if ext in IMAGES:
+        return _read_image(body, ocr)
     warnings: list[str] = []
     try:
         if ext == ".docx":
@@ -152,6 +173,32 @@ def read_upload(filename: str, body: bytes, ocr: bool = True) -> tuple[str, str,
     return text, fmt, warnings
 
 
+def _read_image(body: bytes, ocr: bool) -> tuple[str, str, list[str]]:
+    if not ocr_available():
+        raise UploadError("Снимките се разчитат само на сървъра (OCR). Качете PDF или Word файл.")
+    try:
+        from PIL import Image
+        with Image.open(BytesIO(body)) as im:
+            im.verify()   # a real JPEG/PNG, not a renamed file
+    except Exception as exc:  # noqa: BLE001 - broken or non-image files from users
+        raise UploadError("Снимката не може да се отвори. Запазете я наново като JPEG или PNG.") from exc
+    if not ocr:
+        return "", "image-scan", [OCR_NOTE]
+    try:
+        text = _OCR_NO.sub("№ ", ocr_image(body))
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise UploadError("Снимката не може да се разчете. Снимайте страницата отблизо и на светло.") from exc
+    if private_page(text):
+        raise UploadError("Снимката е на пълномощно или договор за правна защита – не се праща към AI.")
+    text = _normalize(text)
+    if len(text) < 100:
+        raise UploadError("На снимката почти няма четим текст. Снимайте страницата отблизо, изправена и на светло.")
+    warnings = [OCR_NOTE]
+    if not re.search(r"[А-Яа-я]{3}", text):
+        warnings.append("няма кирилица в текста")
+    return text, "image-ocr", warnings
+
+
 def read_stored(path: Path, filename: str) -> tuple[str, str, list[str]]:
     """read_upload for a file already in private storage; OCR text is kept next to it (.ocr.txt)
     so a scanned document is read only once."""
@@ -159,7 +206,7 @@ def read_stored(path: Path, filename: str) -> tuple[str, str, list[str]]:
     if cache.is_file():
         return cache.read_text(encoding="utf-8"), "pdf-ocr", [OCR_NOTE]
     text, fmt, warnings = read_upload(filename, path.read_bytes())
-    if fmt == "pdf-ocr":
+    if fmt in ("pdf-ocr", "image-ocr"):
         cache.write_text(text, encoding="utf-8")
     return text, fmt, warnings
 

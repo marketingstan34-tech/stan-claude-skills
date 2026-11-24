@@ -36,7 +36,7 @@
     </div>
     <div class="card details-card" id="docs">
       <h2 class="details-title">Какво чете AI за жалбата</h2>
-      <p class="muted small">Колкото повече документи по делото, толкова по-подробна и точна е жалбата – AI взима фактите, доказателствата и доводите от тях. Сканирани PDF се разчитат автоматично.</p>
+      <p class="muted small">Колкото повече документи по делото, толкова по-подробна и точна е жалбата – AI взима фактите, доказателствата и доводите от тях. Сканирани PDF и снимки на страници (JPEG, PNG) се разчитат автоматично.</p>
       {% if request.query_params.get('doc_error') %}<div class="notice bad">{{ request.query_params.get('doc_error') }}</div>{% endif %}
       <ul class="ai-docs">
         <li class="ok">Въззивното решение</li>
@@ -60,11 +60,12 @@
       </table>
       <p class="muted small">Пълномощното и договорът за правна защита са изключени автоматично (и страниците им в сканиран PDF) – не се пращат към AI.</p>
       {% endif %}
-      <form method="post" action="/runs/{{ run_id }}/docs" enctype="multipart/form-data" class="docs-upload" id="folder-form">
+      <form method="post" action="/runs/{{ run_id }}/docs" enctype="multipart/form-data" class="docs-upload" data-drop data-drop-submit id="folder-form">
         <label class="kit-submit" style="display:block;text-align:center;cursor:pointer">Качи цялата папка на делото
           <input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
         <label class="kit-submit light" style="display:block;text-align:center;cursor:pointer">Избери файлове или ZIP
-          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.zip" hidden onchange="this.form.submit()"></label>
+          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.jpg,.jpeg,.png,.zip" hidden onchange="this.form.submit()"></label>
+        <p class="drop-hint muted small">или довлечете тук файловете, ZIP или цялата папка</p>
       </form>
       <p class="muted small">Всичко по делото наведнъж: искова молба, отговор, протоколи, експертизи, жалби, писмени защити. Програмата сама разпознава документите и ги подрежда по дата; сканираните се разчитат при писането. До 60 документа. След това натиснете „Напиши наново с AI“.</p>
     </div>

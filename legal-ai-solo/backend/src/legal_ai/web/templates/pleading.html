@@ -43,13 +43,14 @@
           <td class="doc-links"><form method="post" action="/pleadings/{{ item.id }}/docs/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }}?')"><button type="submit" class="link-button">махни</button></form></td></tr>
         {% endfor %}
       </table>{% endif %}
-      <form method="post" action="/pleadings/{{ item.id }}/docs" enctype="multipart/form-data" class="docs-upload">
+      <form method="post" action="/pleadings/{{ item.id }}/docs" enctype="multipart/form-data" class="docs-upload" data-drop data-drop-submit>
         <label class="kit-submit" style="display:block;text-align:center;cursor:pointer">Качи цялата папка на делото
           <input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
         <label class="kit-submit light" style="display:block;text-align:center;cursor:pointer">Избери файлове или ZIP
-          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.zip" hidden onchange="this.form.submit()"></label>
+          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.jpg,.jpeg,.png,.zip" hidden onchange="this.form.submit()"></label>
+        <p class="drop-hint muted small">или довлечете тук файловете, ZIP или цялата папка</p>
       </form>
-      <p class="muted small">Програмата разпознава документите и ги подрежда по дата; сканираните се разчитат при писането. Пълномощното и договорът за правна защита не се пращат към AI.</p>
+      <p class="muted small">Програмата разпознава документите и ги подрежда по дата; сканираните и снимките (JPEG, PNG) се разчитат при писането. Пълномощното и договорът за правна защита не се пращат към AI.</p>
     </div>
   </div>
   <div class="dash-col-right scroll-col">

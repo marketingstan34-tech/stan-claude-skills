@@ -161,6 +161,68 @@
 })();
 </script>
 <script>
+/* Drag and drop onto every area marked data-drop: the dropped files – or all files of a dropped folder –
+   go into its file input, as if chosen with the button. With data-drop-submit the form is sent at once,
+   like the buttons there do. Hidden system files (.DS_Store and the like) are left out. */
+(function () {
+  var zones = document.querySelectorAll('[data-drop]');
+  if (!zones.length) return;
+  function hasFiles(e) { var t = e.dataTransfer && e.dataTransfer.types; return !!t && Array.prototype.indexOf.call(t, 'Files') >= 0; }
+  function walk(entry, out) {
+    return new Promise(function (done) {
+      if (entry.isFile) { entry.file(function (f) { out.push(f); done(); }, function () { done(); }); return; }
+      if (!entry.isDirectory) { done(); return; }
+      var reader = entry.createReader(), found = [];
+      (function more() {   /* readEntries returns a folder in batches */
+        reader.readEntries(function (batch) {
+          if (batch.length) { found = found.concat(Array.prototype.slice.call(batch)); more(); return; }
+          Promise.all(found.map(function (e) { return walk(e, out); })).then(done);
+        }, function () { done(); });
+      })();
+    });
+  }
+  function dropped(dt) {   /* entries must be taken while the drop event runs */
+    var entries = [];
+    Array.prototype.forEach.call(dt.items || [], function (it) {
+      var e = it.kind === 'file' && it.webkitGetAsEntry ? it.webkitGetAsEntry() : null;
+      if (e) entries.push(e);
+    });
+    if (!entries.length) return Promise.resolve(Array.prototype.slice.call(dt.files || []));
+    var out = [];
+    return Promise.all(entries.map(function (e) { return walk(e, out); })).then(function () { return out; });
+  }
+  Array.prototype.forEach.call(zones, function (zone) {
+    var input = zone.querySelector('input[type=file]:not([webkitdirectory])');
+    if (!input) return;
+    var hint = zone.querySelector('.drop-hint');
+    ['dragenter', 'dragover'].forEach(function (ev) {
+      zone.addEventListener(ev, function (e) { if (!hasFiles(e)) return; e.preventDefault(); e.stopPropagation(); zone.classList.add('drop-over'); });
+    });
+    zone.addEventListener('dragleave', function (e) { if (!zone.contains(e.relatedTarget)) zone.classList.remove('drop-over'); });
+    zone.addEventListener('drop', function (e) {
+      if (!hasFiles(e)) return;
+      e.preventDefault(); e.stopPropagation(); zone.classList.remove('drop-over');
+      dropped(e.dataTransfer).then(function (files) {
+        files = files.filter(function (f) { return f.name && f.name.charAt(0) !== '.'; });
+        if (!files.length) return;
+        var dt = new DataTransfer();
+        files.slice(0, input.multiple ? files.length : 1).forEach(function (f) { dt.items.add(f); });
+        input.files = dt.files;
+        if (zone.hasAttribute('data-drop-submit')) {
+          if (hint) hint.textContent = 'Качване на ' + dt.files.length + (dt.files.length === 1 ? ' файл…' : ' файла…');
+          (zone.tagName === 'FORM' ? zone : zone.closest('form')).submit();
+        } else {
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+      });
+    });
+  });
+  /* a file dropped beside a zone must not open in the browser and leave the page */
+  window.addEventListener('dragover', function (e) { if (hasFiles(e)) e.preventDefault(); });
+  window.addEventListener('drop', function (e) { if (hasFiles(e)) e.preventDefault(); });
+})();
+</script>
+<script>
 window.addEventListener('beforeprint', function () {
   document.querySelectorAll('details:not([data-print="closed"])').forEach(function (d) { d.open = true; });
 });

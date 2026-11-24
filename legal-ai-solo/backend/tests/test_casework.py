@@ -832,6 +832,7 @@ def test_pleadings_without_a_report(client, monkeypatch):
     assert c.get("/pleadings/..%2Fruns").status_code == 404 and c.get("/pleadings/20990101000000").status_code == 404
     page = c.get(f"/pleadings/{pid}").text
     assert "Отговор на искова молба (чл. 131 ГПК)" in page and "Още няма чернова" in page
+    assert "data-drop data-drop-submit" in page and "довлечете тук" in page   # files and folders can be dragged in
     c.post(f"/pleadings/{pid}", data={"court": "Районен съд – Пловдив", "case_ref": "123/2026", "client": "Иван Иванов",
                                       "opponent": "Банка АД", "lawyer": "Петров"}, headers=h)
     claim = ("ИСКОВА МОЛБА\nот Банка АД срещу Иван Иванов. Ответникът дължи сумата от 5 000 лева по договор за заем "
