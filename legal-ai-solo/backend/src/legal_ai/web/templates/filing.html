@@ -15,6 +15,10 @@
       <h2 class="details-title">{{ spec.short }}</h2>
       {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
       {% if kind == 'otgovor' %}<p>За отговора качете касационната жалба и изложението на насрещната страна в „Папка на делото“.</p>
+        <p class="muted small">Това е отговор по чл. 287 ГПК пред Върховния касационен съд. За административно-наказателно
+          дело (касационна жалба пред административния съд срещу решение на районния съд по наказателно постановление):</p>
+        <form method="post" action="/runs/{{ run_id }}/to-pleading/otgovor_kasacionna_an">
+          <button class="kit-submit light" type="submit" style="width:100%">Отговор пред административния съд (АНД)</button></form>
       {% elif kind == 'vazzivna' %}<p>Обжалва се първоинстанционното решение – сваля се от сайта на съда или се взима от „Папка на делото“.</p>
       {% else %}<p>Качете обжалваното определение в „Папка на делото“ – взима се най-новото определение.</p>{% endif %}
       <a class="kit-submit light" href="/runs/{{ run_id }}/appeal#docs" style="display:block;text-align:center">Папка на делото</a>

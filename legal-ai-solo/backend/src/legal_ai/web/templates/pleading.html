@@ -18,8 +18,8 @@
       <h2 class="details-title">Данни за документа</h2>
       <form method="post" action="/pleadings/{{ item.id }}" class="kit-form">
         <label>Кратко име<input class="kit-input" name="title" maxlength="160" value="{{ item.title }}"></label>
-        <label>Съд{% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna') %} (постановил обжалвания акт){% endif %}<input class="kit-input" name="court" maxlength="160" value="{{ item.court }}" placeholder="напр. Районен съд – Пловдив"></label>
-        {% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna') %}<label>Горен съд<input class="kit-input" name="upper_court" maxlength="160" value="{{ item.upper_court }}" placeholder="напр. Окръжен съд – Пловдив"></label>{% endif %}
+        <label>Съд{% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna', 'otgovor_kasacionna_an') %} (постановил обжалвания акт){% endif %}<input class="kit-input" name="court" maxlength="160" value="{{ item.court }}" placeholder="напр. Районен съд – Пловдив"></label>
+        {% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna', 'otgovor_kasacionna_an') %}<label>Горен съд<input class="kit-input" name="upper_court" maxlength="160" value="{{ item.upper_court }}" placeholder="{{ 'напр. Административен съд – Пловдив' if item.kind == 'otgovor_kasacionna_an' else 'напр. Окръжен съд – Пловдив' }}"></label>{% endif %}
         {% if item.kind != 'iskova' %}<label>Дело №<input class="kit-input" name="case_ref" maxlength="80" value="{{ item.case_ref }}" placeholder="напр. 1234/2026"></label>{% endif %}
         <label>Доверител<input class="kit-input" name="client" maxlength="200" value="{{ item.client }}"></label>
         <label>ЕГН/ЕИК<input class="kit-input" name="client_id" maxlength="40" value="{{ item.client_id }}"></label>

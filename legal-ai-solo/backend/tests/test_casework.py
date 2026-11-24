@@ -311,6 +311,30 @@ def test_failed_report_can_be_run_again(client, monkeypatch):
     (d.parent.parent / started[0]["file"]).unlink()
     assert c2.post("/analyze/retry-last", headers=h).status_code == 404
 
+def test_report_case_goes_to_an_administrative_penal_answer(client):
+    """From the report's answer page: a new answer before the administrative court with the decision, the other
+    documents and the case data of the report, nothing uploaded again."""
+    from legal_ai.cassation import pleadings as PL
+    from legal_ai.cassation.casefile import save_case
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    storage = d.parent.parent
+    save_case(d, {"client": "Иван Иванов", "lawyer": "Петров", "opponent": "ОДМВР – Пловдив"})
+    (d / "context.json").write_text(json.dumps([{"name": "parva.txt", "text": "Първоинстанционно решение."}],
+                                               ensure_ascii=False), encoding="utf-8")
+    page = c.get("/runs/20260102030405/filing/otgovor").text
+    assert "/runs/20260102030405/to-pleading/otgovor_kasacionna_an" in page and "Върховния касационен съд" in page
+    assert c.post("/runs/20260102030405/to-pleading/otgovor_kasacionna_an",
+                  headers={"origin": "http://evil.example"}).status_code == 403
+    assert c.post("/runs/20260102030405/to-pleading/nyama", headers=h).status_code == 404
+    r = c.post("/runs/20260102030405/to-pleading/otgovor_kasacionna_an", headers=h, follow_redirects=False)
+    pid = r.headers["location"].split("/")[2].split("#")[0]
+    item = PL.load(storage, pid)
+    assert item["kind"] == "otgovor_kasacionna_an" and item["client"] == "Иван Иванов" and item["lawyer"] == "Петров"
+    assert item["title"].startswith("Апелативен съд Пловдив")
+    names = [x["filename"] for x in PL.docs(storage, pid).items()]
+    assert len(names) == 2 and names[1] == "parva.txt"
+
 def test_context_documents_in_the_prompts():
     from legal_ai.cassation import prompts as P
     from legal_ai.cassation.appeal import appeal_prompt
@@ -933,3 +957,20 @@ def test_pleadings_without_a_report(client, monkeypatch):
         assert all(w in t for w in words), kind
     assert PL.best_passages(["кратко", "А" * 50 + " погасителна давност за вземането " + "Б" * 100],
                             ["погасителна", "давност"]) and PL.find_practice(None, [], date(2026, 1, 1)) == []
+    # answer to a cassation appeal in an administrative-penal case: no civil VKS practice, one AI call
+    pid3 = PL.create(storage, "otgovor_kasacionna_an", {"court": "Районен съд – Пловдив",
+                                                        "upper_court": "Административен съд – Пловдив"})
+    appeal = ("КАСАЦИОННА ЖАЛБА\nот ОДМВР – Пловдив срещу решението на районния съд, с което е отменено "
+              "наказателното постановление. " + "Съдът неправилно е приел, че актът е съставен извън срока. " * 12)
+    PL.docs(storage, pid3).add("kasacionna.txt", appeal.encode(), appeal)
+    ai3 = Fake()
+    draft3 = PL.generate(ai3, "otgovor_kasacionna_an", PL.load(storage, pid3),
+                         PL.docs(storage, pid3).read_all(), conn=None)
+    assert [x["schema_name"] for x in ai3.prompts] == ["pleading"] and draft3["practice"] == []
+    assert "ОСНОВНИЯТ ДОКУМЕНТ: касационна жалба" in ai3.prompts[0]["user"] and "ЗАНН" in ai3.prompts[0]["user"]
+    assert "vks_labels оставяй празни" in ai3.prompts[0]["user"]
+    t = to_text(PL.build(PL.load(storage, pid3), draft3))
+    assert "ДО АДМИНИСТРАТИВЕН СЪД – ПЛОВДИВ" in t and "ЧРЕЗ РАЙОНЕН СЪД – ПЛОВДИВ" in t
+    assert "на касационна жалба" in t and "Наказателно постановление №" in t and "чл. 80 ГПК" not in t
+    page = c.get(f"/pleadings/{pid3}").text
+    assert "Административен съд – Пловдив" in page and "Горен съд" in page

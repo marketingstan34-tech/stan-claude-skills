@@ -1,5 +1,6 @@
 """Filings started without a report: искова молба, отговор на искова молба, въззивна жалба,
-отговор на въззивна жалба and частна жалба.
+отговор на въззивна жалба, частна жалба and отговор на касационна жалба по административно-наказателно
+дело (решение на районния съд по наказателно постановление, обжалвано пред административния съд).
 
 The lawyer uploads the case documents and writes what the client wants. Two AI calls: a light one
 lists the legal issues with search words, the VKS practice for them is taken from the own
@@ -86,6 +87,26 @@ evidence – доказателствата и доказателственит�
 решението), с доказателствата и закона; посочи кои оплаквания са общи и не подлежат на проверка
 (чл. 269 ГПК); ако жалбата иска нови доказателства – защо не са допустими по чл. 266 ГПК. В petitum –
 какво да постанови въззивният съд (да остави в сила решението).""",
+    },
+    "otgovor_kasacionna_an": {
+        "title": "Отговор на касационна жалба по АНД (пред административния съд)",
+        "short": "Отговор на касационна жалба (АНД)", "main": "касационна жалба", "practice": False,
+        "hint": "Административно-наказателно дело: решение на районния съд по наказателно постановление, "
+                "обжалвано с касационна жалба пред административния съд. Качете касационната жалба, решението на "
+                "районния съд, наказателното постановление, акта (АУАН) и протоколите. Практиката на ВКС от "
+                "базата не се ползва – тя е гражданска.",
+        "task": """Напиши отговор на касационната жалба (тя е ОСНОВНИЯТ ДОКУМЕНТ) по административно-наказателно дело:
+районният съд се е произнесъл по жалба срещу наказателно постановление (ЗАНН), а насрещната страна е
+подала касационна жалба пред административния съд (касационно обжалване по ЗАНН на основанията по
+НПК и по реда на глава дванадесета от АПК). Клиентът на адвоката защитава решението на районния съд.
+Обори всяко касационно основание и оплакване поотделно: с изводите на районния съд (дословни цитати от
+решението), с доказателствата по делото (АУАН, наказателното постановление, протоколите, свидетелските
+показания) и със закона – материалния закон, по който е наложено наказанието, ЗАНН (напр. реквизитите на
+АУАН и НП, сроковете, маловажен случай, ако е относимо) и касационните основания по НПК (нарушение на
+закона, съществено нарушение на процесуалните правила, явна несправедливост на наказанието). Посочи кои
+оплаквания са нови факти или доказателства, които касационната инстанция не проверява. Номерата на
+членовете от ЗАНН, НПК и АПК пиши само ако си сигурен, и винаги добавяй [проверете чл. …]. В petitum –
+да оставите в сила решението на районния съд.""",
     },
     "chastna": {
         "title": "Частна жалба (чл. 274–278 ГПК)", "short": "Частна жалба", "main": "определение",
@@ -290,6 +311,10 @@ def prompt(kind: str, item: dict, main: tuple[str, str] | None, other_docs: list
            practice: list[dict], style: list[tuple[str, str]], archive: list[tuple[str, str]]) -> str:
     spec = KINDS[kind]
     parts = [spec["task"], _RULES]
+    if not spec.get("practice", True):
+        parts.append("ПРАКТИКА: за този вид дело няма списък от базата (базата е гражданска практика на ВКС). "
+                     "vks_labels оставяй празни. Съдебна практика цитирай само ако е посочена в документите по "
+                     "делото, със същите номер, дата и съд.")
     if item.get("notes"):
         parts.append(f"=== БЕЛЕЖКИ НА АДВОКАТА (позицията и целта на клиента; не цитирай от тях) ===\n{item['notes']}")
     if main:
@@ -324,12 +349,15 @@ def generate(ai, kind: str, item: dict, docs_read: list[dict], conn, style=None,
         raise ValueError(f"Няма {spec['main']} в документите – качете я/го, за да се пише {spec['short'].lower()}.")
     cfg = ai.config
     topic = (item.get("notes", "") + "\n\n" + (main[1] if main else "\n".join(t for _, t in others)))[:40_000]
-    progress("AI определя правните въпроси за търсене на практика…")
-    issues = ai.structured(model=cfg.light_model, system=P.SYSTEM_BASE,
-                           user=f"{ISSUES_INSTRUCTIONS}\n\n{topic}", schema_name="pleading_issues",
-                           schema=ISSUES_SCHEMA, effort=cfg.assess_effort).get("issues", [])
-    progress("Търсене на практика на ВКС в базата…")
-    practice = find_practice(conn, issues, today or date.today())
+    issues: list[dict] = []
+    practice: list[dict] = []
+    if spec.get("practice", True):   # the own database holds civil VKS practice only
+        progress("AI определя правните въпроси за търсене на практика…")
+        issues = ai.structured(model=cfg.light_model, system=P.SYSTEM_BASE,
+                               user=f"{ISSUES_INSTRUCTIONS}\n\n{topic}", schema_name="pleading_issues",
+                               schema=ISSUES_SCHEMA, effort=cfg.assess_effort).get("issues", [])
+        progress("Търсене на практика на ВКС в базата…")
+        practice = find_practice(conn, issues, today or date.today())
     progress(f"AI пише: {spec['title']} (обикновено 3–8 минути)…")
     raw = ai.structured(model=cfg.analysis_model, system=P.SYSTEM_BASE,
                         user=prompt(kind, item, main, others, practice, style or [], archive or []),
@@ -386,6 +414,15 @@ def build(item: dict, draft: dict) -> list[Block]:
                 Block("p", party.replace(" – чрез", " – ответник, чрез", 1)),
                 Block("p", f"по исковата молба на {opponent}"),
                 Block("heading", "УВАЖАЕМИ ГОСПОДИН/ГОСПОЖО СЪДИЯ,")]
+    elif kind == "otgovor_kasacionna_an":
+        out += [Block("heading", f"ДО {upper.upper()}"), Block("heading", f"ЧРЕЗ {court.upper()}"),
+                Block("heading", f"ПО ДЕЛО № {case_ref} г."),
+                Block("center", "ОТГОВОР"), Block("center", "на касационна жалба"), Block("p", party),
+                Block("p", f"по касационната жалба на {opponent} срещу Решение № [номер]/[дата] г., постановено по "
+                           f"дело № {case_ref} г. по описа на {court}, с което е [потвърдено/отменено/изменено] "
+                           "Наказателно постановление № [номер]/[дата] г."),
+                Block("note", "[Проверете срока за отговор, адресата и номера на касационното дело по АПК и ЗАНН.]"),
+                Block("heading", "УВАЖАЕМИ АДМИНИСТРАТИВНИ СЪДИИ,")]
     elif kind in ("vazzivna", "otgovor_vazzivna"):
         out += [Block("heading", f"ДО {upper.upper()}"), Block("heading", f"ЧРЕЗ {court.upper()}"),
                 Block("heading", f"ПО ДЕЛО № {case_ref} г.")]
@@ -426,7 +463,10 @@ def build(item: dict, draft: dict) -> list[Block]:
     if kind == "otgovor_iskova":
         out.append(Block("note", "[Възраженията и доказателствата, непосочени в отговора, по правило се преклудират "
                                  "(чл. 133 ГПК) – проверете дали всичко е включено.]"))
-    if kind != "chastna":
+    if kind == "otgovor_kasacionna_an":
+        out.append(Block("p", "Моля да ми присъдите направените разноски за касационната инстанция, вкл. адвокатско "
+                              "възнаграждение. [Проверете основанието за разноски по ЗАНН и АПК; списък на разноските]"))
+    elif kind != "chastna":
         out.append(Block("p", "Моля да ми присъдите направените разноски, вкл. адвокатско възнаграждение. "
                               "[Списък по чл. 80 ГПК]"))
     attachments = {
@@ -437,6 +477,8 @@ def build(item: dict, draft: dict) -> list[Block]:
         "vazzivna": ["Документ за платена държавна такса [сума];", "Пълномощно;",
                      "Препис от жалбата за насрещната страна."],
         "otgovor_vazzivna": ["Пълномощно;", "Препис от отговора за насрещната страна."],
+        "otgovor_kasacionna_an": ["Пълномощно;", "Препис от отговора за насрещната страна;",
+                                  "Списък на разноските [ако се претендират]."],
         "chastna": ["Документ за платена държавна такса [сума];", "Препис от жалбата за насрещната страна."],
     }[kind]
     out.append(Block("heading", "Прилагам:"))

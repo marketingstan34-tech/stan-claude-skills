@@ -666,6 +666,45 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"/runs/{run_id}/filing/{kind}?busy=1", status_code=303)
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
+    @app.post("/runs/{run_id}/to-pleading/{kind}")
+    def run_to_pleading(request: Request, run_id: str, kind: str):
+        """A filing of another kind (cassation/pleadings.py) for the case of this report: the decision, the other
+        documents and the case data are carried over, so nothing is uploaded or typed again."""
+        import json
+
+        from legal_ai.cassation import pleadings as PL
+        from legal_ai.cassation.casefile import load_case
+        from legal_ai.web.casedocs import case_docs
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        run = load_run(runs_dir, run_id)
+        if run is None or kind not in PL.KINDS:
+            raise HTTPException(404, "Няма такава справка.")
+        d = runs_dir / run_id
+        case = load_case(d)
+        label = (run.get("appellate") or {}).get("label") or "Решение"
+        pid = PL.create(storage, kind, {**{k: case.get(k, "") for k in PL.FIELDS}, "title": label})
+        files = PL.docs(storage, pid)
+        try:
+            if (d / "appellate.txt").is_file():
+                text = (d / "appellate.txt").read_text(encoding="utf-8")
+                files.add(f"{label[:100]}.txt", text.encode("utf-8"), text)
+            try:
+                context = json.loads((d / "context.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                context = []
+            for c in context:
+                if c.get("text"):
+                    files.add(f"{os.path.splitext(c.get('name') or 'документ')[0][:100]}.txt",
+                              c["text"].encode("utf-8"), c["text"])
+            for x in case_docs(storage, run_id).items():
+                src = storage / "uploads" / x["file"]
+                if re.fullmatch(r"[0-9a-f]{32}\.[a-z]{2,5}", x["file"]) and src.is_file():
+                    files.add(x["filename"], src.read_bytes())
+        except ValueError:   # the document limit: the rest can be added on the page
+            pass
+        return RedirectResponse(f"/pleadings/{pid}#docs", status_code=303)
+
     # ---------- filings without a report (cassation/pleadings.py) ----------
 
     def pleading_or_404(pid: str) -> dict:
