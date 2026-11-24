@@ -822,7 +822,8 @@ def test_pleadings_without_a_report(client, monkeypatch):
     c, d = client
     storage = d.parent.parent
     h = {"origin": "http://127.0.0.1"}
-    assert "Нов документ" in c.get("/pleadings").text
+    page = c.get("/pleadings").text
+    assert "Нов документ" in page and 'name="notes"' in page and "data-dictate" in page and "Диктувай" in page
     r = c.post("/pleadings", data={"kind": "otgovor_iskova", "title": "Иванов", "notes": "Вземането е погасено по давност."},
                headers=h, follow_redirects=False)
     pid = r.headers["location"].rsplit("/", 1)[1]

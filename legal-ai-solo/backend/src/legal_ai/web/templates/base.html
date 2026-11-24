@@ -115,6 +115,52 @@
 })();
 </script>
 <script>
+/* Dictation: a "Диктувай" button under every textarea marked data-dictate. The browser's own speech
+   recognition (Chrome, Edge, Safari) writes Bulgarian speech into the field; nothing is sent to this
+   server until the form is saved. Without support, the button says to use the keyboard's microphone. */
+(function () {
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  Array.prototype.forEach.call(document.querySelectorAll('textarea[data-dictate]'), function (ta) {
+    var box = document.createElement('div'); box.className = 'dictate';
+    var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'kit-submit light dictate-btn';
+    btn.textContent = '\uD83C\uDFA4 Диктувай';
+    var live = document.createElement('span'); live.className = 'muted small dictate-live';
+    box.appendChild(btn); box.appendChild(live); ta.insertAdjacentElement('afterend', box);
+    if (!SR) {
+      btn.addEventListener('click', function () {
+        live.textContent = 'Този браузър не поддържа диктовка – отворете в Chrome или Safari, или натиснете микрофона на клавиатурата.';
+      });
+      return;
+    }
+    var rec = null, on = false;
+    function add(text) {
+      text = text.trim(); if (!text) return;
+      var v = ta.value; ta.value = v + (v && !/\s$/.test(v) ? ' ' : '') + text;
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+    function stop() { on = false; btn.textContent = '\uD83C\uDFA4 Диктувай'; btn.classList.remove('on'); live.textContent = ''; }
+    btn.addEventListener('click', function () {
+      if (on) { rec && rec.stop(); stop(); return; }
+      rec = new SR(); rec.lang = 'bg-BG'; rec.continuous = true; rec.interimResults = true;
+      rec.onresult = function (e) {
+        var interim = '';
+        for (var i = e.resultIndex; i < e.results.length; i++) {
+          if (e.results[i].isFinal) add(e.results[i][0].transcript); else interim += e.results[i][0].transcript;
+        }
+        live.textContent = interim;
+      };
+      rec.onerror = function (e) {
+        stop();
+        live.textContent = e.error === 'not-allowed' ? 'Разрешете микрофона за този сайт и опитайте пак.' : 'Диктовката спря (' + e.error + ').';
+      };
+      rec.onend = function () { if (on) { try { rec.start(); } catch (x) { stop(); } } };   /* keep listening after pauses */
+      on = true; btn.textContent = '\u23F9 Спри диктовката'; btn.classList.add('on'); live.textContent = 'Слушам… говорете.';
+      rec.start();
+    });
+  });
+})();
+</script>
+<script>
 window.addEventListener('beforeprint', function () {
   document.querySelectorAll('details:not([data-print="closed"])').forEach(function (d) { d.open = true; });
 });

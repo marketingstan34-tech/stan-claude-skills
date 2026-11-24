@@ -27,7 +27,7 @@
         <label>Насрещна страна<input class="kit-input" name="opponent" maxlength="300" value="{{ item.opponent }}"></label>
         <label>Адвокат<input class="kit-input" name="lawyer" maxlength="120" value="{{ item.lawyer }}"></label>
         <label>Съдебен адрес<input class="kit-input" name="lawyer_address" maxlength="300" value="{{ item.lawyer_address }}"></label>
-        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="8000">{{ item.notes }}</textarea></label>
+        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="20000" data-dictate>{{ item.notes }}</textarea></label>
         <button class="kit-submit light" type="submit">Запази</button>
       </form>
     </div>

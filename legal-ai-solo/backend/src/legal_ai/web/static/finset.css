@@ -440,3 +440,9 @@ body { overflow: visible !important; }
 .bench-pairs li{margin:2px 0}
 .bench-missed{margin:4px 0 0 18px;padding:0}
 details.small summary{cursor:pointer;color:var(--primary,#5b5bd6)}
+
+/* dictation button under a textarea (base.html) */
+.dictate { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 6px 0 4px; }
+.dictate-btn { width: auto; padding: 6px 14px; font-size: 13px; }
+.dictate-btn.on { background: #fde8e8; border-color: #e05252; color: #b42318; }
+.dictate-live { flex: 1; min-width: 120px; }

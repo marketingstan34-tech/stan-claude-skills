@@ -31,7 +31,7 @@ PASSAGE_CHARS = 1500
 
 FIELDS = {   # name -> max length
     "title": 160, "court": 160, "upper_court": 160, "case_ref": 80, "client": 200, "client_id": 40,
-    "client_address": 300, "opponent": 300, "lawyer": 120, "lawyer_address": 300, "notes": 8000,
+    "client_address": 300, "opponent": 300, "lawyer": 120, "lawyer_address": 300, "notes": 20000,
 }
 
 KINDS = {

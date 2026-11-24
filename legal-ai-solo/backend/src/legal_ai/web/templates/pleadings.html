@@ -11,7 +11,7 @@
         <label>Вид документ<select class="kit-input" name="kind" required>
           {% for k, s in kinds.items() %}<option value="{{ k }}">{{ s.title }}</option>{% endfor %}</select></label>
         <label>Кратко име (за списъка)<input class="kit-input" name="title" maxlength="160" placeholder="напр. Иванов срещу Банка АД"></label>
-        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="8000" placeholder="Кой, какво, кога, колко; какво искаме да постанови съдът; известни възражения на насрещната страна."></textarea></label>
+        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="20000" data-dictate placeholder="Кой, какво, кога, колко; какво искаме да постанови съдът; известни възражения на насрещната страна."></textarea></label>
         <button class="kit-submit" type="submit">Създай</button>
       </form>
       <p class="muted small">След това качвате документите по делото и натискате „Напиши с AI“. Нищо не се плаща, докато не натиснете.</p>
