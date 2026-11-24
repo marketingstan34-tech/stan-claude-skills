@@ -7,6 +7,8 @@ mkdir -p "$PRIVATE_STORAGE_PATH"
 # the corpus build and the analyses share one request every 2 s per court site
 export SOURCE_LOCK_DIR="${SOURCE_LOCK_DIR:-$PRIVATE_STORAGE_PATH/.ratelimit}"
 legal-ai migrate
+# where the database space goes, once per start, in the logs (read only)
+(legal-ai db-size 2>&1 || true) &
 if [ "${CORPUS_BUILD:-0}" = "1" ]; then
   # also to stdout, so progress shows in the host's logs
   (sh /app/deploy/corpus.sh 2>&1 | tee -a "$PRIVATE_STORAGE_PATH/corpus.log") &

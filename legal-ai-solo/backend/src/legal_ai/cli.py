@@ -63,6 +63,71 @@ def cmd_check_db(_args) -> int:
     return 0
 
 
+def cmd_db_size(_args) -> int:
+    """Where the database space goes: tables, their indexes and TOAST, the text columns (estimated
+    from a 2 % sample), old text versions, dead rows and WAL. Read only."""
+    from legal_ai.config import load_settings
+    from legal_ai.db import connect
+
+    conn = connect(load_settings().database_url)
+    mb = 1024 * 1024
+
+    def q(sql, *params):
+        try:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                return cur.fetchall()
+        except Exception as exc:  # noqa: BLE001 - one unavailable figure must not hide the others
+            conn.rollback()
+            print(f"db-size: {type(exc).__name__}: {str(exc).splitlines()[0]}")
+            return []
+
+    conn.execute("SET statement_timeout = '180s'")
+    conn.commit()
+    for r in q("SELECT pg_database_size(current_database()) AS b"):
+        print(f"db-size: database {r['b'] / mb:.0f} MB")
+    for r in q("""SELECT c.relname AS t, pg_total_relation_size(c.oid) AS total, pg_relation_size(c.oid) AS heap,
+                         pg_indexes_size(c.oid) AS idx,
+                         COALESCE(pg_total_relation_size(NULLIF(c.reltoastrelid, 0)), 0) AS toast,
+                         s.n_live_tup AS live, s.n_dead_tup AS dead
+                  FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+                  LEFT JOIN pg_stat_user_tables s ON s.relid = c.oid
+                  WHERE n.nspname = 'public' AND c.relkind = 'r'
+                  ORDER BY pg_total_relation_size(c.oid) DESC"""):
+        print(f"db-size: table {r['t']}: total {r['total'] / mb:.0f} MB = rows {r['heap'] / mb:.0f} + "
+              f"long text (TOAST) {r['toast'] / mb:.0f} + indexes {r['idx'] / mb:.0f}; "
+              f"live rows {r['live']}, dead rows {r['dead']}")
+    for r in q("""SELECT i.relname AS i, pg_relation_size(i.oid) AS b
+                  FROM pg_index x JOIN pg_class i ON i.oid = x.indexrelid JOIN pg_class t ON t.oid = x.indrelid
+                  JOIN pg_namespace n ON n.oid = t.relnamespace
+                  WHERE n.nspname = 'public' ORDER BY 2 DESC LIMIT 12"""):
+        print(f"db-size: index {r['i']}: {r['b'] / mb:.0f} MB")
+    for r in q("""SELECT count(*) AS n, sum(pg_column_size(exact_text)) AS exact, sum(pg_column_size(search_text)) AS search,
+                         sum(pg_column_size(tsv)) AS tsv FROM passages TABLESAMPLE SYSTEM (2)"""):
+        if r["n"]:
+            print(f"db-size: passages 2% sample ({r['n']} rows) x50: exact_text {r['exact'] * 50 / mb:.0f} MB, "
+                  f"search_text {r['search'] * 50 / mb:.0f} MB, tsv {r['tsv'] * 50 / mb:.0f} MB")
+    for r in q("""SELECT count(*) AS n, sum(pg_column_size(canonical_text)) AS b
+                  FROM decision_versions TABLESAMPLE SYSTEM (2)"""):
+        if r["n"]:
+            print(f"db-size: decision_versions 2% sample ({r['n']} rows) x50: canonical_text {r['b'] * 50 / mb:.0f} MB")
+    for r in q("""SELECT count(*) AS versions, count(*) FILTER (WHERE d.current_version_id IS DISTINCT FROM v.id) AS old
+                  FROM decision_versions v LEFT JOIN decisions d ON d.id = v.decision_id"""):
+        print(f"db-size: text versions {r['versions']}, of them not current {r['old']}")
+    for r in q("""SELECT count(*) AS n, count(*) FILTER (WHERE proceeding_article = '290') AS a290,
+                         count(*) FILTER (WHERE proceeding_article = '288') AS a288,
+                         count(*) FILTER (WHERE proceeding_article = '274') AS a274 FROM decisions"""):
+        print(f"db-size: decisions {r['n']} (art. 290: {r['a290']}, 288: {r['a288']}, 274: {r['a274']})")
+    for r in q("SELECT proceeding_article AS a, count(*) AS n FROM decisions GROUP BY 1 ORDER BY 2 DESC LIMIT 8"):
+        print(f"db-size: decisions by article {r['a']}: {r['n']}")
+    for r in q("SELECT sum(size) AS b, count(*) AS n FROM pg_ls_waldir()"):
+        print(f"db-size: WAL {(r['b'] or 0) / mb:.0f} MB in {r['n']} files")
+    for r in q("""SELECT temp_files, temp_bytes FROM pg_stat_database WHERE datname = current_database()"""):
+        print(f"db-size: temp files so far {r['temp_files']}, {r['temp_bytes'] / mb:.0f} MB")
+    conn.close()
+    return 0
+
+
 def cmd_crawl(args) -> int:
     from legal_ai.config import load_settings
     from legal_ai.sources.vks.crawler import VksClient, crawl
@@ -344,6 +409,7 @@ def main(argv: list[str] | None = None) -> int:
 
     sub.add_parser("migrate", help="Приложи миграциите").set_defaults(func=cmd_migrate)
     sub.add_parser("check-db", help="Провери връзката с базата").set_defaults(func=cmd_check_db)
+    sub.add_parser("db-size", help="Колко място заема всяка част от базата (само чете)").set_defaults(func=cmd_db_size)
 
     c = sub.add_parser("crawl-vks", help="Свали списъци и актове от vks.bg (директно)")
     c.add_argument("--from", dest="start", required=True, help="ГГГГ-ММ")
