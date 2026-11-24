@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import calendar
 import json
+import re
 import os
 import threading
 import traceback
@@ -468,6 +469,32 @@ class JobRunner:
     @staticmethod
     def _can_trace(p: dict) -> bool:
         return bool(p.get("court") and p.get("case") and p.get("year"))
+
+    def last_failed(self) -> dict | None:
+        """The last failed new-case report (with or without AI) from errors.log, if its uploaded files
+        are still there: {"started", "params"}. Jobs live in memory, so this survives a restart."""
+        f = self.runs_dir / "errors.log"
+        if not f.is_file():
+            return None
+        last = None
+        for line in f.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.match(r"^(\d{4}-\d\d-\d\dT\S+) (\{.*\})$", line)
+            if m:
+                try:
+                    last = {"started": m[1], "params": json.loads(m[2])}
+                except ValueError:
+                    continue
+        if last is None or not self.can_retry(last["params"]):
+            return None
+        return last
+
+    def can_retry(self, p: dict) -> bool:
+        """A new-case report whose uploaded files (if any) are still in private storage."""
+        if p.get("mode") not in ("ai", "noai"):
+            return False
+        files = ([p["file"]] if p.get("file") else []) + [e.get("file", "") for e in p.get("extras", [])]
+        return all(isinstance(x, str) and re.fullmatch(r"uploads/[0-9a-f]{32}\.[a-z]{2,5}", x)
+                   and (self.runs_dir.parent / x).is_file() for x in files)
 
     def _fail(self, job: Job, exc: Exception) -> None:
         job.status = "failed"

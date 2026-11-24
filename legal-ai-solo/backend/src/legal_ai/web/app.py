@@ -258,7 +258,36 @@ def create_app() -> FastAPI:
 
     @app.get("/analyze", response_class=HTMLResponse)
     def analyze_form(request: Request, m: str | None = Query(None, max_length=7)):
-        return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), **dashboard(m)})
+        ctx = dashboard(m)
+        last = runner.last_failed()
+        if last and any(r.get("created_at", "") > last["started"] for r in ctx.get("reports", [])):
+            last = None   # a report has been made since: nothing to offer
+        return render(request, "analyze.html", {"courts": COURTS, "busy": runner.busy(), "last_failed": last, **ctx})
+
+    def _retry(request: Request, params: dict):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        if not runner.can_retry(params):
+            raise HTTPException(404, "Тази справка не може да се пусне отново – качете документа пак.")
+        job = runner.start(dict(params))
+        if job is None:
+            return RedirectResponse("/analyze?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.post("/jobs/{job_id}/retry")
+    def job_retry(request: Request, job_id: str):
+        """The same report again, with the same documents and choices (after a failure)."""
+        job = runner.jobs.get(job_id)
+        if job is None or job.status != "failed":
+            raise HTTPException(404, "Няма такава неуспешна справка.")
+        return _retry(request, job.params)
+
+    @app.post("/analyze/retry-last")
+    def analyze_retry_last(request: Request):
+        last = runner.last_failed()
+        if last is None:
+            raise HTTPException(404, "Няма неуспешна справка за повторение.")
+        return _retry(request, last["params"])
 
     @app.get("/reports", response_class=HTMLResponse)
     def reports_page(request: Request, m: str | None = Query(None, max_length=7),

@@ -5,6 +5,14 @@
 {% block page_title %}Нов случай{% endblock %}
 {% block page_hint %}Най-лесно: качете въззивното решение като файл – съдът, делото и годината се разпознават сами – и добавете в полето „Текст“ бележки по казуса. Или попълнете съда, номера и годината. Изберете режим и натиснете „Започни справката“. Вдясно са последните справки и решенията на ВКС в базата по дни.{% endblock %}
 {% block content %}
+{% if last_failed %}{% set lp = last_failed.params %}
+<form class="notice retry-notice" method="post" action="/analyze/retry-last"
+      onsubmit="return confirm('Да се пусне ли пак същата справка със същите документи?{{ ' Платена е, както първия път.' if lp.mode == 'ai' }}')">
+  <span>Последната справка не успя ({{ last_failed.started[:16].replace('T', ' ') }} UTC):
+    <b>{{ lp.filename if lp.file else (courts[lp.court].name if lp.court in courts else 'дело') ~ ' ' ~ (lp.case or '') ~ ('/' ~ lp.year if lp.year else '') }}</b>{% if lp.extras %} + {{ lp.extras|length }} документа{% endif %}.
+    Може да я пуснете отново, без да попълвате и качвате всичко пак.</span>
+  <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>Пусни отново</button>
+</form>{% endif %}
 <div class="dash-grid-container">
   <form class="dash-col-left" method="post" action="/analyze" id="case" enctype="multipart/form-data">
     <div class="card profile-card">

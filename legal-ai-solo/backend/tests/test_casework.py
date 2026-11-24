@@ -274,6 +274,43 @@ def test_other_documents_go_with_the_decision(client, monkeypatch):
     assert r.status_code == 400
 
 
+def test_failed_report_can_be_run_again(client, monkeypatch):
+    """A failed report is offered again with the same documents: on its job page, and on the new-case
+    page after a restart (from errors.log), until a report has been made since."""
+    import legal_ai.web.jobs as jobs
+    c, d = client
+    h = {"origin": "http://127.0.0.1"}
+    started = []
+
+    def failing_run(self, job):
+        started.append(job.params)
+        self._fail(job, RuntimeError("DiskFull: No space left on device"))
+
+    monkeypatch.setattr(jobs.JobRunner, "_run", failing_run)
+    doc = ("Въззивният съд приема, че искът е неоснователен. " * 10).encode()
+    r = c.post("/analyze", data={"mode": "ai"}, files=[("document", ("reshenie.txt", doc, "text/plain"))],
+               headers=h, follow_redirects=False)
+    job_url = r.headers["location"]
+    page = c.get(job_url).text
+    assert "Справката не успя" in page and "DiskFull" in page and f"{job_url}/retry" in page
+    assert c.post(f"{job_url}/retry", headers={"origin": "http://evil.example"}).status_code == 403
+    r = c.post(f"{job_url}/retry", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] != job_url and started[1] == started[0]
+    # after a restart the jobs in memory are gone; the new-case page offers the last failed one
+    from legal_ai.web import app as web_app
+    c2 = type(c)(web_app.create_app(), base_url="http://127.0.0.1")
+    assert c2.get(job_url).status_code == 404
+    page = c2.get("/analyze").text
+    assert "Последната справка не успя" in page and "reshenie.txt" in page and "Платена е" in page
+    r = c2.post("/analyze/retry-last", headers=h, follow_redirects=False)
+    assert r.status_code == 303 and started[2]["file"] == started[0]["file"]
+    # a report made since: nothing to offer; a removed upload: nothing to offer
+    (d / "run.json").write_text(json.dumps({**json.loads((d / "run.json").read_text(encoding="utf-8")),
+                                            "created_at": "2999-01-01T00:00:00+00:00"}), encoding="utf-8")
+    assert "Последната справка не успя" not in c2.get("/analyze").text
+    (d.parent.parent / started[0]["file"]).unlink()
+    assert c2.post("/analyze/retry-last", headers=h).status_code == 404
+
 def test_context_documents_in_the_prompts():
     from legal_ai.cassation import prompts as P
     from legal_ai.cassation.appeal import appeal_prompt

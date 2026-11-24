@@ -451,3 +451,7 @@ details.small summary{cursor:pointer;color:var(--primary,#5b5bd6)}
 .docs-upload[data-drop]:hover { border-color: var(--fs-purple-bar); }
 .docs-upload .drop-hint { width: 100%; margin: 0; text-align: center; }
 [data-drop].drop-over { outline: 2px dashed var(--fs-purple) !important; outline-offset: 2px; border-color: var(--fs-purple) !important; background: var(--fs-purple-light) !important; }
+/* "the last report failed – run it again" above the new-case form */
+.retry-notice { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 14px; }
+.retry-notice span { flex: 1 1 320px; }
+.retry-notice .kit-submit { width: auto; padding: 8px 18px; }

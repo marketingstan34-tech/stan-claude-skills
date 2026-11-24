@@ -70,9 +70,8 @@ def _build_sql(n_terms: int) -> str:
     decision_cov = " + ".join(f"max(m{i})" for i in range(n_terms))
     return f"""
 WITH q AS (SELECT to_tsquery('simple', %(tsq)s) AS q),
-hits AS (
-    SELECT p.id, p.decision_version_id, p.paragraph_no, p.section, p.start_offset, p.end_offset,
-           p.exact_text, p.is_admission, ts_rank_cd(p.tsv, q.q) AS rank, {match_cols}
+hits AS (   -- lean: no passage text, so even a query of common words stays small in memory
+    SELECT p.id, p.decision_version_id, p.paragraph_no, ts_rank_cd(p.tsv, q.q) AS rank, {match_cols}
     FROM passages p
     JOIN decisions d ON d.current_version_id = p.decision_version_id
     CROSS JOIN q
@@ -88,16 +87,23 @@ per_decision AS (
     FROM hits GROUP BY decision_version_id
     ORDER BY coverage DESC, score DESC, decision_version_id
     LIMIT %(limit)s
+),
+best AS (   -- the best passages of the chosen decisions only; their text is read after this
+    SELECT h.*, ({passage_cov}) AS passage_coverage,
+           row_number() OVER (PARTITION BY h.decision_version_id
+                              ORDER BY ({passage_cov}) DESC, h.rank DESC, h.paragraph_no) AS pos
+    FROM hits h JOIN per_decision pd ON pd.decision_version_id = h.decision_version_id
 )
 SELECT d.id AS decision_id, pd.decision_version_id AS version_id, pd.score, pd.coverage,
        d.act_type, d.act_number, d.act_date, d.case_type, d.case_number, d.case_year, d.chamber,
        d.proceeding_article, d.admission_grounds, d.canonical_url,
-       h.id AS passage_id, h.paragraph_no, h.section, h.start_offset, h.end_offset,
-       h.exact_text, h.is_admission, h.rank, ({passage_cov}) AS passage_coverage
+       b.id AS passage_id, b.paragraph_no, p.section, p.start_offset, p.end_offset,
+       p.exact_text, p.is_admission, b.rank, b.passage_coverage
 FROM per_decision pd
 JOIN decisions d ON d.current_version_id = pd.decision_version_id
-JOIN hits h ON h.decision_version_id = pd.decision_version_id
-ORDER BY pd.coverage DESC, pd.score DESC, pd.decision_version_id, passage_coverage DESC, h.rank DESC, h.paragraph_no
+JOIN best b ON b.decision_version_id = pd.decision_version_id AND b.pos <= %(per_decision)s
+JOIN passages p ON p.id = b.id
+ORDER BY pd.coverage DESC, pd.score DESC, pd.decision_version_id, b.pos
 """
 
 
@@ -105,6 +111,7 @@ def _run(conn: psycopg.Connection, terms: list[Term], mode: str, only_290: bool,
          passages_per_decision: int, articles: list[str] | None = None,
          until: date | None = None) -> list[DecisionHit]:
     params = {"tsq": build_tsquery(terms, mode), "only_290": only_290, "limit": limit,
+              "per_decision": max(1, passages_per_decision),
               "articles": list(articles) if articles else None, "until": until}
     params.update({f"t{i}": t.to_tsquery() for i, t in enumerate(terms)})
     with conn.cursor() as cur:

@@ -14,7 +14,12 @@
   </div>
   {% if job.status == 'failed' %}
     <div class="notice">{{ job.message }}</div>
-    <a class="kit-submit" href="/analyze" style="display:block;text-align:center">Назад</a>
+    {% if job.params.mode in ('ai', 'noai') %}
+    <form method="post" action="/jobs/{{ job.id }}/retry"
+          onsubmit="return confirm('Да се пусне ли пак същата справка със същите документи?{{ ' Платена е, както първия път.' if job.params.mode == 'ai' }}')">
+      <button class="kit-submit" type="submit" style="width:100%">Пусни отново</button></form>
+    <a class="kit-submit light" href="/analyze" style="display:block;text-align:center">Назад</a>
+    {% else %}<a class="kit-submit" href="/analyze" style="display:block;text-align:center">Назад</a>{% endif %}
   {% else %}
     <div class="proj-stage-row"><span class="proj-stage-text">{{ job.message }}</span></div>
     <div class="proj-progress-bar-bg blue-bar-bg"><div class="proj-progress-fill blue-fill indeterminate"></div></div>
