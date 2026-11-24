@@ -5,6 +5,9 @@
   an analysis running on the same server take turns);
 - only https and only hosts on the allowlist (SSRF guard); redirects are not followed;
 - bounded retries for timeouts/429/5xx, honouring Retry-After; no retry on other 4xx;
+- a host that cannot be reached at all (connection or timeout) in DOWN_AFTER requests in a row is
+  treated as down for the rest of this client's life: further requests to it fail at once, so a
+  report goes on with the own database instead of waiting minutes per request on a site that is off;
 - response size cap.
 """
 
@@ -24,6 +27,8 @@ from urllib.parse import urlparse
 import httpx
 
 MAX_ATTEMPTS = 3
+DOWN_AFTER = 2          # requests in a row that could not reach a host at all
+CONNECT_TIMEOUT = 15.0  # seconds to open a connection; reading a slow page may still take 60
 
 
 class FetchError(Exception):
@@ -67,8 +72,9 @@ class PoliteClient:
         self._sleep = sleep
         self._clock = clock
         self._last: float | None = None
+        self._unreachable: dict[str, int] = {}   # host -> requests in a row that never reached it
         self._http = httpx.Client(
-            timeout=httpx.Timeout(60.0),
+            timeout=httpx.Timeout(60.0, connect=CONNECT_TIMEOUT),
             headers={"User-Agent": user_agent},
             follow_redirects=False,
             transport=transport,
@@ -114,16 +120,24 @@ class PoliteClient:
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
+    def host_down(self, host: str) -> bool:
+        return self._unreachable.get((host or "").lower(), 0) >= DOWN_AFTER
+
     def get(self, url: str) -> Fetched:
         parsed = urlparse(url)
         if parsed.scheme != "https" or not host_allowed(parsed.hostname, self._allowed):
             raise FetchError(f"URL извън разрешения домейн: {url}")
+        host = (parsed.hostname or "").lower()
+        if self.host_down(host):
+            raise FetchError(f"Сайтът {host} не отговаря (пропуснато): {url}")
         last_error = ""
+        reached = False
         for attempt in range(1, MAX_ATTEMPTS + 1):
             self._wait_turn()
             self._shared_turn(parsed.hostname or "")
             try:
                 with self._http.stream("GET", url) as resp:
+                    reached = True
                     if resp.status_code == 429 or resp.status_code >= 500:
                         last_error = f"HTTP {resp.status_code}"
                         retry_after = resp.headers.get("Retry-After", "")
@@ -138,10 +152,15 @@ class PoliteClient:
                         if size > self._max_bytes:
                             raise FetchError(f"Отговорът е над {self._max_bytes} байта: {url}")
                         chunks.append(chunk)
+                    self._unreachable.pop(host, None)
                     return Fetched(url, 200, b"".join(chunks),
                                    datetime.now(timezone.utc).isoformat(),
                                    resp.headers.get("Content-Type", ""))
             except (httpx.TimeoutException, httpx.TransportError) as exc:
                 last_error = type(exc).__name__
                 self._sleep(2 ** attempt + random.uniform(0, 1))
+        if reached:
+            self._unreachable.pop(host, None)
+        else:
+            self._unreachable[host] = self._unreachable.get(host, 0) + 1
         raise FetchError(f"Неуспешно след {MAX_ATTEMPTS} опита ({last_error}): {url}")

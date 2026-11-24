@@ -66,6 +66,29 @@ def test_retries_5xx_then_succeeds_and_does_not_retry_404():
     assert calls["n"] == 1
 
 
+def test_a_site_that_cannot_be_reached_is_skipped_after_two_requests():
+    """VKS site off (24.11.2026: connections hung for minutes per request): after DOWN_AFTER requests
+    that never reached the host, the rest fail at once; a site that answers (even 5xx) is not 'down'."""
+    calls = {"n": 0}
+
+    def down(request):
+        calls["n"] += 1
+        raise httpx.ConnectTimeout("no answer", request=request)
+
+    client, _ = _client(down)
+    for path in ("/a", "/b"):
+        with pytest.raises(FetchError, match="Неуспешно след 3 опита"):
+            client.get("https://www.vks.bg" + path)
+    assert calls["n"] == 6
+    with pytest.raises(FetchError, match="не отговаря"):
+        client.get("https://www.vks.bg/c")
+    assert calls["n"] == 6 and client.host_down("www.vks.bg")
+    client, _ = _client(lambda r: httpx.Response(503))
+    for path in ("/a", "/b", "/c"):
+        with pytest.raises(FetchError, match="HTTP 503"):
+            client.get("https://www.vks.bg" + path)
+    assert not client.host_down("www.vks.bg")
+
 def test_truncated_month_is_split_by_chamber_and_reported(tmp_path):
     full = [f"{i:032X}" for i in range(249)]
 
