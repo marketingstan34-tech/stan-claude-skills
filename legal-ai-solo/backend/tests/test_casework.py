@@ -567,6 +567,11 @@ def test_other_filings(client, monkeypatch):
     for kind in FILINGS:
         assert "Още няма чернова" in c.get(f"/runs/20260102030405/filing/{kind}").text
     assert c.get("/runs/20260102030405/filing/nyama").status_code == 404
+    # with a kind of case saved, the button still posts to the kind of filing (bug seen 24.11.2026)
+    (d / "case.json").write_text(json.dumps({"kind": "граждански"}), encoding="utf-8")
+    page = c.get("/runs/20260102030405/filing/vazzivna").text
+    assert 'action="/runs/20260102030405/filing/vazzivna"' in page and "filing/граждански" not in page
+    (d / "case.json").unlink()
     started = []
     monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
     r = c.post("/runs/20260102030405/filing/otgovor", headers=h, follow_redirects=False)

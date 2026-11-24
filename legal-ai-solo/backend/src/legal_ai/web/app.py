@@ -620,9 +620,10 @@ def create_app() -> FastAPI:
         run, ctx, filing, blocks = filing_blocks(run_id, kind)
         cost = cost_usd({filing["model"]: [filing["usage"]["input_tokens"], filing["usage"]["output_tokens"]]}) \
             if filing and filing.get("usage") else None
-        return render(request, "filing.html", {"run": run, "run_id": run_id, "kind": kind, "spec": FILINGS[kind],
+        # the case data first: its "kind" (the kind of case) must not replace the kind of filing
+        return render(request, "filing.html", {**ctx, "run": run, "run_id": run_id, "kind": kind, "spec": FILINGS[kind],
                                                "filings": FILINGS, "filing": filing, "blocks": blocks, "cost": cost,
-                                               "price_range": TYPICAL_APPEAL_USD, "busy": runner.busy(), **ctx})
+                                               "price_range": TYPICAL_APPEAL_USD, "busy": runner.busy()})
 
     @app.post("/runs/{run_id}/filing/{kind}")
     def run_filing_start(request: Request, run_id: str, kind: str):
