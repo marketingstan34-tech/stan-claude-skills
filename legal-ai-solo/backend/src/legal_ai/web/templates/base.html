@@ -19,6 +19,7 @@
   ('/start', 'Начало', 'grid', path.startswith('/start'), 'Начало: текущите случаи, срокове и какво остава'),
   ('/analyze', 'Нов случай', 'case', path.startswith(('/analyze', '/jobs')), 'Нов случай: качете въззивното решение или въведете номера на делото'),
   ('/reports', 'Справки', 'doc', path.startswith(('/reports', '/traces')) or (path.startswith('/runs') and not path.endswith(('/draft', '/appeal', '/edit'))), 'Всички направени справки'),
+  ('/pleadings', 'Нов документ', 'plus', path.startswith('/pleadings'), 'Искова молба, отговори, въззивна и частна жалба – без справка'),
   ('/documents', 'Документи', 'msg', path.startswith('/documents') or path.endswith(('/draft', '/appeal', '/edit')), 'Всички изложения и касационни жалби – отваряне, редакция, Word'),
   ('/', 'Търсене', 'search', path == '/' or path.startswith('/decisions'), 'Търсене по думи в решенията на ВКС и тълкувателните решения'),
   ('/judges', 'Съдии', 'court', path.startswith('/judges'), 'Проучване по съдия: докладчици във ВКС и как допускат'),
@@ -86,7 +87,7 @@
     </div>
     <a class="nav-tab1-center-btn" href="/analyze#case" aria-label="Нов случай"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></a>
     <div class="nav-tab1-group right">
-      {% for href, label, ic, active, desc in [nav[3], nav[4]] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
+      {% for href, label, ic, active, desc in [nav[4], nav[5]] %}<a class="nav-tab1-item {{ 'active' if active }}" href="{{ href }}" aria-label="{{ label }}">{{ icon(ic, 22) }}</a>{% endfor %}
     </div>
   </nav>
 </div>

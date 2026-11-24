@@ -293,3 +293,17 @@ def test_cited_acts_follow_citations_into_the_database(conn, raw):
     assert cited_acts(conn, [("В1", text, "x")], later, {d["source_record_id"]}, 10) == []
     before = d["act_date"].replace(year=d["act_date"].year - 1)
     assert cited_acts(conn, [("В1", text, "x")], before, set(), 10) == []   # after the cutoff
+
+
+def test_pleading_practice_from_the_database(conn, raw):
+    """SYNTHETIC: the issue's word set finds the art. 290 decision; its matching paragraph is passed on."""
+    from datetime import date
+
+    from legal_ai.cassation.pleadings import find_practice
+    ingest_raw_dir(conn, raw, raw.parent, "manual", "synthetic")
+    issues = [{"text": "Възлагане на неподеляем имот по чл. 349 ГПК",
+               "word_sets": [["възлагане", "неподеляем", "имот"]]}]
+    found = find_practice(conn, issues, date(2030, 1, 1))
+    assert len(found) == 1 and found[0]["label"].startswith("Решение №901/")
+    assert any("неподеляем" in p.lower() for p in found[0]["passages"])
+    assert find_practice(conn, issues, date(2000, 1, 1)) == []    # nothing after the cutoff

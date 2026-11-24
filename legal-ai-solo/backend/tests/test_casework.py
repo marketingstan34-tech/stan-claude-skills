@@ -812,3 +812,85 @@ def test_benchmark_page_shows_meaning_verdict(client):
     html = c.get("/benchmark").text
     assert "(по смисъл) в 1 от 1" in html and "по смисъл – <b>същият</b>" in html
     assert "наш въпрос 1. Същият проблем." in html and "по думи: наш въпрос 2 (20% общи думи)" in html
+
+
+def test_pleadings_without_a_report(client, monkeypatch):
+    """Искова молба, отговори, въззивна и частна жалба: page, documents, the AI part (faked), Word."""
+    import legal_ai.web.jobs as jobs
+    from legal_ai.cassation import pleadings as PL
+    from legal_ai.cassation.draft import to_text
+    c, d = client
+    storage = d.parent.parent
+    h = {"origin": "http://127.0.0.1"}
+    assert "Нов документ" in c.get("/pleadings").text
+    r = c.post("/pleadings", data={"kind": "otgovor_iskova", "title": "Иванов", "notes": "Вземането е погасено по давност."},
+               headers=h, follow_redirects=False)
+    pid = r.headers["location"].rsplit("/", 1)[1]
+    assert r.status_code == 303 and PL.valid_id(pid)
+    assert c.post("/pleadings", data={"kind": "nyama"}, headers=h).status_code == 400
+    assert c.get("/pleadings/..%2Fruns").status_code == 404 and c.get("/pleadings/20990101000000").status_code == 404
+    page = c.get(f"/pleadings/{pid}").text
+    assert "Отговор на искова молба (чл. 131 ГПК)" in page and "Още няма чернова" in page
+    c.post(f"/pleadings/{pid}", data={"court": "Районен съд – Пловдив", "case_ref": "123/2026", "client": "Иван Иванов",
+                                      "opponent": "Банка АД", "lawyer": "Петров"}, headers=h)
+    claim = ("ИСКОВА МОЛБА\nот Банка АД срещу Иван Иванов. Ответникът дължи сумата от 5 000 лева по договор за заем "
+             "от 01.02.2015 г., която не е върнал в уговорения срок. " + "Ищецът е изпълнил задълженията си по договора. " * 20)
+    r = c.post(f"/pleadings/{pid}/docs", files={"files": ("iskova.txt", claim.encode(), "text/plain")}, headers=h,
+               follow_redirects=False)
+    assert r.status_code == 303 and PL.docs(storage, pid).items()[0]["kind"] == "искова молба"
+    started = []
+    monkeypatch.setattr(jobs.JobRunner, "_run", lambda self, job: started.append(job.params))
+    assert c.post(f"/pleadings/{pid}/write", headers=h, follow_redirects=False).status_code == 303
+    assert started == [{"mode": "pleading", "pleading_id": pid}]
+
+    class Fake:
+        def __init__(self):
+            self.prompts = []
+            self.config = type("C", (), {"analysis_model": "big", "light_model": "small", "assess_effort": "low"})()
+            self.usage = type("U", (), {"calls": 2, "input_tokens": 10, "output_tokens": 5, "by_model": {}})()
+
+        def structured(self, **kw):
+            self.prompts.append(kw)
+            if kw["schema_name"] == "pleading_issues":
+                return {"issues": [{"text": "Погасителна давност за вземане по договор за заем",
+                                    "word_sets": [["погасителна", "давност", "заем"]]}]}
+            return {"intro": "Оспорвам исковата молба изцяло.",
+                    "sections": [{"title": "Възражение за давност",
+                                  "paragraphs": ["Ищецът твърди, че „Ответникът дължи сумата от 5 000 лева по договор "
+                                                 "за заем от 01.02.2015 г.“, но вземането е погасено.",
+                                                 "Тъй като „договорът е сключен в писмена форма пред нотариус в "
+                                                 "присъствието на двама свидетели“, вземането е безспорно."],
+                                  "vks_labels": ["Решение №1/01.01.2020 по дело №1/2019"]}],
+                    "petitum": "да отхвърлите предявения иск изцяло", "claim_value": "",
+                    "evidence": ["Моля да бъде задължен ищецът да представи оригинала на договора."],
+                    "closing": "С оглед изложеното искът е неоснователен."}
+
+    ai = Fake()
+    item = PL.load(storage, pid)
+    draft = PL.generate(ai, "otgovor_iskova", item, PL.docs(storage, pid).read_all(), conn=None)
+    assert ai.prompts[0]["model"] == "small" and ai.prompts[1]["model"] == "big"
+    assert "ОСНОВНИЯТ ДОКУМЕНТ: искова молба" in ai.prompts[1]["user"] and "чл. 133 ГПК" in ai.prompts[1]["user"]
+    s = draft["sections"][0]
+    assert s["vks_labels"] == [] and s["dropped_labels"] == ["Решение №1/01.01.2020 по дело №1/2019"]
+    assert "не е намерен" not in s["paragraphs"][0] and "не е намерен" in s["paragraphs"][1]
+    assert draft["unverified_quotes"] == 1 and draft["main_doc"].startswith("искова молба")
+    PL.save_draft(storage, pid, draft)
+    text = to_text(PL.build(item, draft))
+    assert "ДО РАЙОННИЯ СЪД" not in text and "ДО РАЙОНЕН СЪД – ПЛОВДИВ" in text and "по чл. 131 ГПК" in text
+    assert "Моля да отхвърлите предявения иск изцяло." in text and "по исковата молба на Банка АД" in text
+    assert "(адв. Петров)" in text and "чл. 133 ГПК" in text
+    assert "I. Възражение за давност" in c.get(f"/pleadings/{pid}").text
+    assert c.get(f"/pleadings/{pid}/docx").status_code == 200
+    # a filing that needs a main document refuses without it
+    pid2 = PL.create(storage, "vazzivna", {})
+    with pytest.raises(ValueError, match="решение"):
+        PL.generate(Fake(), "vazzivna", PL.load(storage, pid2), [], conn=None)
+    # the other kinds build their fixed parts
+    for kind, words in {"iskova": ("ИСКОВА МОЛБА", "Цена на иска: 5 000 лв."),
+                        "vazzivna": ("ВЪЗЗИВНА ЖАЛБА", "Моля да отмените обжалваното решение и да отхвърлите"),
+                        "otgovor_vazzivna": ("по чл. 263, ал. 1 ГПК", "по въззивната жалба на"),
+                        "chastna": ("ЧАСТНА ЖАЛБА", "Моля да отмените обжалваното определение")}.items():
+        t = to_text(PL.build({**item, "kind": kind}, {**draft, "claim_value": "5 000 лв."}))
+        assert all(w in t for w in words), kind
+    assert PL.best_passages(["кратко", "А" * 50 + " погасителна давност за вземането " + "Б" * 100],
+                            ["погасителна", "давност"]) and PL.find_practice(None, [], date(2026, 1, 1)) == []

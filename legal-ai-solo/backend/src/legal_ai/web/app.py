@@ -637,6 +637,91 @@ def create_app() -> FastAPI:
             return RedirectResponse(f"/runs/{run_id}/filing/{kind}?busy=1", status_code=303)
         return RedirectResponse(f"/jobs/{job.id}", status_code=303)
 
+    # ---------- filings without a report (cassation/pleadings.py) ----------
+
+    def pleading_or_404(pid: str) -> dict:
+        from legal_ai.cassation import pleadings as PL
+        item = PL.load(storage, pid)
+        if item is None:
+            raise HTTPException(404, "Няма такъв документ.")
+        return item
+
+    @app.get("/pleadings", response_class=HTMLResponse)
+    def pleadings_page(request: Request):
+        from legal_ai.cassation import pleadings as PL
+        return render(request, "pleadings.html", {"kinds": PL.KINDS, "items": PL.all_items(storage)})
+
+    @app.post("/pleadings")
+    async def pleadings_create(request: Request):
+        from legal_ai.cassation import pleadings as PL
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        form = await request.form()
+        if form.get("kind") not in PL.KINDS:
+            raise HTTPException(400, "Изберете вид документ.")
+        pid = PL.create(storage, form["kind"], dict(form))
+        return RedirectResponse(f"/pleadings/{pid}", status_code=303)
+
+    @app.get("/pleadings/{pid}", response_class=HTMLResponse)
+    def pleading_page(request: Request, pid: str):
+        from legal_ai.ai.pricing import TYPICAL_APPEAL_USD, cost_usd
+        from legal_ai.cassation import pleadings as PL
+        item = pleading_or_404(pid)
+        draft = PL.load_draft(storage, pid)
+        cost = cost_usd(draft["usage"].get("by_model") or {}) if draft and draft.get("usage") else None
+        return render(request, "pleading.html", {
+            "item": item, "spec": PL.KINDS[item["kind"]], "draft": draft,
+            "blocks": PL.build(item, draft) if draft else [], "docs": PL.docs(storage, pid).items(),
+            "cost": cost, "price_range": TYPICAL_APPEAL_USD, "busy": runner.busy()})
+
+    @app.post("/pleadings/{pid}")
+    async def pleading_save(request: Request, pid: str):
+        from legal_ai.cassation import pleadings as PL
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        pleading_or_404(pid)
+        PL.update(storage, pid, dict(await request.form()))
+        return RedirectResponse(f"/pleadings/{pid}", status_code=303)
+
+    @app.post("/pleadings/{pid}/docs")
+    async def pleading_docs_add(request: Request, pid: str):
+        from legal_ai.cassation import pleadings as PL
+        pleading_or_404(pid)
+        return await add_files(request, PL.docs(storage, pid), f"/pleadings/{pid}#docs")
+
+    @app.post("/pleadings/{pid}/docs/{item_id}/delete")
+    def pleading_docs_delete(request: Request, pid: str, item_id: str):
+        from legal_ai.cassation import pleadings as PL
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        pleading_or_404(pid)
+        PL.docs(storage, pid).remove(item_id)
+        return RedirectResponse(f"/pleadings/{pid}#docs", status_code=303)
+
+    @app.post("/pleadings/{pid}/write")
+    def pleading_write(request: Request, pid: str):
+        if not same_origin(request):
+            raise HTTPException(403, "Заявката не идва от тази страница.")
+        pleading_or_404(pid)
+        job = runner.start({"mode": "pleading", "pleading_id": pid})
+        if job is None:
+            return RedirectResponse(f"/pleadings/{pid}?busy=1", status_code=303)
+        return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+    @app.get("/pleadings/{pid}/docx")
+    def pleading_docx(pid: str):
+        from fastapi.responses import Response
+
+        from legal_ai.cassation import pleadings as PL
+        from legal_ai.cassation.draft import to_docx
+        item = pleading_or_404(pid)
+        draft = PL.load_draft(storage, pid)
+        if not draft:
+            raise HTTPException(404, "Още няма чернова.")
+        return Response(to_docx(PL.build(item, draft)),
+                        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        headers={"Content-Disposition": f'attachment; filename="{item["kind"]}-{pid}.docx"'})
+
     @app.get("/runs/{run_id}/filing-docx/{kind}")
     def run_filing_docx(run_id: str, kind: str):
         from fastapi.responses import Response

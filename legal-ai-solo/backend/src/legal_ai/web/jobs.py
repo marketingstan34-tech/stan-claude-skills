@@ -62,6 +62,8 @@ class JobRunner:
             return self._run_filing(job)
         if job.params.get("mode") == "benchmark":
             return self._run_benchmark(job)
+        if job.params.get("mode") == "pleading":
+            return self._run_pleading(job)
         from legal_ai.ai import load_ai_config, make_provider
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
@@ -216,6 +218,45 @@ class JobRunner:
         except Exception as exc:  # noqa: BLE001 - shown to the local user
             self._fail(job, exc)
         finally:
+            if job.cleanup:
+                job.cleanup()
+
+    def _run_pleading(self, job: Job) -> None:
+        """A filing without a report (cassation/pleadings.py): issues, practice from the database, draft."""
+        from legal_ai.ai import load_ai_config, make_provider
+        from legal_ai.cassation import pleadings as PL
+        from legal_ai.web.casedocs import archive, archive_excerpts, style_samples
+        job.status = "running"
+        pid = job.params["pleading_id"]
+        storage = self.runs_dir.parent
+        conn = None
+        try:
+            item = PL.load(storage, pid)
+            if item is None:
+                raise ValueError("Няма такъв документ.")
+            job.message = "Четене на документите по делото (сканираните се разчитат – до минута-две)…"
+            docs_read = PL.docs(storage, pid).read_all()
+            style = style_samples(storage).texts()
+            past_all = archive(storage).texts()
+            if not style:
+                style = past_all[:2]
+            past = archive_excerpts(past_all, item.get("notes", ""))
+            if os.environ.get("DATABASE_URL"):
+                from legal_ai.db import connect
+                conn = connect(os.environ["DATABASE_URL"])
+            ai = make_provider(load_ai_config())
+            job.cleanup = ai.close
+            draft = PL.generate(ai, item["kind"], item, docs_read, conn, style, past,
+                                progress=lambda msg: setattr(job, "message", msg))
+            PL.save_draft(storage, pid, draft)
+            job.redirect = f"/pleadings/{pid}"
+            job.status = "done"
+            job.message = "Готово."
+        except Exception as exc:  # noqa: BLE001 - shown to the local user
+            self._fail(job, exc)
+        finally:
+            if conn is not None:
+                conn.close()
             if job.cleanup:
                 job.cleanup()
 
