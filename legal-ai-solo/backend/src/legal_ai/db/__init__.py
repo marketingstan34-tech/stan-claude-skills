@@ -42,5 +42,16 @@ def describe_target(database_url: str) -> str:
     return f"{parts.hostname}:{parts.port or 5432}{parts.path}"
 
 
+# Sorting and grouping the search hits stays in memory up to this size instead of spilling to temporary
+# files on the database disk; a search with common words then works even when that disk is nearly full.
+WORK_MEM = "64MB"
+
+
 def connect(database_url: str) -> psycopg.Connection:
-    return psycopg.connect(to_psycopg_url(database_url), row_factory=dict_row)
+    conn = psycopg.connect(to_psycopg_url(database_url), row_factory=dict_row)
+    try:
+        conn.execute(f"SET work_mem = '{WORK_MEM}'")
+        conn.commit()   # a later rollback must not undo it
+    except psycopg.Error:
+        conn.rollback()   # a pooler that refuses SET: the server default stays
+    return conn
