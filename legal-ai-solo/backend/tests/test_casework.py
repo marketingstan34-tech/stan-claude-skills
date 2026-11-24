@@ -324,6 +324,7 @@ def test_report_case_goes_to_an_administrative_penal_answer(client):
                                                ensure_ascii=False), encoding="utf-8")
     page = c.get("/runs/20260102030405/filing/otgovor").text
     assert "/runs/20260102030405/to-pleading/otgovor_kasacionna_an" in page and "Върховния касационен съд" in page
+    assert "/runs/20260102030405/to-pleading/otgovor_vazzivna" in page
     assert c.post("/runs/20260102030405/to-pleading/otgovor_kasacionna_an",
                   headers={"origin": "http://evil.example"}).status_code == 403
     assert c.post("/runs/20260102030405/to-pleading/nyama", headers=h).status_code == 404
