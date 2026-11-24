@@ -85,7 +85,7 @@ legal-ai search "възлагане на неподеляем имот чл. 349
 
 ## Касационен анализ (етап 2)
 
-Нужни: `OPENAI_API_KEY` и `AI_*` от `.env.example`, достъп до www.vks.bg и *.justice.bg.
+Нужни: `OPENAI_API_KEY` и `AI_*` от `.env.example` (или `AI_PROVIDER=anthropic` и `ANTHROPIC_API_KEY` за Claude), достъп до www.vks.bg и *.justice.bg.
 
 ```bash
 cd backend

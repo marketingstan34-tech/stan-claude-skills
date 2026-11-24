@@ -10,7 +10,7 @@
     <div class="card details-card">
       <h2 class="details-title">Проверка</h2>
       {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
-      <p>Проверява текущото изложение{% if has_appeal %} и жалбата{% else %} (жалба още няма – по-добре първо я напишете){% endif %}, включително вашите редакции. Една заявка към OpenAI, около {{ '%.2f'|format(judge_price[0]) }}–{{ '%.2f'|format(judge_price[1]) }} $.</p>
+      <p>Проверява текущото изложение{% if has_appeal %} и жалбата{% else %} (жалба още няма – по-добре първо я напишете){% endif %}, включително вашите редакции. Една заявка към {{ ai_name }}, около {{ '%.2f'|format(judge_price[0]) }}–{{ '%.2f'|format(judge_price[1]) }} $.</p>
       <form method="post" action="/runs/{{ run_id }}/judge" onsubmit="return confirm('Да провери ли „Съдия от ВКС“? Една платена заявка, около {{ '%.2f'|format(judge_price[0]) }}–{{ '%.2f'|format(judge_price[1]) }} $.')">
         <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else ('Провери наново' if result else 'Провери') }}</button></form>
       {% if result %}<p class="muted small">Проверено на {{ result.created_at[:10].split('-')|reverse|join('.') }} · {{ result.model }}{% if cost is not none %} · ≈ {{ '%.2f'|format(cost) }} ${% endif %}</p>{% endif %}

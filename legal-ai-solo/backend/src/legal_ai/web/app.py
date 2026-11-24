@@ -78,6 +78,10 @@ def create_app() -> FastAPI:
     traces_dir = storage / "traces"
     runner = JobRunner(runs_dir, traces_dir)
 
+    def _ai_name() -> str:
+        from legal_ai.ai.pricing import vendor
+        return vendor()["name"]
+
     def price_info() -> dict:
         from legal_ai.ai import pricing
         try:
@@ -85,13 +89,14 @@ def create_app() -> FastAPI:
             max_calls = max(MIN_CALLS, int(os.environ.get("AI_MAX_CALLS_PER_RUN", str(MIN_CALLS))))
         except ValueError:
             max_calls = 140
-        return {"report": pricing.TYPICAL_REPORT_USD, "appeal": pricing.TYPICAL_APPEAL_USD, "max_calls": max_calls}
+        return {"report": pricing.report_usd(), "appeal": pricing.TYPICAL_APPEAL_USD, "max_calls": max_calls}
 
     def render(request: Request, name: str, ctx: dict, status_code: int = 200):
         return _TEMPLATES.TemplateResponse(request, name, {
             "running_job": runner.running(),
             "today": date.today().strftime("%d.%m.%Y"), "today_iso": date.today().isoformat(),
             "price": price_info(), "credits": credits.summary(storage, runs_dir),
+            "ai_name": _ai_name(),
             **ctx}, status_code=status_code)
 
     def corpus_counts(cur) -> dict:
@@ -455,7 +460,7 @@ def create_app() -> FastAPI:
 
     @app.post("/credits")
     async def set_credits(request: Request):
-        """The balance shown on the OpenAI billing page, typed by the lawyer after a top-up."""
+        """The balance shown on the AI provider's billing page, typed by the lawyer after a top-up."""
         if not same_origin(request):
             raise HTTPException(403, "Заявката не идва от тази страница.")
         form = await request.form()
@@ -670,7 +675,7 @@ def create_app() -> FastAPI:
     def benchmark_page(request: Request):
         import json as _json
 
-        from legal_ai.ai.pricing import TYPICAL_REPORT_USD, cost_usd
+        from legal_ai.ai.pricing import cost_usd, report_usd
         bdir = storage / "benchmark"
         runs = []
         for f in sorted(bdir.glob("*.json"), reverse=True)[:5] if bdir.is_dir() else []:
@@ -689,7 +694,7 @@ def create_app() -> FastAPI:
             pass
         from legal_ai.benchmark import WHY
         return render(request, "benchmark.html", {"runs": runs, "available": available, "why": WHY,
-                                                  "price_one": TYPICAL_REPORT_USD, "busy": runner.busy()})
+                                                  "price_one": report_usd(), "busy": runner.busy()})
 
     @app.post("/benchmark")
     async def benchmark_start(request: Request):

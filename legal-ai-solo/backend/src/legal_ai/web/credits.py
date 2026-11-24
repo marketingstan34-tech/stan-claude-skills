@@ -1,4 +1,4 @@
-"""Estimate of the OpenAI credit left, for the bar in the menu.
+"""Estimate of the AI credit left (OpenAI or Anthropic), for the bar in the menu.
 
 OpenAI does not give the prepaid balance to an ordinary API key, so the lawyer types the
 balance shown on the OpenAI billing page once (after each top-up) and the program subtracts
@@ -15,9 +15,8 @@ import re
 from datetime import datetime, timezone
 from pathlib import Path
 
-from legal_ai.ai.pricing import TYPICAL_REPORT_USD, cost_usd
+from legal_ai.ai.pricing import cost_usd, report_usd, vendor
 
-BILLING_URL = "https://platform.openai.com/settings/organization/billing/overview"
 LOW_USD = 2.0
 
 
@@ -92,12 +91,12 @@ def summary(storage: Path, runs_dir: Path) -> dict:
     """What the bar shows. `set` is False until the lawyer enters the balance once."""
     data = load(storage)
     if data is None:
-        return {"set": False, "url": BILLING_URL}
+        return {"set": False, "url": vendor()["billing"], "vendor": vendor()["name"]}
     at = _parse_time(data["at"])
     balance = float(data["balance"])
     spent = spent_since(runs_dir, at)
     left = max(balance - spent, 0.0)
-    return {"set": True, "url": BILLING_URL, "balance": balance, "spent": spent, "left": left,
+    return {"set": True, "url": vendor()["billing"], "vendor": vendor()["name"], "balance": balance, "spent": spent, "left": left,
             "pct": round(100 * left / balance) if balance > 0 else 0,
-            "reports_left": int(left // TYPICAL_REPORT_USD[1]), "low": left < LOW_USD,
+            "reports_left": int(left // report_usd()[1]), "low": left < LOW_USD,
             "at": at.astimezone(timezone.utc).strftime("%d.%m.%Y")}

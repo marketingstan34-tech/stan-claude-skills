@@ -62,7 +62,7 @@ class JobRunner:
             return self._run_filing(job)
         if job.params.get("mode") == "benchmark":
             return self._run_benchmark(job)
-        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.ai import load_ai_config, make_provider
         from legal_ai.cassation.pipeline import run_analysis, save_run
         from legal_ai.http import PoliteClient
         from legal_ai.sources.courts import ALLOWED_HOSTS
@@ -73,7 +73,7 @@ class JobRunner:
         try:
             interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
             ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
-            ai = OpenAIProvider(load_ai_config())
+            ai = make_provider(load_ai_config())
             job.cleanup = ai.close
             with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
                     PoliteClient([VKS_HOST], interval, ua) as vks:
@@ -117,7 +117,7 @@ class JobRunner:
 
     def _run_appeal(self, job: Job) -> None:
         """Draft of the cassation appeal for a saved AI report (one AI call)."""
-        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.ai import load_ai_config, make_provider
         from legal_ai.cassation import casefile
         from legal_ai.cassation.appeal import generate
         job.status = "running"
@@ -130,7 +130,7 @@ class JobRunner:
             text = (d / "appellate.txt").read_text(encoding="utf-8")
             case = casefile.load_case(d)
             chosen = case.get("questions") or casefile.default_questions(run)
-            ai = OpenAIProvider(load_ai_config())
+            ai = make_provider(load_ai_config())
             job.cleanup = ai.close
             try:
                 context = [(c["name"], c["text"]) for c in json.loads((d / "context.json").read_text(encoding="utf-8"))]
@@ -160,7 +160,7 @@ class JobRunner:
 
     def _run_filing(self, job: Job) -> None:
         """Answer (чл. 287), appeal against the first-instance decision or private appeal (one AI call)."""
-        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.ai import load_ai_config, make_provider
         from legal_ai.cassation import casefile
         from legal_ai.cassation.appeal import generate
         from legal_ai.cassation.filings import FILINGS, instructions
@@ -203,7 +203,7 @@ class JobRunner:
                 context.insert(0, ("Хронология на делото (документите по дата)", folder.chronology()))
             chosen = casefile.load_case(d).get("questions") or casefile.default_questions(run)
             style, past = self._style_and_archive(storage, run, chosen)
-            ai = OpenAIProvider(load_ai_config())
+            ai = make_provider(load_ai_config())
             job.cleanup = ai.close
             job.message = f"AI пише: {spec['title']} (обикновено 3–8 минути)…"
             result = generate(ai, run, main, chosen, context, style, instructions(kind), spec["decision_title"],
@@ -235,7 +235,7 @@ class JobRunner:
 
     def _run_benchmark(self, job: Job) -> None:
         """Accuracy check on real VKS admission rulings (legal_ai/benchmark.py): one AI report per case."""
-        from legal_ai.ai import OpenAIProvider, Usage, load_ai_config
+        from legal_ai.ai import Usage, load_ai_config, make_provider
         from legal_ai.benchmark import in_database, judge_questions, pick_cases, score, summary
         from legal_ai.cassation.pipeline import fetch_appellate, run_analysis
         from legal_ai.db import connect
@@ -263,7 +263,7 @@ class JobRunner:
                         result["cases"].append(c)
                         job.message = f"Дело {i} от {len(cases)}: {c['court_name']}, дело {c['case']}/{c['year']}…"
                         # each case is one analysis with its own call cap (AI_MAX_CALLS_PER_RUN), as a report
-                        ai = OpenAIProvider(load_ai_config())
+                        ai = make_provider(load_ai_config())
                         job.cleanup = ai.close
                         try:
                             _, appellate = fetch_appellate(courts, c["court"], c["case"], c["year"])
@@ -284,7 +284,7 @@ class JobRunner:
                                 # one more call, outside the report's cap: same question by meaning?
                                 job.message = f"Дело {i} от {len(cases)}: сравнение на въпросите по смисъл…"
                                 cfg = load_ai_config()
-                                judge_ai = OpenAIProvider(cfg)
+                                judge_ai = make_provider(cfg)
                                 try:
                                     judge_questions(judge_ai, cfg.stance_model or cfg.analysis_model,
                                                     cfg.stance_effort, sc)
@@ -317,7 +317,7 @@ class JobRunner:
 
     def _run_judge(self, job: Job) -> None:
         """„Съдия от ВКС": one AI call reviews the statement and the appeal (texts given by the page)."""
-        from legal_ai.ai import OpenAIProvider, load_ai_config
+        from legal_ai.ai import load_ai_config, make_provider
         from legal_ai.cassation.judge import review
         job.status = "running"
         run_id = job.params["run_id"]
@@ -327,7 +327,7 @@ class JobRunner:
             if run is None:
                 raise ValueError("Няма такава справка.")
             text = (d / "appellate.txt").read_text(encoding="utf-8")
-            ai = OpenAIProvider(load_ai_config())
+            ai = make_provider(load_ai_config())
             job.cleanup = ai.close
             job.message = "„Съдия от ВКС“ чете изложението и жалбата (обикновено 1–3 минути)…"
             result = review(ai, run, text, job.params.get("statement", ""), job.params.get("appeal", ""),

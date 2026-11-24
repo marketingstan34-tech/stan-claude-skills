@@ -439,7 +439,8 @@ def test_credit_estimate(tmp_path):
     (runs / "20261003130000" / "appeal.json").write_text(json.dumps({
         "created_at": "2026-10-03T13:05:00+00:00", "model": "gpt-5.5-2026-04-23",
         "usage": {"input_tokens": 20_000, "output_tokens": 2_000}}), encoding="utf-8")       # 0.10 + 0.06 = 0.16 $
-    assert credits.summary(tmp_path, runs) == {"set": False, "url": credits.BILLING_URL}
+    assert credits.summary(tmp_path, runs) == {"set": False, "url": "https://platform.openai.com/settings/organization/billing/overview",
+                                              "vendor": "OpenAI"}
     credits.save(tmp_path, 10.0, now=datetime(2026, 10, 3, 12, 0, tzinfo=timezone.utc))
     s = credits.summary(tmp_path, runs)
     assert round(s["spent"], 2) == 0.96 and round(s["left"], 2) == 9.04      # only what came after 12:00
@@ -686,7 +687,7 @@ def test_benchmark_gives_each_case_its_own_call_cap(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", "postgresql://unused")
     monkeypatch.setattr(db, "connect", lambda url: FakeConn())
     monkeypatch.setattr(bm, "pick_cases", lambda conn, n: [dict(c) for c in cases])
-    monkeypatch.setattr(ai_mod, "OpenAIProvider", FakeAI)
+    monkeypatch.setattr(ai_mod, "make_provider", FakeAI)
     monkeypatch.setattr(ai_mod, "load_ai_config", lambda: None)
     monkeypatch.setattr(pipeline, "fetch_appellate",
                         lambda courts, court, case, year: (None, SimpleNamespace(act_date=date(2025, 1, 10), label="Р")))

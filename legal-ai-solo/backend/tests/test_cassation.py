@@ -4,6 +4,7 @@ import json
 from datetime import date
 
 import httpx
+import pytest
 
 from legal_ai.ai import AIConfig, OpenAIProvider
 from legal_ai.cassation.pipeline import SourceDoc, check_quote, render_markdown, run_analysis
@@ -133,3 +134,89 @@ def test_exhausted_credit_stops_with_a_clear_error():
                         sleep=lambda s: None)
     with pytest.raises(AIQuotaError):
         ai.structured(model="m", system="s", user="u", schema_name="x", schema={"type": "object"})
+
+
+def test_claude_provider_structured_output_usage_and_errors(monkeypatch):
+    """Claude via the SDK: JSON-schema output, effort, refusal fallback, call cap, quota stop."""
+    from types import SimpleNamespace
+
+    import anthropic
+
+    from legal_ai.ai import AIError, AIQuotaError, load_ai_config, make_provider
+    from legal_ai.ai.claude import FALLBACK_BETA, ClaudeProvider
+
+    sent = []
+
+    class FakeStream:
+        def __init__(self, msg):
+            self.msg = msg
+        def __enter__(self):
+            return self
+        def __exit__(self, *a):
+            return False
+        def get_final_message(self):
+            if isinstance(self.msg, Exception):
+                raise self.msg
+            return self.msg
+
+    def message(text, stop="end_turn", model="claude-opus-5-5"):
+        return SimpleNamespace(model=model, stop_reason=stop, content=[SimpleNamespace(type="text", text=text)],
+                               usage=SimpleNamespace(input_tokens=100, output_tokens=20,
+                                                     cache_creation_input_tokens=0, cache_read_input_tokens=5))
+
+    replies = []
+
+    class FakeClient:
+        beta = SimpleNamespace(messages=SimpleNamespace(stream=lambda **kw: (sent.append(kw), FakeStream(replies.pop(0)))[1]))
+        def close(self):
+            pass
+
+    monkeypatch.setenv("AI_PROVIDER", "anthropic")
+    for var in ("CLAUDE_ANALYSIS_MODEL", "CLAUDE_QUERY_MODEL", "CLAUDE_ASSESS_MODEL", "CLAUDE_STANCE_MODEL"):
+        monkeypatch.delenv(var, raising=False)
+    cfg = load_ai_config()
+    assert (cfg.provider, cfg.analysis_model, cfg.assess_model, cfg.stance_model) == \
+        ("anthropic", "claude-opus-5-5", "claude-haiku-5-5", "claude-opus-5-5")
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "dummy")
+    assert isinstance(make_provider(cfg), ClaudeProvider)
+
+    ai = ClaudeProvider(cfg, client=FakeClient())
+    schema = {"type": "object", "properties": {"a": {"type": "integer"}}, "required": ["a"], "additionalProperties": False}
+    replies.append(message('{"a": 1}'))
+    assert ai.structured(model="claude-opus-5-5", system="S", user="U", schema_name="x", schema=schema, effort="low") == {"a": 1}
+    kw = sent[-1]
+    assert kw["output_config"] == {"effort": "low", "format": {"type": "json_schema", "schema": schema}}
+    assert kw["fallbacks"] == "default" and kw["betas"] == [FALLBACK_BETA] and kw["system"] == "S"
+    assert ai.usage.by_model["claude-opus-5-5"] == [105, 20]
+    # the fast filter model has no refusal fallback; OpenAI's "minimal" effort becomes "low"
+    replies.append(message('{"a": 2}', model="claude-haiku-5-5"))
+    ai.structured(model="claude-haiku-5-5", system="S", user="U", schema_name="x", schema=schema, effort="minimal")
+    assert "fallbacks" not in sent[-1] and sent[-1]["output_config"]["effort"] == "low"
+    # a cut-off answer is asked once more; a refusal is an error
+    replies.extend([message('{"a"', stop="max_tokens"), message('{"a": 3}')])
+    assert ai.structured(model="claude-opus-5-5", system="S", user="U", schema_name="x", schema=schema)["a"] == 3
+    replies.append(message("", stop="refusal"))
+    with pytest.raises(AIError, match="отказа"):
+        ai.structured(model="claude-opus-5-5", system="S", user="U", schema_name="x", schema=schema)
+    # no credit: the whole run stops
+    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
+    replies.append(anthropic.PaymentRequiredError("no credit", response=httpx.Response(402, request=req), body=None))
+    with pytest.raises(AIQuotaError, match="Anthropic"):
+        ai.structured(model="claude-opus-5-5", system="S", user="U", schema_name="x", schema=schema)
+    # the call cap counts every request
+    capped = ClaudeProvider(AIConfig("m", "m", max_calls=0, provider="anthropic"), client=FakeClient())
+    with pytest.raises(AIError, match="лимит"):
+        capped.structured(model="claude-opus-5-5", system="S", user="U", schema_name="x", schema=schema)
+
+
+def test_provider_choice_and_prices(monkeypatch):
+    from legal_ai.ai import AIError, load_ai_config, provider_name
+    from legal_ai.ai.pricing import cost_usd, report_usd, vendor
+    monkeypatch.delenv("AI_PROVIDER", raising=False)
+    assert provider_name() == "openai" and vendor()["name"] == "OpenAI"
+    monkeypatch.setenv("AI_PROVIDER", "anthropic")
+    assert vendor()["name"] == "Anthropic" and report_usd()[1] < 1.4
+    assert abs(cost_usd({"claude-opus-5-5": [1_000_000, 100_000], "claude-haiku-5-5": [1_000_000, 0]}) - 6.10) < 1e-9
+    monkeypatch.setenv("AI_PROVIDER", "gemini")
+    with pytest.raises(AIError):
+        load_ai_config()

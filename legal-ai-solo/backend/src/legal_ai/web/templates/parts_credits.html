@@ -1,5 +1,5 @@
 {% from "icons.html" import icon %}
-{# Estimated OpenAI credit left and a link to top up (see web/credits.py). #}
+{# Estimated AI credit left (OpenAI or Anthropic) and a link to top up (see web/credits.py). #}
 {% macro credits_box(credits, request) -%}
 {% set err = request.query_params.get('credits_error') %}
 <div class="fs-credits {{ 'low' if credits.set and credits.low }}">
@@ -9,17 +9,17 @@
   <div class="fs-credits-bar" role="img" aria-label="Остават {{ credits.pct }}%"><i style="width: {{ credits.pct }}%"></i></div>
   <p class="fs-credits-sub">{% if credits.low %}Свършва – заредете преди следващата справка{% else %}≈ {{ credits.reports_left }} справки с AI{% endif %} · от {{ '%.2f'|format(credits.balance) }} $ на {{ credits.at }}</p>
   {% else %}
-  <p class="fs-credits-sub">Въведете баланса от OpenAI, за да виждате колко остава.</p>
+  <p class="fs-credits-sub">Въведете баланса от {{ credits.vendor }}, за да виждате колко остава.</p>
   {% endif %}
-  <a class="fs-credits-btn" href="{{ credits.url }}" target="_blank" rel="noopener noreferrer" title="Отваря плащанията в OpenAI в нов прозорец">Зареди кредит {{ icon('arrow', 11) }}</a>
+  <a class="fs-credits-btn" href="{{ credits.url }}" target="_blank" rel="noopener noreferrer" title="Отваря плащанията в {{ credits.vendor }} в нов прозорец">Зареди кредит {{ icon('arrow', 11) }}</a>
   <details class="fs-credits-edit" {{ 'open' if err }}>
     <summary>{{ 'Обнови баланса' if credits.set else 'Въведи баланса' }}</summary>
     <form method="post" action="/credits">
       <input type="hidden" name="next" value="{{ request.url.path }}">
-      <input class="kit-input" name="balance" inputmode="decimal" placeholder="напр. 25.40" required aria-label="Баланс в OpenAI в долари">
+      <input class="kit-input" name="balance" inputmode="decimal" placeholder="напр. 25.40" required aria-label="Баланс в {{ credits.vendor }} в долари">
       <button class="kit-submit" type="submit">Запази</button>
     </form>
-    <p class="fs-credits-hint">{% if err %}<b>Въведете сума, напр. 25.40.</b> {% endif %}В OpenAI → Billing вижте „Credit balance“ и въведете сумата в $ след всяко зареждане.</p>
+    <p class="fs-credits-hint">{% if err %}<b>Въведете сума, напр. 25.40.</b> {% endif %}В {{ credits.vendor }} → Billing вижте баланса и въведете сумата в $ след всяко зареждане.</p>
   </details>
 </div>
 {%- endmacro %}

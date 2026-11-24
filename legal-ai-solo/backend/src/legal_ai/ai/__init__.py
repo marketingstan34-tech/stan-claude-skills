@@ -68,6 +68,7 @@ class AIConfig:
     background: bool = True      # background mode + polling (survives proxy 502s on long calls)
     poll_backoff: bool = True    # 0.5, 1, 1.5, 2 s, then every poll_seconds; False = fixed interval
     workers: int = DEFAULT_WORKERS  # parallel assessments in one analysis run (1..MAX_WORKERS)
+    provider: str = "openai"     # "openai" or "anthropic" (Claude), from AI_PROVIDER
 
 
 def _flag(var: str, default: bool) -> bool:
@@ -101,7 +102,32 @@ def poll_delays(steady: float, backoff: bool = True) -> Iterator[float]:
         yield steady
 
 
+# Claude models when AI_PROVIDER=anthropic (CLAUDE_* variables override them): the main model
+# for the analysis and the stance, a fast one for the relevance filter
+CLAUDE_MODELS = {"CLAUDE_ANALYSIS_MODEL": "claude-opus-5-5", "CLAUDE_QUERY_MODEL": "claude-haiku-5-5"}
+
+
+def provider_name() -> str:
+    v = os.environ.get("AI_PROVIDER", "openai").strip().lower() or "openai"
+    if v not in ("openai", "anthropic"):
+        raise AIError(f"AI_PROVIDER трябва да е openai или anthropic, а е „{v}“.")
+    return v
+
+
 def load_ai_config() -> AIConfig:
+    if provider_name() == "anthropic":
+        analysis = os.environ.get("CLAUDE_ANALYSIS_MODEL", "") or CLAUDE_MODELS["CLAUDE_ANALYSIS_MODEL"]
+        query = os.environ.get("CLAUDE_QUERY_MODEL", "") or CLAUDE_MODELS["CLAUDE_QUERY_MODEL"]
+        return AIConfig(
+            analysis_model=analysis, light_model=query,
+            max_calls=max(MIN_CALLS, int(os.environ.get("AI_MAX_CALLS_PER_RUN", str(MIN_CALLS)))),
+            reasoning_effort=os.environ.get("AI_REASONING_EFFORT", "medium"),
+            assess_model=os.environ.get("CLAUDE_ASSESS_MODEL", "") or query,
+            assess_effort=os.environ.get("AI_ASSESS_EFFORT", "low"),
+            stance_model=os.environ.get("CLAUDE_STANCE_MODEL", "") or analysis,
+            stance_effort=os.environ.get("AI_STANCE_EFFORT", "low"),
+            provider="anthropic", **runtime_env())
+
     def model(var: str) -> str:
         v = os.environ.get(var, "")
         if not v or v.startswith("SET_"):
@@ -259,3 +285,11 @@ class OpenAIProvider:
             waited += delay
             data = self._request("GET", f"{OPENAI_URL}/{data['id']}")
         return data
+
+
+def make_provider(config: AIConfig):
+    """The AI client for the configured provider (both have the same `structured` call)."""
+    if config.provider == "anthropic":
+        from legal_ai.ai.claude import ClaudeProvider
+        return ClaudeProvider(config)
+    return OpenAIProvider(config)

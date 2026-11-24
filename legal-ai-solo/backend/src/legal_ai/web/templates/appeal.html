@@ -26,7 +26,7 @@
           <button class="kit-submit light" type="submit" {{ 'disabled' if busy }}>Напиши наново с AI</button></form>
       {% else %}
         <p>Още няма чернова. AI ще напише обстойна жалба срещу въззивното решение по отметнатите
-          въпроси ({{ chosen|length }}), документите по делото и практиката „противоречи“ от справката. Една заявка към OpenAI, обикновено 3–8 минути.</p>
+          въпроси ({{ chosen|length }}), документите по делото и практиката „противоречи“ от справката. Една заявка към {{ ai_name }}, обикновено 3–8 минути.</p>
         <form method="post" action="/runs/{{ run_id }}/appeal" onsubmit="return confirm('Да напише ли AI черновата на жалбата? Една платена заявка, около {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.')">
           <button class="kit-submit" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else 'Напиши жалбата с AI' }}</button></form>
       {% endif %}

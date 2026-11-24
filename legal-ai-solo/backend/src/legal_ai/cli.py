@@ -243,7 +243,7 @@ def cmd_analyze(args) -> int:
     import os
     from datetime import date, timedelta
 
-    from legal_ai.ai import OpenAIProvider, load_ai_config
+    from legal_ai.ai import load_ai_config, make_provider
     from legal_ai.cassation.pipeline import fetch_appellate, load_local, run_analysis, save_run
     from legal_ai.http import PoliteClient
     from legal_ai.sources.courts import ALLOWED_HOSTS
@@ -252,7 +252,7 @@ def cmd_analyze(args) -> int:
     interval = max(2.0, float(os.environ.get("SOURCE_MIN_INTERVAL_SECONDS", "2")))
     ua = os.environ.get("SOURCE_USER_AGENT", "legal-ai-solo/0.1 (private research tool)")
     out = Path(args.out or Path(os.environ.get("PRIVATE_STORAGE_PATH", "data")) / "runs")
-    ai = OpenAIProvider(load_ai_config())
+    ai = make_provider(load_ai_config())
     with PoliteClient(ALLOWED_HOSTS, interval, ua, max_bytes=20 * 1024 * 1024) as courts, \
             PoliteClient([VKS_HOST], interval, ua) as vks:
         if args.file:

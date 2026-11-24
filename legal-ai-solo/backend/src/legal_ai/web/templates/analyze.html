@@ -100,7 +100,7 @@
               {% if credits.set and credits.left < price.report[1] %}<span class="cost-note credits-warn">AI кредитът е ≈ {{ '%.2f'|format(credits.left) }} $ – може да не стигне за справка с AI. <a class="link" href="{{ credits.url }}" target="_blank" rel="noopener noreferrer">Заредете кредит</a>.</span>{% endif %}
               <span class="cost-note">С AI приблизително: справка {{ '%.2f'|format(price.report[0]) }}–{{ '%.2f'|format(price.report[1]) }} $
                 (при повече документи – към горната граница), чернова на жалба {{ '%.2f'|format(price.appeal[0]) }}–{{ '%.2f'|format(price.appeal[1]) }} $.
-                Таван: {{ price.max_calls }} AI заявки на справка. Точната сума е в OpenAI → Usage.</span></div></div>
+                Таван: {{ price.max_calls }} AI заявки на справка. Точната сума е в {{ ai_name }} → Usage.</span></div></div>
           <div class="detail-right"><span class="detail-action-circle help-tip" title="Без AI: пътят на делото, обжалваният акт и цитираната практика. С AI: правни въпроси и практика „противоречи/подкрепя“.">{{ icon('ai', 11) }}</span></div>
         </div>
         <button class="kit-submit" type="submit" {% if busy %}disabled{% endif %}>
