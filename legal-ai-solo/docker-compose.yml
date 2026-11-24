@@ -1,0 +1,32 @@
+# Local only. The UI is published on 127.0.0.1 only; Postgres has no published port.
+services:
+  app:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://legal_ai:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/legal_ai
+      PRIVATE_STORAGE_PATH: /data
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: legal_ai
+      POSTGRES_DB: legal_ai
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U legal_ai -d legal_ai"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  pgdata:

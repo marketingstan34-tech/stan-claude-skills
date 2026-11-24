@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Нов документ · Legal AI Solo{% endblock %}
+{% block page_title %}Нов документ{% endblock %}
+{% block page_hint %}Искова молба, отговор на искова молба, въззивна жалба, отговор на въззивна жалба, частна жалба или отговор на касационна жалба по административно-наказателно дело (пред административния съд) – без справка. Качвате документите по делото, AI пише черновата с практика на ВКС от базата. Касационна жалба и отговор по чл. 287 се пишат от справката (Нов случай).{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    <div class="card details-card">
+      <h2 class="details-title">Започни нов документ</h2>
+      <form method="post" action="/pleadings" class="kit-form">
+        <label>Вид документ<select class="kit-input" name="kind" required>
+          {% for k, s in kinds.items() %}<option value="{{ k }}">{{ s.title }}</option>{% endfor %}</select></label>
+        <label>Кратко име (за списъка)<input class="kit-input" name="title" maxlength="160" placeholder="напр. Иванов срещу Банка АД"></label>
+        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="20000" data-dictate placeholder="Кой, какво, кога, колко; какво искаме да постанови съдът; известни възражения на насрещната страна."></textarea></label>
+        <button class="kit-submit" type="submit">Създай</button>
+      </form>
+      <p class="muted small">След това качвате документите по делото и натискате „Напиши с AI“. Нищо не се плаща, докато не натиснете.</p>
+      <p class="muted small">Касационна жалба, изложение и отговор по чл. 287 – от <a class="link" href="/analyze">Нов случай</a> (справка с практика на ВКС по въпросите).</p>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if not items %}<div class="card page-card"><p>Още няма документи.</p></div>{% endif %}
+    {% for it in items %}
+    <div class="card page-card doc-row">
+      <div class="doc-head">
+        <a class="link doc-title" href="/pleadings/{{ it.id }}">{{ it.title or kinds[it.kind].short }}</a>
+        <span class="status-chip">{{ kinds[it.kind].short }}</span>
+        {% if it.has_draft %}<span class="count-chip">има чернова</span>{% endif %}
+        <span class="muted small">{{ it.created_at[:10].split('-')|reverse|join('.') }}</span>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

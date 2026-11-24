@@ -1,0 +1,81 @@
+{# Building blocks with the markup of the owner's UI kit (dashboard v3), filled with our data. #}
+{% from "icons.html" import icon %}
+
+{% macro report_card(r, i) -%}
+{% set color = ['peach', 'blue', 'pink'][i % 3] %}
+{% if r %}
+<a class="project-card {{ color }}-card" href="{{ r.url }}">
+  <div class="proj-card-top">
+    <span class="proj-date-pill">{{ r.created }}</span>
+    <span class="status-chip st-{{ ['нов', 'в работа', 'подадена жалба', 'приключен'].index(r.status) if r.status in ['нов', 'в работа', 'подадена жалба', 'приключен'] else 0 }}">{{ r.status }}</span>
+  </div>
+  <div class="proj-title-row">
+    <h3 class="proj-title">{{ r.kind }} {{ r.case or r.label }}</h3>
+    <span class="proj-info-icon" title="{{ r.label }}">{{ icon('info', 12) }}</span>
+  </div>
+  <div class="proj-stage-row">
+    <span class="proj-stage-text">{{ r.court }} · {{ r.mode }}</span>
+    <div class="proj-progress-tag"><span class="prog-percent-bubble">{{ r.percent }}%</span><span class="prog-text">Път</span></div>
+  </div>
+  <div class="proj-progress-bar-bg {{ color }}-bar-bg"><div class="proj-progress-fill {{ color }}-fill" style="width: {{ r.percent }}%"></div></div>
+  <div class="proj-card-footer">
+    <div class="avatar-stack">
+      {% for l in r.levels %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar {{ '' if l.ok else 'level-missing' }}" title="{{ 'потвърдено' if l.ok else 'не е потвърдено' }}">{{ l.short }}</span>{% endfor %}
+    </div>
+    {% if r.due and r.status in ('нов', 'в работа') %}<span class="days-left-pill {{ 'due-bad' if r.days_left < 0 else ('due-warn' if r.days_left <= 7 else '') }}" title="Последен ден за жалбата">срок {{ r.due[:5] }} · {{ r.days_left }} дни</span>
+    {% else %}<span class="days-left-pill">{{ r.vks_text }}</span>{% endif %}
+  </div>
+</a>
+{% else %}
+<a class="project-card {{ color }}-card empty-card" href="#case">
+  <div class="proj-card-top"><span class="proj-date-pill">—</span></div>
+  <div class="proj-title-row"><h3 class="proj-title">Няма справка</h3></div>
+  <div class="proj-stage-row"><span class="proj-stage-text">Въведете дело</span>
+    <div class="proj-progress-tag"><span class="prog-percent-bubble">0%</span><span class="prog-text">Път</span></div></div>
+  <div class="proj-progress-bar-bg {{ color }}-bar-bg"><div class="proj-progress-fill {{ color }}-fill" style="width: 0"></div></div>
+  <div class="proj-card-footer"><div class="avatar-stack"><span class="stack-avatar stack-more-avatar {{ color }}-more">+</span></div>
+    <span class="days-left-pill">I → II → ВКС</span></div>
+</a>
+{% endif %}
+{%- endmacro %}
+
+{% macro calendar_card(month, base_url) -%}
+<div class="card calendar-card">
+  <div class="card-top-header">
+    <div class="header-title-group"><a class="card-section-title link-title" href="/corpus?m={{ month.year }}-{{ '%02d' % month.month }}">Решения на ВКС: {{ month.total }}</a>
+      <span class="section-title-icon">{{ icon('cal', 14) }}</span></div>
+    <a class="card-options-btn" href="/corpus?m={{ month.year }}-{{ '%02d' % month.month }}" title="Към базата">{{ icon('more', 14) }}</a>
+  </div>
+  <div class="month-switcher-row">
+    <a class="month-arrow-btn" href="{{ base_url }}?m={{ month.prev }}" title="Предишен месец">{{ icon('left', 13) }}</a>
+    <span class="current-month-name">{{ month.name }}</span>
+    <a class="month-arrow-btn" href="{{ base_url }}?m={{ month.next }}" title="Следващ месец">{{ icon('right', 13) }}</a>
+  </div>
+  <div class="calendar-grid-matrix">
+    {% for d in month.days %}{% set iso = '%04d-%02d-%02d' % (month.year, month.month, d.day) %}{% set tip = d.day ~ '.' ~ ('%02d' % month.month) ~ '.' ~ month.year ~ ': ' ~ d.n ~ ' решения' ~ (', тълкувателно решение' if d.tr else '') %}
+    <a class="cal-day-cell cal-{{ d.type }}" href="/?d={{ iso }}" title="{{ tip }} – отвори">{{ d.day }}</a>{% endfor %}
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro events_card(events) -%}
+<div class="card inbox-card">
+  <div class="card-top-header">
+    <div class="header-title-group"><span class="card-section-title">Попълване на базата</span>
+      <span class="section-title-icon">{{ icon('msg', 14) }}</span></div>
+    <a class="view-all-link" href="/?kind=all">Виж всички</a>
+  </div>
+  <div class="inbox-messages-list">
+    {% for e in events %}
+    <a class="inbox-msg-item {{ 'active-dark' if loop.first }}" href="/?kind={{ 'gr' if e.initials == 'ГК' else 'targ' }}" title="Покажи решенията">
+      <span class="inbox-sender-avatar initials-avatar">{{ e.initials }}</span>
+      <div class="inbox-msg-content"><div class="inbox-msg-sender">{{ e.title }}</div>
+        <div class="inbox-msg-snippet">{{ e.text }}</div></div>
+      <span class="inbox-action-btn">{{ icon('right', 13) }}</span>
+    </a>
+    {% else %}
+    <p class="muted">Базата още не се попълва.</p>
+    {% endfor %}
+  </div>
+</div>
+{%- endmacro %}

@@ -1,0 +1,1465 @@
+{
+ "note": "Court sites on the shared justice.bg template. Each one verified on 03.10.2026 with a real acts search (HTTP 200, parsed rows); list of courts from https://plovdiv-as.justice.bg/bg/2477, regions from the courts' 'Съдебен район' pages. Region is empty where no official page names it.",
+ "courts": [
+  {
+   "key": "as-burgas",
+   "name": "Апелативен съд Бургас",
+   "host": "burgas-as.justice.bg",
+   "acts_page": "case-info/actove",
+   "level": "апелативен",
+   "city": "Бургас",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "as-varna",
+   "name": "Апелативен съд Варна",
+   "host": "varna-as.justice.bg",
+   "acts_page": "2325",
+   "level": "апелативен",
+   "city": "Варна",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "as-veliko-tarnovo",
+   "name": "Апелативен съд Велико Търново",
+   "host": "vtarnovo-as.justice.bg",
+   "acts_page": "2395",
+   "level": "апелативен",
+   "city": "Велико Търново",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "as-plovdiv",
+   "name": "Апелативен съд Пловдив",
+   "host": "plovdiv-as.justice.bg",
+   "acts_page": "2465",
+   "level": "апелативен",
+   "city": "Пловдив",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "as-sofia",
+   "name": "Апелативен съд София",
+   "host": "sofia-as.justice.bg",
+   "acts_page": "18975",
+   "level": "апелативен",
+   "city": "София",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "sgs",
+   "name": "Софийски градски съд",
+   "host": "sgs.justice.bg",
+   "acts_page": "12543",
+   "level": "градски",
+   "city": "София",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-blagoevgrad",
+   "name": "Окръжен съд Благоевград",
+   "host": "blagoevgrad-os.justice.bg",
+   "acts_page": "2885",
+   "level": "окръжен",
+   "city": "Благоевград",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-burgas",
+   "name": "Окръжен съд Бургас",
+   "host": "burgas-os.justice.bg",
+   "acts_page": "2955",
+   "level": "окръжен",
+   "city": "Бургас",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-varna",
+   "name": "Окръжен съд Варна",
+   "host": "varna-os.justice.bg",
+   "acts_page": "case-info/actove",
+   "level": "окръжен",
+   "city": "Варна",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-veliko-tarnovo",
+   "name": "Окръжен съд Велико Търново",
+   "host": "vtarnovo-os.justice.bg",
+   "acts_page": "3095",
+   "level": "окръжен",
+   "city": "Велико Търново",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-vidin",
+   "name": "Окръжен съд Видин",
+   "host": "vidin-os.justice.bg",
+   "acts_page": "3165",
+   "level": "окръжен",
+   "city": "Видин",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-vratsa",
+   "name": "Окръжен съд Враца",
+   "host": "vratsa-os.justice.bg",
+   "acts_page": "3235",
+   "level": "окръжен",
+   "city": "Враца",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-gabrovo",
+   "name": "Окръжен съд Габрово",
+   "host": "gabrovo-os.justice.bg",
+   "acts_page": "3305",
+   "level": "окръжен",
+   "city": "Габрово",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-dobrich",
+   "name": "Окръжен съд Добрич",
+   "host": "dobrich-os.justice.bg",
+   "acts_page": "3375",
+   "level": "окръжен",
+   "city": "Добрич",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-kardzhali",
+   "name": "Окръжен съд Кърджали",
+   "host": "kardzhali-os.justice.bg",
+   "acts_page": "3445",
+   "level": "окръжен",
+   "city": "Кърджали",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-kyustendil",
+   "name": "Окръжен съд Кюстендил",
+   "host": "kyustendil-os.justice.bg",
+   "acts_page": "3515",
+   "level": "окръжен",
+   "city": "Кюстендил",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-lovech",
+   "name": "Окръжен съд Ловеч",
+   "host": "lovech-os.justice.bg",
+   "acts_page": "3585",
+   "level": "окръжен",
+   "city": "Ловеч",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-montana",
+   "name": "Окръжен съд Монтана",
+   "host": "montana-os.justice.bg",
+   "acts_page": "3655",
+   "level": "окръжен",
+   "city": "Монтана",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-pazardzhik",
+   "name": "Окръжен съд Пазарджик",
+   "host": "pazardzhik-os.justice.bg",
+   "acts_page": "3725",
+   "level": "окръжен",
+   "city": "Пазарджик",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-pernik",
+   "name": "Окръжен съд Перник",
+   "host": "pernik-os.justice.bg",
+   "acts_page": "3795",
+   "level": "окръжен",
+   "city": "Перник",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-pleven",
+   "name": "Окръжен съд Плевен",
+   "host": "pleven-os.justice.bg",
+   "acts_page": "3865",
+   "level": "окръжен",
+   "city": "Плевен",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-plovdiv",
+   "name": "Окръжен съд Пловдив",
+   "host": "plovdiv-os.justice.bg",
+   "acts_page": "3935",
+   "level": "окръжен",
+   "city": "Пловдив",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-razgrad",
+   "name": "Окръжен съд Разград",
+   "host": "razgrad-os.justice.bg",
+   "acts_page": "4005",
+   "level": "окръжен",
+   "city": "Разград",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-ruse",
+   "name": "Окръжен съд Русе",
+   "host": "ruse-os.justice.bg",
+   "acts_page": "4075",
+   "level": "окръжен",
+   "city": "Русе",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-silistra",
+   "name": "Окръжен съд Силистра",
+   "host": "silistra-os.justice.bg",
+   "acts_page": "4145",
+   "level": "окръжен",
+   "city": "Силистра",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-sliven",
+   "name": "Окръжен съд Сливен",
+   "host": "sliven-os.justice.bg",
+   "acts_page": "4215",
+   "level": "окръжен",
+   "city": "Сливен",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-smolyan",
+   "name": "Окръжен съд Смолян",
+   "host": "smolyan-os.justice.bg",
+   "acts_page": "20237",
+   "level": "окръжен",
+   "city": "Смолян",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-stara-zagora",
+   "name": "Окръжен съд Стара Загора",
+   "host": "stzagora-os.justice.bg",
+   "acts_page": "4355",
+   "level": "окръжен",
+   "city": "Стара Загора",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-targovishte",
+   "name": "Окръжен съд Търговище",
+   "host": "targovishte-os.justice.bg",
+   "acts_page": "4425",
+   "level": "окръжен",
+   "city": "Търговище",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-haskovo",
+   "name": "Окръжен съд Хасково",
+   "host": "haskovo-os.justice.bg",
+   "acts_page": "4495",
+   "level": "окръжен",
+   "city": "Хасково",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-shumen",
+   "name": "Окръжен съд Шумен",
+   "host": "shumen-os.justice.bg",
+   "acts_page": "4565",
+   "level": "окръжен",
+   "city": "Шумен",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-yambol",
+   "name": "Окръжен съд Ямбол",
+   "host": "yambol-os.justice.bg",
+   "acts_page": "4635",
+   "level": "окръжен",
+   "city": "Ямбол",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "os-sofia",
+   "name": "Софийски окръжен съд",
+   "host": "sofia-os.justice.bg",
+   "acts_page": "12615",
+   "level": "окръжен",
+   "city": "София",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-aytos",
+   "name": "Районен съд Айтос",
+   "host": "aytos-rs.justice.bg",
+   "acts_page": "4705",
+   "level": "районен",
+   "city": "Айтос",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-ardino",
+   "name": "Районен съд Ардино",
+   "host": "ardino-rs.justice.bg",
+   "acts_page": "4775",
+   "level": "районен",
+   "city": "Ардино",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-asenovgrad",
+   "name": "Районен съд Асеновград",
+   "host": "asenovgrad-rs.justice.bg",
+   "acts_page": "4845",
+   "level": "районен",
+   "city": "Асеновград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-balchik",
+   "name": "Районен съд Балчик",
+   "host": "balchik-rs.justice.bg",
+   "acts_page": "4915",
+   "level": "районен",
+   "city": "Балчик",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-belogradchik",
+   "name": "Районен съд Белоградчик",
+   "host": "belogradchik-rs.justice.bg",
+   "acts_page": "4985",
+   "level": "районен",
+   "city": "Белоградчик",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-berkovitsa",
+   "name": "Районен съд Берковица",
+   "host": "berkovitsa-rs.justice.bg",
+   "acts_page": "5055",
+   "level": "районен",
+   "city": "Берковица",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-blagoevgrad",
+   "name": "Районен съд Благоевград",
+   "host": "blagoevgrad-rs.justice.bg",
+   "acts_page": "5125",
+   "level": "районен",
+   "city": "Благоевград",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-botevgrad",
+   "name": "Районен съд Ботевград",
+   "host": "botevgrad-rs.justice.bg",
+   "acts_page": "5195",
+   "level": "районен",
+   "city": "Ботевград",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-breznik",
+   "name": "Районен съд Брезник",
+   "host": "breznik-rs.justice.bg",
+   "acts_page": "5265",
+   "level": "районен",
+   "city": "Брезник",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-burgas",
+   "name": "Районен съд Бургас",
+   "host": "burgas-rs.justice.bg",
+   "acts_page": "5335",
+   "level": "районен",
+   "city": "Бургас",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-byala",
+   "name": "Районен съд Бяла",
+   "host": "byala-rs.justice.bg",
+   "acts_page": "5475",
+   "level": "районен",
+   "city": "Бяла",
+   "region": "",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-byala-slatina",
+   "name": "Районен съд Бяла Слатина",
+   "host": "bslatina-rs.justice.bg",
+   "acts_page": "5405",
+   "level": "районен",
+   "city": "Бяла Слатина",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-varna",
+   "name": "Районен съд Варна",
+   "host": "varna-rs.justice.bg",
+   "acts_page": "5545",
+   "level": "районен",
+   "city": "Варна",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-veliki-preslav",
+   "name": "Районен съд Велики Преслав",
+   "host": "vpreslav-rs.justice.bg",
+   "acts_page": "5615",
+   "level": "районен",
+   "city": "Велики Преслав",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-veliko-tarnovo",
+   "name": "Районен съд Велико Търново",
+   "host": "vtarnovo-rs.justice.bg",
+   "acts_page": "5685",
+   "level": "районен",
+   "city": "Велико Търново",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-velingrad",
+   "name": "Районен съд Велинград",
+   "host": "velingrad-rs.justice.bg",
+   "acts_page": "5755",
+   "level": "районен",
+   "city": "Велинград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-vidin",
+   "name": "Районен съд Видин",
+   "host": "vidin-rs.justice.bg",
+   "acts_page": "5825",
+   "level": "районен",
+   "city": "Видин",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-vratsa",
+   "name": "Районен съд Враца",
+   "host": "vratsa-rs.justice.bg",
+   "acts_page": "5895",
+   "level": "районен",
+   "city": "Враца",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-gabrovo",
+   "name": "Районен съд Габрово",
+   "host": "gabrovo-rs.justice.bg",
+   "acts_page": "5965",
+   "level": "районен",
+   "city": "Габрово",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-general-toshevo",
+   "name": "Районен съд Генерал Тошево",
+   "host": "gtoshevo-rs.justice.bg",
+   "acts_page": "6035",
+   "level": "районен",
+   "city": "Генерал Тошево",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-gorna-oryahovitsa",
+   "name": "Районен съд Горна Оряховица",
+   "host": "goryahovitsa-rs.justice.bg",
+   "acts_page": "6105",
+   "level": "районен",
+   "city": "Горна Оряховица",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-gotse-delchev",
+   "name": "Районен съд Гоце Делчев",
+   "host": "gdelchev-rs.justice.bg",
+   "acts_page": "6175",
+   "level": "районен",
+   "city": "Гоце Делчев",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-galabovo",
+   "name": "Районен съд Гълъбово",
+   "host": "galabovo-rs.justice.bg",
+   "acts_page": "6245",
+   "level": "районен",
+   "city": "Гълъбово",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-devin",
+   "name": "Районен съд Девин",
+   "host": "devin-rs.justice.bg",
+   "acts_page": "6315",
+   "level": "районен",
+   "city": "Девин",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-devnya",
+   "name": "Районен съд Девня",
+   "host": "devnya-rs.justice.bg",
+   "acts_page": "6385",
+   "level": "районен",
+   "city": "Девня",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-dimitrovgrad",
+   "name": "Районен съд Димитровград",
+   "host": "dimitrovgrad-rs.justice.bg",
+   "acts_page": "6455",
+   "level": "районен",
+   "city": "Димитровград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-dobrich",
+   "name": "Районен съд Добрич",
+   "host": "dobrich-rs.justice.bg",
+   "acts_page": "6525",
+   "level": "районен",
+   "city": "Добрич",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-dryanovo",
+   "name": "Районен съд Дряново",
+   "host": "dryanovo-rs.justice.bg",
+   "acts_page": "6595",
+   "level": "районен",
+   "city": "Дряново",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-dulovo",
+   "name": "Районен съд Дулово",
+   "host": "dulovo-rs.justice.bg",
+   "acts_page": "6665",
+   "level": "районен",
+   "city": "Дулово",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-dupnitsa",
+   "name": "Районен съд Дупница",
+   "host": "dupnitsa-rs.justice.bg",
+   "acts_page": "6735",
+   "level": "районен",
+   "city": "Дупница",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-elena",
+   "name": "Районен съд Елена",
+   "host": "elena-rs.justice.bg",
+   "acts_page": "6805",
+   "level": "районен",
+   "city": "Елена",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-elin-pelin",
+   "name": "Районен съд Елин Пелин",
+   "host": "elpelin-rs.justice.bg",
+   "acts_page": "6875",
+   "level": "районен",
+   "city": "Елин Пелин",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-elhovo",
+   "name": "Районен съд Елхово",
+   "host": "elhovo-rs.justice.bg",
+   "acts_page": "6945",
+   "level": "районен",
+   "city": "Елхово",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-etropole",
+   "name": "Районен съд Етрополе",
+   "host": "etropole-rs.justice.bg",
+   "acts_page": "7015",
+   "level": "районен",
+   "city": "Етрополе",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-zlatograd",
+   "name": "Районен съд Златоград",
+   "host": "zlatograd-rs.justice.bg",
+   "acts_page": "7085",
+   "level": "районен",
+   "city": "Златоград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-ivaylovgrad",
+   "name": "Районен съд Ивайловград",
+   "host": "ivaylovgrad-rs.justice.bg",
+   "acts_page": "7155",
+   "level": "районен",
+   "city": "Ивайловград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-isperih",
+   "name": "Районен съд Исперих",
+   "host": "isperih-rs.justice.bg",
+   "acts_page": "7225",
+   "level": "районен",
+   "city": "Исперих",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-ihtiman",
+   "name": "Районен съд Ихтиман",
+   "host": "ihtiman-rs.justice.bg",
+   "acts_page": "7295",
+   "level": "районен",
+   "city": "Ихтиман",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kavarna",
+   "name": "Районен съд Каварна",
+   "host": "kavarna-rs.justice.bg",
+   "acts_page": "7365",
+   "level": "районен",
+   "city": "Каварна",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kazanlak",
+   "name": "Районен съд Казанлък",
+   "host": "kazanlak-rs.justice.bg",
+   "acts_page": "7435",
+   "level": "районен",
+   "city": "Казанлък",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-karlovo",
+   "name": "Районен съд Карлово",
+   "host": "karlovo-rs.justice.bg",
+   "acts_page": "7505",
+   "level": "районен",
+   "city": "Карлово",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-karnobat",
+   "name": "Районен съд Карнобат",
+   "host": "karnobat-rs.justice.bg",
+   "acts_page": "7575",
+   "level": "районен",
+   "city": "Карнобат",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-knezha",
+   "name": "Районен съд Кнежа",
+   "host": "knezha-rs.justice.bg",
+   "acts_page": "7645",
+   "level": "районен",
+   "city": "Кнежа",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kozloduy",
+   "name": "Районен съд Козлодуй",
+   "host": "kozloduy-rs.justice.bg",
+   "acts_page": "7715",
+   "level": "районен",
+   "city": "Козлодуй",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kostinbrod",
+   "name": "Районен съд Костинброд",
+   "host": "kostinbrod-rs.justice.bg",
+   "acts_page": "7785",
+   "level": "районен",
+   "city": "Костинброд",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kotel",
+   "name": "Районен съд Котел",
+   "host": "kotel-rs.justice.bg",
+   "acts_page": "7855",
+   "level": "районен",
+   "city": "Котел",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-krumovgrad",
+   "name": "Районен съд Крумовград",
+   "host": "krumovgrad-rs.justice.bg",
+   "acts_page": "7925",
+   "level": "районен",
+   "city": "Крумовград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kubrat",
+   "name": "Районен съд Кубрат",
+   "host": "kubrat-rs.justice.bg",
+   "acts_page": "7995",
+   "level": "районен",
+   "city": "Кубрат",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kula",
+   "name": "Районен съд Кула",
+   "host": "kula-rs.justice.bg",
+   "acts_page": "8065",
+   "level": "районен",
+   "city": "Кула",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kardzhali",
+   "name": "Районен съд Кърджали",
+   "host": "kardzhali-rs.justice.bg",
+   "acts_page": "8135",
+   "level": "районен",
+   "city": "Кърджали",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-kyustendil",
+   "name": "Районен съд Кюстендил",
+   "host": "kyustendil-rs.justice.bg",
+   "acts_page": "8205",
+   "level": "районен",
+   "city": "Кюстендил",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-levski",
+   "name": "Районен съд Левски",
+   "host": "levski-rs.justice.bg",
+   "acts_page": "8275",
+   "level": "районен",
+   "city": "Левски",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-lovech",
+   "name": "Районен съд Ловеч",
+   "host": "lovech-rs.justice.bg",
+   "acts_page": "8345",
+   "level": "районен",
+   "city": "Ловеч",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-lom",
+   "name": "Районен съд Лом",
+   "host": "lom-rs.justice.bg",
+   "acts_page": "8415",
+   "level": "районен",
+   "city": "Лом",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-lukovit",
+   "name": "Районен съд Луковит",
+   "host": "lukovit-rs.justice.bg",
+   "acts_page": "8485",
+   "level": "районен",
+   "city": "Луковит",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-madan",
+   "name": "Районен съд Мадан",
+   "host": "madan-rs.justice.bg",
+   "acts_page": "8555",
+   "level": "районен",
+   "city": "Мадан",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-malko-tarnovo",
+   "name": "Районен съд Малко Търново",
+   "host": "mtarnovo-rs.justice.bg",
+   "acts_page": "8625",
+   "level": "районен",
+   "city": "Малко Търново",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-mezdra",
+   "name": "Районен съд Мездра",
+   "host": "mezdra-rs.justice.bg",
+   "acts_page": "8695",
+   "level": "районен",
+   "city": "Мездра",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-momchilgrad",
+   "name": "Районен съд Момчилград",
+   "host": "momchilgrad-rs.justice.bg",
+   "acts_page": "8765",
+   "level": "районен",
+   "city": "Момчилград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-montana",
+   "name": "Районен съд Монтана",
+   "host": "montana-rs.justice.bg",
+   "acts_page": "8835",
+   "level": "районен",
+   "city": "Монтана",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-nesebar",
+   "name": "Районен съд Несебър",
+   "host": "nesebar-rs.justice.bg",
+   "acts_page": "8905",
+   "level": "районен",
+   "city": "Несебър",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-nikopol",
+   "name": "Районен съд Никопол",
+   "host": "nikopol-rs.justice.bg",
+   "acts_page": "8975",
+   "level": "районен",
+   "city": "Никопол",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-nova-zagora",
+   "name": "Районен съд Нова Загора",
+   "host": "nzagora-rs.justice.bg",
+   "acts_page": "9045",
+   "level": "районен",
+   "city": "Нова Загора",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-novi-pazar",
+   "name": "Районен съд Нови пазар",
+   "host": "npazar-rs.justice.bg",
+   "acts_page": "9115",
+   "level": "районен",
+   "city": "Нови пазар",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-omurtag",
+   "name": "Районен съд Омуртаг",
+   "host": "omurtag-rs.justice.bg",
+   "acts_page": "9185",
+   "level": "районен",
+   "city": "Омуртаг",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-oryahovo",
+   "name": "Районен съд Оряхово",
+   "host": "oryahovo-rs.justice.bg",
+   "acts_page": "9255",
+   "level": "районен",
+   "city": "Оряхово",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pavlikeni",
+   "name": "Районен съд Павликени",
+   "host": "pavlikeni-rs.justice.bg",
+   "acts_page": "9325",
+   "level": "районен",
+   "city": "Павликени",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pazardzhik",
+   "name": "Районен съд Пазарджик",
+   "host": "pazardzhik-rs.justice.bg",
+   "acts_page": "9395",
+   "level": "районен",
+   "city": "Пазарджик",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-panagyurishte",
+   "name": "Районен съд Панагюрище",
+   "host": "panagyurishte-rs.justice.bg",
+   "acts_page": "9465",
+   "level": "районен",
+   "city": "Панагюрище",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pernik",
+   "name": "Районен съд Перник",
+   "host": "pernik-rs.justice.bg",
+   "acts_page": "9535",
+   "level": "районен",
+   "city": "Перник",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-petrich",
+   "name": "Районен съд Петрич",
+   "host": "petrich-rs.justice.bg",
+   "acts_page": "9605",
+   "level": "районен",
+   "city": "Петрич",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-peshtera",
+   "name": "Районен съд Пещера",
+   "host": "peshtera-rs.justice.bg",
+   "acts_page": "16120",
+   "level": "районен",
+   "city": "Пещера",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pirdop",
+   "name": "Районен съд Пирдоп",
+   "host": "pirdop-rs.justice.bg",
+   "acts_page": "9745",
+   "level": "районен",
+   "city": "Пирдоп",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pleven",
+   "name": "Районен съд Плевен",
+   "host": "pleven-rs.justice.bg",
+   "acts_page": "9815",
+   "level": "районен",
+   "city": "Плевен",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-plovdiv",
+   "name": "Районен съд Пловдив",
+   "host": "plovdiv-rs.justice.bg",
+   "acts_page": "9885",
+   "level": "районен",
+   "city": "Пловдив",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-pomorie",
+   "name": "Районен съд Поморие",
+   "host": "pomorie-rs.justice.bg",
+   "acts_page": "9955",
+   "level": "районен",
+   "city": "Поморие",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-popovo",
+   "name": "Районен съд Попово",
+   "host": "popovo-rs.justice.bg",
+   "acts_page": "10025",
+   "level": "районен",
+   "city": "Попово",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-provadia",
+   "name": "Районен съд Провадия",
+   "host": "provadiya-rs.justice.bg",
+   "acts_page": "10095",
+   "level": "районен",
+   "city": "Провадия",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-parvomay",
+   "name": "Районен съд Първомай",
+   "host": "parvomay-rs.justice.bg",
+   "acts_page": "10165",
+   "level": "районен",
+   "city": "Първомай",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-radnevo",
+   "name": "Районен съд Раднево",
+   "host": "radnevo-rs.justice.bg",
+   "acts_page": "10235",
+   "level": "районен",
+   "city": "Раднево",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-radomir",
+   "name": "Районен съд Радомир",
+   "host": "radomir-rs.justice.bg",
+   "acts_page": "10305",
+   "level": "районен",
+   "city": "Радомир",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-razgrad",
+   "name": "Районен съд Разград",
+   "host": "razgrad-rs.justice.bg",
+   "acts_page": "10375",
+   "level": "районен",
+   "city": "Разград",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-razlog",
+   "name": "Районен съд Разлог",
+   "host": "razlog-rs.justice.bg",
+   "acts_page": "10445",
+   "level": "районен",
+   "city": "Разлог",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-ruse",
+   "name": "Районен съд Русе",
+   "host": "ruse-rs.justice.bg",
+   "acts_page": "10515",
+   "level": "районен",
+   "city": "Русе",
+   "region": "",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-samokov",
+   "name": "Районен съд Самоков",
+   "host": "samokov-rs.justice.bg",
+   "acts_page": "10585",
+   "level": "районен",
+   "city": "Самоков",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-sandanski",
+   "name": "Районен съд Сандански",
+   "host": "sandanski-rs.justice.bg",
+   "acts_page": "10655",
+   "level": "районен",
+   "city": "Сандански",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-svilengrad",
+   "name": "Районен съд Свиленград",
+   "host": "svilengrad-rs.justice.bg",
+   "acts_page": "10725",
+   "level": "районен",
+   "city": "Свиленград",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-svishtov",
+   "name": "Районен съд Свищов",
+   "host": "svishtov-rs.justice.bg",
+   "acts_page": "10795",
+   "level": "районен",
+   "city": "Свищов",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-svoge",
+   "name": "Районен съд Своге",
+   "host": "svoge-rs.justice.bg",
+   "acts_page": "10865",
+   "level": "районен",
+   "city": "Своге",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-sevlievo",
+   "name": "Районен съд Севлиево",
+   "host": "sevlievo-rs.justice.bg",
+   "acts_page": "10935",
+   "level": "районен",
+   "city": "Севлиево",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-silistra",
+   "name": "Районен съд Силистра",
+   "host": "silistra-rs.justice.bg",
+   "acts_page": "11005",
+   "level": "районен",
+   "city": "Силистра",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-sliven",
+   "name": "Районен съд Сливен",
+   "host": "sliven-rs.justice.bg",
+   "acts_page": "11075",
+   "level": "районен",
+   "city": "Сливен",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-slivnitsa",
+   "name": "Районен съд Сливница",
+   "host": "slivnitsa-rs.justice.bg",
+   "acts_page": "11145",
+   "level": "районен",
+   "city": "Сливница",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-smolyan",
+   "name": "Районен съд Смолян",
+   "host": "smolyan-rs.justice.bg",
+   "acts_page": "11215",
+   "level": "районен",
+   "city": "Смолян",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-sredets",
+   "name": "Районен съд Средец",
+   "host": "sredets-rs.justice.bg",
+   "acts_page": "11285",
+   "level": "районен",
+   "city": "Средец",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-stara-zagora",
+   "name": "Районен съд Стара Загора",
+   "host": "stzagora-rs.justice.bg",
+   "acts_page": "11355",
+   "level": "районен",
+   "city": "Стара Загора",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-tervel",
+   "name": "Районен съд Тервел",
+   "host": "tervel-rs.justice.bg",
+   "acts_page": "11425",
+   "level": "районен",
+   "city": "Тервел",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-teteven",
+   "name": "Районен съд Тетевен",
+   "host": "teteven-rs.justice.bg",
+   "acts_page": "11495",
+   "level": "районен",
+   "city": "Тетевен",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-topolovgrad",
+   "name": "Районен съд Тополовград",
+   "host": "topolovgrad-rs.justice.bg",
+   "acts_page": "11565",
+   "level": "районен",
+   "city": "Тополовград",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-troyan",
+   "name": "Районен съд Троян",
+   "host": "troyan-rs.justice.bg",
+   "acts_page": "11635",
+   "level": "районен",
+   "city": "Троян",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-tran",
+   "name": "Районен съд Трън",
+   "host": "tran-rs.justice.bg",
+   "acts_page": "11705",
+   "level": "районен",
+   "city": "Трън",
+   "region": "София",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-tryavna",
+   "name": "Районен съд Трявна",
+   "host": "tryavna-rs.justice.bg",
+   "acts_page": "11775",
+   "level": "районен",
+   "city": "Трявна",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-tutrakan",
+   "name": "Районен съд Тутракан",
+   "host": "tutrakan-rs.justice.bg",
+   "acts_page": "11845",
+   "level": "районен",
+   "city": "Тутракан",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-targovishte",
+   "name": "Районен съд Търговище",
+   "host": "targovishte-rs.justice.bg",
+   "acts_page": "11915",
+   "level": "районен",
+   "city": "Търговище",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-harmanli",
+   "name": "Районен съд Харманли",
+   "host": "harmanli-rs.justice.bg",
+   "acts_page": "11985",
+   "level": "районен",
+   "city": "Харманли",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-haskovo",
+   "name": "Районен съд Хасково",
+   "host": "haskovo-rs.justice.bg",
+   "acts_page": "12055",
+   "level": "районен",
+   "city": "Хасково",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-tsarevo",
+   "name": "Районен съд Царево",
+   "host": "tsarevo-rs.justice.bg",
+   "acts_page": "12125",
+   "level": "районен",
+   "city": "Царево",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-chepelare",
+   "name": "Районен съд Чепеларе",
+   "host": "chepelare-rs.justice.bg",
+   "acts_page": "12195",
+   "level": "районен",
+   "city": "Чепеларе",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-cherven-bryag",
+   "name": "Районен съд Червен бряг",
+   "host": "chbryag-rs.justice.bg",
+   "acts_page": "12265",
+   "level": "районен",
+   "city": "Червен бряг",
+   "region": "Велико Търново",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-chirpan",
+   "name": "Районен съд Чирпан",
+   "host": "chirpan-rs.justice.bg",
+   "acts_page": "12335",
+   "level": "районен",
+   "city": "Чирпан",
+   "region": "Пловдив",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-shumen",
+   "name": "Районен съд Шумен",
+   "host": "shumen-rs.justice.bg",
+   "acts_page": "12405",
+   "level": "районен",
+   "city": "Шумен",
+   "region": "Варна",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "rs-yambol",
+   "name": "Районен съд Ямбол",
+   "host": "yambol-rs.justice.bg",
+   "acts_page": "12475",
+   "level": "районен",
+   "city": "Ямбол",
+   "region": "Бургас",
+   "verified": "2026-10-03"
+  },
+  {
+   "key": "srs",
+   "name": "Софийски районен съд",
+   "host": "srs.justice.bg",
+   "acts_page": "12685",
+   "level": "районен",
+   "city": "София",
+   "region": "София",
+   "verified": "2026-10-03"
+  }
+ ]
+}

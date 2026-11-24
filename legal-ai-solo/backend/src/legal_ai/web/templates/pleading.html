@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}{{ spec.short }} · Legal AI Solo{% endblock %}
+{% block page_title %}{{ spec.title }}{% endblock %}
+{% block page_hint %}{{ spec.hint }}{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left no-print">
+    <div class="card details-card">
+      <h2 class="details-title">{{ item.title or spec.short }}</h2>
+      {% if request.query_params.get('busy') %}<div class="notice">Вече тече друга справка. Опитайте след малко.</div>{% endif %}
+      {% if draft %}<a class="kit-submit" href="/pleadings/{{ item.id }}/docx" style="display:block;text-align:center">Свали като Word</a>
+        <p class="muted small">Написан на {{ draft.created_at[:10].split('-')|reverse|join('.') }} · {{ draft.model }}{% if cost is not none %} · ≈ {{ '%.2f'|format(cost) }} ${% endif %}</p>{% endif %}
+      <form method="post" action="/pleadings/{{ item.id }}/write" onsubmit="return confirm('Да напише ли AI {{ spec.short }}? Две платени заявки, около {{ '%.2f'|format(price_range[0]) }}–{{ '%.2f'|format(price_range[1]) }} $.')">
+        <button class="kit-submit {{ 'light' if draft }}" type="submit" {{ 'disabled' if busy }}>{{ 'Тече друга справка…' if busy else ('Напиши наново с AI' if draft else 'Напиши с AI') }}</button></form>
+      <a class="link" href="/pleadings" style="text-align:center;font-size:12px">← всички документи</a>
+    </div>
+    <div class="card details-card">
+      <h2 class="details-title">Данни за документа</h2>
+      <form method="post" action="/pleadings/{{ item.id }}" class="kit-form">
+        <label>Кратко име<input class="kit-input" name="title" maxlength="160" value="{{ item.title }}"></label>
+        <label>Съд{% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna', 'otgovor_kasacionna_an') %} (постановил обжалвания акт){% endif %}<input class="kit-input" name="court" maxlength="160" value="{{ item.court }}" placeholder="{{ 'напр. Районен съд – Пловдив или Окръжен съд – Пловдив' if item.kind in ('vazzivna', 'otgovor_vazzivna') else 'напр. Районен съд – Пловдив' }}"></label>
+        {% if item.kind in ('vazzivna', 'otgovor_vazzivna', 'chastna', 'otgovor_kasacionna_an') %}<label>Горен съд<input class="kit-input" name="upper_court" maxlength="160" value="{{ item.upper_court }}" placeholder="{{ 'напр. Административен съд – Пловдив' if item.kind == 'otgovor_kasacionna_an' else 'напр. Окръжен съд – Пловдив или Апелативен съд – Пловдив' }}"></label>{% endif %}
+        {% if item.kind != 'iskova' %}<label>Дело №<input class="kit-input" name="case_ref" maxlength="80" value="{{ item.case_ref }}" placeholder="напр. 1234/2026"></label>{% endif %}
+        <label>Доверител<input class="kit-input" name="client" maxlength="200" value="{{ item.client }}"></label>
+        <label>ЕГН/ЕИК<input class="kit-input" name="client_id" maxlength="40" value="{{ item.client_id }}"></label>
+        <label>Адрес на доверителя<input class="kit-input" name="client_address" maxlength="300" value="{{ item.client_address }}"></label>
+        <label>Насрещна страна<input class="kit-input" name="opponent" maxlength="300" value="{{ item.opponent }}"></label>
+        <label>Адвокат<input class="kit-input" name="lawyer" maxlength="120" value="{{ item.lawyer }}"></label>
+        <label>Съдебен адрес<input class="kit-input" name="lawyer_address" maxlength="300" value="{{ item.lawyer_address }}"></label>
+        <label>Какво иска клиентът – факти и цел<textarea class="kit-input" name="notes" rows="6" maxlength="20000" data-dictate>{{ item.notes }}</textarea></label>
+        <button class="kit-submit light" type="submit">Запази</button>
+      </form>
+    </div>
+    <div class="card details-card" id="docs">
+      <h2 class="details-title">Документи по делото</h2>
+      {% if spec.main %}<p class="muted small">Нужен е документ „{{ spec.main }}“ – по него се пише.</p>{% endif %}
+      {% if request.query_params.get('doc_error') %}<div class="notice bad">{{ request.query_params.get('doc_error') }}</div>{% endif %}
+      {% if docs %}
+      <table class="doc-table folder-table">
+        {% for d in docs|sort(attribute='date') %}
+        <tr><td><b>{{ d.kind or 'сканиран – ще се разчете' }}</b>{% if d.date %} · {{ d.date.split('-')|reverse|join('.') }}{% endif %}<br>
+            <span class="muted small">{{ d.filename }}</span></td>
+          <td class="doc-links"><form method="post" action="/pleadings/{{ item.id }}/docs/{{ d.id }}/delete" style="display:inline" onsubmit="return confirm('Да се махне ли {{ d.filename }}?')"><button type="submit" class="link-button">махни</button></form></td></tr>
+        {% endfor %}
+      </table>{% endif %}
+      <form method="post" action="/pleadings/{{ item.id }}/docs" enctype="multipart/form-data" class="docs-upload" data-drop data-drop-submit>
+        <label class="kit-submit" style="display:block;text-align:center;cursor:pointer">Качи цялата папка на делото
+          <input type="file" name="files" webkitdirectory directory multiple hidden onchange="this.form.submit()"></label>
+        <label class="kit-submit light" style="display:block;text-align:center;cursor:pointer">Избери файлове или ZIP
+          <input type="file" name="files" multiple accept=".pdf,.docx,.txt,.html,.htm,.jpg,.jpeg,.png,.zip" hidden onchange="this.form.submit()"></label>
+        <p class="drop-hint muted small">или довлечете тук файловете, ZIP или цялата папка</p>
+      </form>
+      <p class="muted small">Програмата разпознава документите и ги подрежда по дата; сканираните и снимките (JPEG, PNG) се разчитат при писането. Пълномощното и договорът за правна защита не се пращат към AI.</p>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if draft %}
+    <div class="notice no-print">Чернова с AI – не е правно становище. Цитатите са проверени дословно в документите и в откъсите от практиката{% if draft.unverified_quotes %} – <b>{{ draft.unverified_quotes }} не са намерени и са маркирани</b>{% endif %}. Решенията на ВКС са само от базата (списъкът долу); текстовете на закона проверете.</div>
+    <div class="card page-card legal-text draft-text">
+      {% for b in blocks %}
+        {% if b.kind == 'heading' %}<p><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'center' %}<p style="text-align:center"><strong>{{ b.text }}</strong></p>
+        {% elif b.kind == 'note' %}<p><mark>{{ b.text }}</mark></p>
+        {% else %}<p>{{ b.text }}</p>{% endif %}
+      {% endfor %}
+    </div>
+    {% if draft.practice %}<details class="card page-card no-print"><summary class="muted">Практика на ВКС, дадена на AI ({{ draft.practice|length }})</summary><ul>
+      {% for p in draft.practice %}<li>{% if p.url %}<a class="link" href="{{ p.url }}" target="_blank" rel="noopener">{{ p.label }}</a>{% else %}{{ p.label }}{% endif %}</li>{% endfor %}</ul>
+      {% if draft.issues %}<p class="muted small">Търсено по: {{ draft.issues|join('; ') }}</p>{% endif %}</details>{% endif %}
+    {% else %}<div class="card page-card"><p>Още няма чернова. Попълнете данните, качете документите и натиснете „Напиши с AI“.</p></div>{% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% from "icons.html" import icon %}
+{% block title %}Редакция · {{ doc_title }} · Legal AI Solo{% endblock %}
+{% block page_title %}Редакция: {{ doc_title }}{% endblock %}
+{% block page_hint %}Пишете направо в текста. Щракнете абзац и с бутоните горе сменете вида му (заглавие, абзац, цитат, бележка). Enter прави нов абзац. „Запази“ пази вашата версия; автоматичната остава и може да се върне.{% endblock %}
+{% block content %}
+<div class="edit-page">
+  <div class="card page-card edit-toolbar no-print">
+    <div class="edit-kinds">
+      <button type="button" data-kind="heading">Заглавие</button>
+      <button type="button" data-kind="center">Центрирано</button>
+      <button type="button" data-kind="p">Абзац</button>
+      <button type="button" data-kind="quote">Цитат</button>
+      <button type="button" data-kind="item">Точка</button>
+      <button type="button" data-kind="note">Бележка</button>
+    </div>
+    <div class="edit-actions">
+      <span id="edit-status" class="muted small">{% if edited %}Последно запазено: {{ edited[:16].replace('T', ' ') }} UTC{% else %}Автоматична версия – още не е редактирана{% endif %}</span>
+      <button type="button" class="kit-submit" id="edit-save">Запази</button>
+      <a class="kit-submit light" href="/runs/{{ run_id }}/{{ doc }}">Готово</a>
+    </div>
+  </div>
+  <div class="card page-card legal-text draft-text edit-area" id="editor" contenteditable="true" spellcheck="true">
+    {% for b in blocks %}<p data-kind="{{ b.kind }}">{{ b.text }}</p>
+    {% endfor %}
+  </div>
+</div>
+<script>
+(function () {
+  var ed = document.getElementById('editor'), status = document.getElementById('edit-status'), dirty = false;
+  try { document.execCommand('defaultParagraphSeparator', false, 'p'); } catch (e) {}
+  function current() {
+    var n = window.getSelection().anchorNode;
+    while (n && n.parentNode !== ed) n = n.parentNode;
+    return n && n.nodeType === 1 ? n : null;
+  }
+  document.querySelectorAll('.edit-kinds button').forEach(function (b) {
+    b.addEventListener('mousedown', function (e) { e.preventDefault(); });
+    b.addEventListener('click', function () {
+      var p = current(); if (!p) return;
+      p.setAttribute('data-kind', b.dataset.kind); dirty = true; status.textContent = 'Има незапазени промени';
+    });
+  });
+  ed.addEventListener('input', function () { dirty = true; status.textContent = 'Има незапазени промени'; });
+  /* paste as plain text, so formatting from Word or a browser does not break the document */
+  ed.addEventListener('paste', function (e) {
+    e.preventDefault();
+    var t = (e.clipboardData || window.clipboardData).getData('text/plain');
+    document.execCommand('insertText', false, t);
+  });
+  function blocks() {
+    var out = [];
+    Array.prototype.forEach.call(ed.childNodes, function (n) {
+      var text = (n.nodeType === 1 ? n.innerText : n.textContent || '').trim();
+      if (!text) return;
+      out.push({ kind: (n.nodeType === 1 && n.getAttribute('data-kind')) || 'p', text: text });
+    });
+    return out;
+  }
+  document.getElementById('edit-save').addEventListener('click', function () {
+    status.textContent = 'Запазва се…';
+    fetch(location.pathname, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ blocks: blocks() }) })
+      .then(function (r) { return r.json().then(function (j) { return [r.ok, j]; }); })
+      .then(function (x) {
+        if (x[0] && x[1].ok) { dirty = false; status.textContent = 'Запазено ' + x[1].saved_at.slice(0, 16).replace('T', ' ') + ' UTC'; }
+        else { status.textContent = 'Не е запазено: ' + (x[1].error || 'грешка'); }
+      })
+      .catch(function () { status.textContent = 'Не е запазено: няма връзка със сървъра'; });
+  });
+  window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+})();
+</script>
+{% endblock %}

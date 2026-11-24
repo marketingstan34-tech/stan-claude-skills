@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% from "parts_case.html" import case_profile with context %}
+{% block title %}Шанс за допускане · Legal AI Solo{% endblock %}
+{% block page_title %}Шанс за допускане{% endblock %}
+{% block page_hint %}Как ВКС се е произнасял по чл. 288 ГПК по сходни въпроси: колко са допуснати и колко не, и с какви мотиви са отказите. Сходството е по думите на въпроса – прегледайте примерите. Безплатно, без AI.{% endblock %}
+{% block content %}
+<div class="dash-grid-container">
+  <div class="dash-col-left">
+    {{ case_profile(run.appellate.label, run.appellate.url, 'С AI', run.created_at[:10].split('-')|reverse|join('.'), '', path_href='/runs/' ~ run_id ~ '#path') }}
+    <div class="card details-card">
+      <h2 class="details-title">Как се чете</h2>
+      <p>Програмата търси думите на всеки въпрос в определенията на ВКС по чл. 288 ГПК в собствената база ({{ total }} определения) и брои как са решени тези, които съдържат поне половината думи.</p>
+      <p>Нисък дял допуснати не значи, че вашият въпрос няма да мине – значи, че подобни въпроси често се отказват. Вижте мотивите и преформулирайте въпроса, така че да ги избегне.</p>
+      <a class="link" href="/runs/{{ run_id }}" style="text-align:center;font-size:12px">← обратно към справката</a>
+    </div>
+  </div>
+  <div class="dash-col-right scroll-col">
+    {% if error %}<div class="notice bad">{{ error }}</div>
+    {% elif not total %}<div class="card page-card"><p>Определенията по чл. 288 още се свалят в базата (бавно, по едно на 2 секунди). Проверката ще се появи, когато има поне няколко стотин. Състоянието се вижда в <a class="link" href="/corpus">База</a>.</p></div>
+    {% else %}
+    {% for c in items %}
+    <div class="card page-card admission-card">
+      <h2>{{ c.question_id }}. {{ c.question }}</h2>
+      {% if not c.found %}<p class="muted">Няма достатъчно сходни определения в базата.</p>
+      {% else %}
+      <div class="adm-bar" title="допуснати / частично / недопуснати">
+        <i class="yes" style="width: {{ (100 * c.admitted / c.found)|round|int }}%"></i><i class="part" style="width: {{ (100 * c.partly / c.found)|round|int }}%"></i><i class="no" style="width: {{ (100 * c.refused / c.found)|round|int }}%"></i>
+      </div>
+      <p><b>{{ c.found }}</b> сходни определения: <span class="adm-yes">допуснати {{ c.admitted }}</span>{% if c.partly %} · частично {{ c.partly }}{% endif %} · <span class="adm-no">недопуснати {{ c.refused }}</span>{% if c.share is not none %} – около {{ c.share }}% допуснати{% endif %}.</p>
+      {% if c.reasons %}<h3 class="section-heading">Най-чести мотиви за отказ</h3>
+      <ul class="help-steps">{% for label, n in c.reasons %}<li>{{ label }} – в {{ n }} от {{ c.refused }}</li>{% endfor %}</ul>{% endif %}
+      <h3 class="section-heading">Примери</h3>
+      {% for e in c.examples %}<div class="adm-example"><a class="link" href="{{ e.url }}" target="_blank" rel="noopener">{{ e.label }}</a>
+        <span class="status-chip {{ 'st-3' if e.outcome == 'не допуска' else 'st-2' }}">{{ e.outcome }}</span>
+        {% if e.snippet %}<p class="muted small">{{ e.snippet }}{% if e.snippet|length >= 400 %}…{% endif %}</p>{% endif %}</div>{% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,145 @@
+{# Case header and case-path cards shared by the no-AI and AI report pages (kit markup). #}
+{% from "icons.html" import icon %}
+
+{% macro case_profile(label, url, mode, created, extra_pills, path_href='#path') -%}
+{% set m = label.split(', ') %}
+<div class="card profile-card">
+  <div class="profile-header-row">
+    <div class="profile-avatar-wrapper app-avatar-lg">{{ icon('court', 22) }}</div>
+    <div class="profile-name-info"><h2 class="profile-name">{{ m[1] if m|length > 1 else label }}</h2>
+      <p class="profile-role">{{ m[0] }}{% if m|length > 2 %} · {{ m[2:]|join(', ') }}{% endif %}</p></div>
+    {% if url %}<a class="card-options-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Източник">{{ icon('link') }}</a>{% endif %}
+  </div>
+  <div class="profile-action-buttons">
+    {% if url %}<a class="action-circle-btn black-btn" href="{{ url }}" target="_blank" rel="noopener noreferrer" title="Въззивното решение в сайта на съда">{{ icon('doc') }}</a>{% endif %}
+    <a class="action-circle-btn light-btn" href="{{ path_href }}" title="Пътят на делото">{{ icon('path') }}</a>
+    <a class="action-circle-btn light-btn" href="/" title="Търсене в практиката">{{ icon('search') }}</a>
+    <a class="action-circle-btn light-btn" href="/reports" title="Всички справки">{{ icon('msg') }}</a>
+  </div>
+  <div class="time-slots-section">
+    <span class="slots-label">Справка</span>
+    <div class="slots-row">
+      <span class="time-slot-pill">{{ created }} {{ icon('cal', 13) }}</span>
+      <span class="count-chip">{{ mode }}{{ extra_pills }}</span>
+    </div>
+  </div>
+</div>
+{%- endmacro %}
+
+{% macro path_cards(path) -%}
+<div class="ongoing-projects-section" id="path">
+  <div class="projects-header-row">
+    <div class="dropdown-wrapper"><h3 class="section-heading">Пътят на делото</h3></div>
+    <div class="projects-action-icons"><span class="proj-icon-circle-btn help-tip" title="Всяка връзка е проверена в сайта на съда; непотвърдените са маркирани.">{{ icon('info', 14) }}</span></div>
+  </div>
+  <div class="project-cards-grid">
+  {% for i in path %}
+    {% set color = ['peach', 'blue', 'pink'][loop.index0 % 3] %}
+    {% set ok = i.acts and not i.note %}
+    {% set last = i.acts[-1] if i.acts else none %}
+    <{{ 'a' if i.source_url else 'div' }} class="project-card {{ color }}-card" {% if i.source_url %}href="{{ i.source_url }}" target="_blank" rel="noopener noreferrer" title="Отвори делото в сайта на съда"{% endif %}>
+      <div class="proj-card-top"><span class="proj-date-pill">{{ i.level if i.level == 'ВКС' else i.level|capitalize }}{{ '' if i.level == 'ВКС' else ' инстанция' }}</span>
+        {% if i.source_url %}<span class="proj-more-btn" title="Източник">{{ icon('link', 13) }}</span>{% endif %}</div>
+      <div class="proj-title-row"><h3 class="proj-title">{{ i.court }}</h3>
+        <span class="proj-info-icon" title="{{ i.note or 'потвърдено в сайта' }}">{{ icon('info', 12) }}</span></div>
+      <div class="proj-stage-row"><span class="proj-stage-text">дело {{ i.case }}</span>
+        <div class="proj-progress-tag"><span class="prog-percent-bubble">{{ i.acts|length }}</span><span class="prog-text">акта</span></div></div>
+      <div class="proj-progress-bar-bg {{ color }}-bar-bg"><div class="proj-progress-fill {{ color }}-fill" style="width: {{ 100 if ok else 25 }}%"></div></div>
+      <div class="proj-card-footer">
+        <div class="avatar-stack">{% for a in i.acts[:3] %}<span class="stack-avatar stack-more-avatar {{ color }}-more level-avatar" title="{{ a.type }} {{ a.number }} от {{ a.date }} (актът е в списъка под картите)">{{ a.type[:1] }}</span>{% endfor %}</div>
+        <span class="days-left-pill">{{ (i.result or (last.result if last and last.result else '') or (last.date if last else '') or ('не е потвърдено' if i.note else '—'))|truncate(28, True, '…') }}</span>
+      </div>
+    </{{ 'a' if i.source_url else 'div' }}>
+  {% endfor %}
+  </div>
+</div>
+<div class="card page-card">
+  <h2>Актове по инстанции</h2>
+  {% for i in path %}
+  <h4>{{ i.level if i.level == 'ВКС' else i.level|capitalize }}: {{ i.court }}, дело {{ i.case }}</h4>
+  {% for a in i.acts %}<div class="muted">{{ a.type }} {% if a.number %}№ {{ a.number }} {% endif %}от {{ a.date }}{% if a.result %} — {{ a.result }}{% endif %}{% if a.url %} · <a class="link" href="{{ a.url }}" target="_blank" rel="noopener noreferrer">акт</a>{% endif %}</div>{% endfor %}
+  {% if i.result %}<div class="muted"><strong>Резултат:</strong> {{ i.result }}</div>{% endif %}
+  {% if i.note %}<div class="muted bad">⚠️ {{ i.note }}</div>{% endif %}
+  {% endfor %}
+</div>
+{%- endmacro %}
+
+{% macro identified_note(idf) -%}
+{% if idf %}
+<div class="page-hint identified-note">{{ icon('info', 14) }}<span>
+  {% if idf.note %}{{ idf.note }} Пътят на делото не е проследен; въведете съда, номера и годината, ако го искате.
+  {% elif idf.supported %}Разпознато от документа: <b>{{ idf.court }}</b>, {{ idf.kind|lower }} № {{ idf.number }}/{{ idf.year }}. Делото е потърсено в сайта на съда.
+  {% else %}Разпознато от документа: <b>{{ idf.court }}</b>, № {{ idf.number }}/{{ idf.year }}. Този съд още не е в списъка за автоматична проверка, затова пътят на делото не е проследен.{% endif %}
+</span></div>
+{% endif %}
+{%- endmacro %}
+
+{% macro case_form(action, run=None) -%}
+{# the lawyer's data: deadline, threshold, parties and (for AI reports) the questions for the draft #}
+<div class="card details-card {{ '' if (due or threshold.ok is not none) else 'no-print' }}" id="case-data">
+  <h2 class="details-title">Срок, праг и данни за изложението</h2>
+  <form method="post" action="{{ action[:-5] }}/status" class="status-form no-print">
+    <label>Статус на случая
+      <select class="kit-input" name="status" onchange="this.form.submit()">
+        {% for s in ['нов', 'в работа', 'подадена жалба', 'приключен'] %}<option {{ 'selected' if (case.status or 'нов') == s }}>{{ s }}</option>{% endfor %}
+      </select></label>
+    <noscript><button class="kit-submit light" type="submit">Смени</button></noscript>
+  </form>
+  {% if form_error %}<div class="notice bad">{{ form_error }}</div>{% elif request.query_params.get('saved') %}<div class="notice ok">Запазено.</div>{% endif %}
+  {% if due %}
+  <div class="case-result {{ 'bad' if due.days_left() < 0 else ('warn' if due.days_left() <= 7 else 'ok') }}">
+    <b>Последен ден за жалбата: {{ due.last_day.strftime('%d.%m.%Y') }}</b>
+    ({{ ['понеделник','вторник','сряда','четвъртък','петък','събота','неделя'][due.last_day.weekday()] }}) –
+    {% if due.days_left() >= 0 %}остават {{ due.days_left() }} дни{% else %}срокът е изтекъл преди {{ -due.days_left() }} дни{% endif %}.
+    {% if due.moved %}<br><span class="muted">Месецът изтича на {{ due.nominal.strftime('%d.%m.%Y') }}, неприсъствен ден – преместено на следващия присъствен (чл. 60, ал. 6 ГПК).</span>{% endif %}
+    <br><span class="muted">Изчислено по чл. 283 и чл. 60 ГПК с официалните празници. Дни, обявени за неработни с решение на МС, не са отчетени – проверете.</span>
+  </div>
+  {% endif %}
+  {% if threshold.ok is not none or threshold.note %}
+  <div class="case-result {{ 'warn' if threshold.ok is none else ('ok' if threshold.ok else 'bad') }}">{{ threshold.text }}
+    <br><span class="muted">Проверете и другите изключения на чл. 280, ал. 3 ГПК.</span></div>
+  {% endif %}
+  <form method="post" action="{{ action }}" class="case-form">
+    <label>Дата на връчване на въззивното решение<input class="kit-input" type="date" name="served" value="{{ case.served or '' }}"></label>
+    <div class="case-row">
+      <label>Цена на иска<input class="kit-input" type="text" inputmode="decimal" name="amount" value="{{ case.amount if case.amount is not none else '' }}"
+        placeholder="{{ ('%.2f'|format(hint_amount[0])) if hint_amount else 'напр. 25000' }}"></label>
+      <label>Валута<select class="kit-input" name="currency">
+        <option value="BGN" {{ 'selected' if case.currency != 'EUR' }}>лв.</option><option value="EUR" {{ 'selected' if case.currency == 'EUR' }}>€</option></select></label>
+      <label>Вид дело<select class="kit-input" name="kind">
+        {% for value, text in kinds.items() %}<option value="{{ value }}" {{ 'selected' if kind == value }}>{{ text }}</option>{% endfor %}</select></label>
+    </div>
+    {% if hint_amount and case.amount is none %}<p class="muted small">Най-голямата сума в решението е {{ '%.2f'|format(hint_amount[0]) }} {{ '€' if hint_amount[1] == 'EUR' else 'лв.' }} – това е само подсказка, цената на иска се проверява.</p>{% endif %}
+    <label class="check"><input type="checkbox" name="property" value="1" {{ 'checked' if case.property }}> Иск за собственост или други вещни права</label>
+    {% if run %}
+    <h3 class="section-heading">Въпроси в изложението</h3>
+    <p class="muted small">Отметнатите влизат в черновата. Предварително са избрани тези с намерена противоречаща практика.</p>
+    {% for qid in ranked %}{% set q = (run.analysis.questions|selectattr('id', 'equalto', qid)|first) %}
+    <label class="check q-check"><input type="checkbox" name="questions" value="{{ qid }}" {{ 'checked' if qid in chosen }}>
+      <span><b>{{ qid }}.</b> {{ q.text|truncate(160) }}</span></label>
+    {% endfor %}
+    <h3 class="section-heading">Страни и адвокат (за черновата)</h3>
+    <label>Доверител (име / фирма)<input class="kit-input" name="client" maxlength="200" value="{{ case.client or '' }}"></label>
+    <div class="case-row">
+      <label>ЕГН / ЕИК<input class="kit-input" name="client_id" maxlength="40" value="{{ case.client_id or '' }}"></label>
+      <label>Адрес<input class="kit-input" name="client_address" maxlength="300" value="{{ case.client_address or '' }}"></label>
+    </div>
+    <label>Насрещна страна<input class="kit-input" name="opponent" maxlength="200" value="{{ case.opponent or '' }}"></label>
+    <div class="case-row">
+      <label>Адвокат<input class="kit-input" name="lawyer" maxlength="120" value="{{ case.lawyer or '' }}"></label>
+      <label>Съдебен адрес<input class="kit-input" name="lawyer_address" maxlength="300" value="{{ case.lawyer_address or '' }}"></label>
+    </div>
+    {% endif %}
+    <button class="kit-submit" type="submit">Запази</button>
+    <p class="muted small">Пази се само в частната папка на сървъра, не в Git.</p>
+  </form>
+</div>
+{%- endmacro %}
+
+{# moving a report to the trash (private storage/trash; can be restored on the server) #}
+{% macro delete_box(action) -%}
+<form method="post" action="{{ action }}" class="delete-box no-print"
+      onsubmit="return confirm('Да се изтрие ли справката? Изчезва от всички списъци, заедно с изложението, жалбата и данните по делото. (Пази се в кошче на сървъра и може да се върне при нужда.)')">
+  <button type="submit" class="delete-btn">{{ icon('trash', 14) }}<span>Изтрий справката</span></button>
+</form>
+{%- endmacro %}

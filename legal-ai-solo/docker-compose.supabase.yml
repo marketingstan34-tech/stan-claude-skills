@@ -1,0 +1,14 @@
+# Variant with the database on Supabase instead of a local Postgres container.
+# Usage: docker compose -f docker-compose.supabase.yml up -d --build
+# Requires DATABASE_URL in .env (Supabase "Session pooler" connection string, EU region).
+services:
+  app:
+    build: ./backend
+    env_file: .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      PRIVATE_STORAGE_PATH: /data
+    volumes:
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8000:8000"
